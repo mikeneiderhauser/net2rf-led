@@ -28,14 +28,16 @@ a bracelet following an xLights sequence, and the web UI.
 
 | | |
 |---|---|
-| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), one bracelet · xLights over **DDP, pixel mode** · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe |
-| 🧪 **Built, not yet tested on hardware** | **LedGiftSupplier** bracelets (protocol 1, RGB + group codes) · **DMX** and **vendor DMX** input modes · **E1.31** (sACN) input · **Ra-02 / SX1278** radio · several controllers on one network (live controller list, `net2rf.local` election) · listen before transmit · Home Assistant examples · range across a full yard |
+| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), one bracelet · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · controller list and `net2rf.local` election (against simulated controllers) |
+| 🧪 **Built, not yet tested on hardware** | **LedGiftSupplier** bracelets (protocol 1, RGB + group codes) · **vendor DMX** input mode · E1.31 multicast · **Ra-02 / SX1278** radio · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
+| ❌ **Not working yet** | Protocol 0 built-in effects: the tested bracelet ignores them |
 | 🛠 **Coming soon** | A carrier board and enclosure |
 
 Full list of what's been tried: [docs/DEVICES.md](docs/DEVICES.md). What we know about the bracelets
 themselves (one model tested so far, a giveaway bracelet from a Banana Ball game):
 - **Waking up:** they need a press of their button before they listen to the radio.
 - **Idle behaviour:** they turn red by themselves after ~20 minutes without a command, but keep listening.
+- **Effects:** colours and off work; the built-in effect commands don't (yet).
 - **Zones:** protocol 0 uses a 16-bit group mask. The tested bracelet is on group 3; others may differ. See
   [PROTOCOL.md](docs/PROTOCOL.md).
 
@@ -71,9 +73,12 @@ The DIY build needs:
 - a 3.3 V USB-serial adapter for the first flash;
 - optionally an OLED and three buttons.
 
+Full parts list, with where to buy: [ASSEMBLY.md, Parts](docs/ASSEMBLY.md#parts).
+
 ## Getting started
 
-1. **Build and flash:** [docs/ASSEMBLY.md](docs/ASSEMBLY.md) covers parts, pinout, wiring and flashing.
+1. **Build and flash:** [docs/ASSEMBLY.md](docs/ASSEMBLY.md) covers parts, pinout, wiring and flashing. The
+   [browser flasher](https://mikeneiderhauser.github.io/net2rf-led/) (Chrome / Edge) installs the latest release over USB, no build tools needed.
 2. **Get connected:** the [user guide](docs/USAGE.md) covers the network, the setup hotspot, the web UI and the
    buttons.
 3. **Add the bracelets to your show:** [docs/SETUP.md](docs/SETUP.md) covers the show network, finding your
@@ -96,12 +101,11 @@ The DIY build needs:
 ## Roadmap
 
 - **Carrier board and enclosure:** in the works; details once it has been built and tested.
-- **Broader testing:** LedGiftSupplier bracelets, DMX and vendor modes, E1.31, the Ra-02, range across a yard,
-  several controllers with listen-before-transmit.
-- **Bracelet behaviour:** confirm protocol 0 group addressing with more bracelets; deal with idle and sleep
-  (e.g. a keep-alive so bracelets don't drift to red between songs).
+- **Broader testing:** LedGiftSupplier bracelets, vendor mode, the Ra-02, range across a yard, two real
+  controllers with listen before transmit.
+- **Bracelet behaviour:** confirm protocol 0 group addressing with more bracelets; find the real effect
+  commands; deal with idle and sleep (e.g. a keep-alive so bracelets don't drift to red between songs).
 - **FPP discovery,** so controllers show up in FPP's MultiSync page and xLights' controller discovery.
-- **Public release:** tagged builds and a browser flasher, no build tools needed.
 
 Have bracelets from another vendor or batch, or ideas? Open an issue. Captures and test reports are especially
 welcome; [DEVICES.md](docs/DEVICES.md#reporting-a-device) lists what helps.
@@ -124,8 +128,8 @@ python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the netwo
 | `lib/cc1101_ook`, `lib/sx1278_ook` | Minimal radio drivers for OOK transmit and listen-before-talk |
 | `lib/net2rf_heartbeat` | Controller heartbeat format (unit tested) |
 
-Releases: pushing a tag like `v1.0.0` runs the tests, builds, attaches the `.bin` files to a GitHub release and
-deploys the browser flasher to GitHub Pages ([`.github/workflows/build.yml`](.github/workflows/build.yml)).
+Releases: pushing a tag like `v1.0.0` runs the tests, builds, attaches the `.bin` files to a
+[GitHub release](https://github.com/mikeneiderhauser/net2rf-led/releases/latest) and deploys the [browser flasher](https://mikeneiderhauser.github.io/net2rf-led/) to GitHub Pages ([`.github/workflows/build.yml`](.github/workflows/build.yml)).
 
 ## License and legal
 

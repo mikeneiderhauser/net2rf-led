@@ -484,7 +484,7 @@ $('o_save').onclick=async()=>{const t=$('r_type').value,[lo,hi]=POWER[t];
   if(+$('b_proto').value!==C.app.bracelets.protocol&&!await ask('Changing the bracelet protocol resets every zone address to the default. Continue?'))return;
   const body={name:$('b_name').value,bracelets:{protocol:+$('b_proto').value,mode:$('b_mode').value,color_order:$('b_order').value},
     radio:{type:t,tx_power:Math.max(lo,Math.min(hi,+$('r_power').value||0)),freq_p0:+$('r_f0').value,freq_p1:+$('r_f1').value,repeats:+$('r_rep').value,refresh_ms:+$('r_ref').value,tx_jitter_ms:+$('r_jit').value,off_threshold:+$('r_thr').value,
-      lbt_enabled:$('r_lbt').checked,lbt_threshold_dbm:Math.max(-120,Math.min(-30,+$('r_lbtThr').value||-85))},
+      lbt_enabled:$('r_lbt').checked,lbt_threshold_dbm:Math.max(-120,Math.min(-30,+$('r_lbtThr').value||-75))},
     input:{ddp_enabled:$('i_ddp').checked,ddp_port:+$('i_port').value,e131_enabled:$('i_e131').checked,e131_universe:+$('i_univ').value,e131_multicast:$('i_mcast').checked,start_channel:+$('i_start').value,timeout_s:+$('i_to').value}};
   if(!body.input.ddp_enabled&&!body.input.e131_enabled&&!await ask('Both DDP and E1.31 are off: the controller will ignore all input. Continue?'))return;
   const j=await api('config',body);afterSave(j,'Settings');if(!j.reboot)loadConfig()};

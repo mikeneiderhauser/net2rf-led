@@ -25,9 +25,10 @@ update keeps its old colour until the next change.
   after 250 ms. It needs no setup between controllers and also avoids key fobs and other 433 MHz traffic. It only
   helps when the controllers can hear each other, which is usually true since they're closer together than the
   bracelets are.
-  - **Threshold:** set it about 10 dB above the quiet reading shown on the page.
+  - **Threshold:** default -75 dBm. Set it about 10 dB above the quiet reading shown on the page: a quiet
+    channel read -84 to -87 dBm on the tested CC1101, so a threshold at the quiet level makes it wait on noise.
   - **Counters:** `/api/stats` shows how often it waited (`lbt_waits`) and how often it gave up and sent anyway
-    (`lbt_forced`).
+    (`lbt_forced`). Waiting on almost every update means the threshold is too low.
   - **Status:** off by default until it has been tested with two radios in range of each other.
 - **Airtime per controller.** The dashboard's controller list shows each controller's airtime (`air`). Two
   neighbours that are both busy are competing for the channel.

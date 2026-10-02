@@ -20,7 +20,7 @@ rest:
         value_template: "{{ value_json.input.fps }}"
         unit_of_measurement: "fps"
         state_class: measurement
-      - name: "Bracelets DDP packets"
+      - name: "Bracelets input packets"
         value_template: "{{ value_json.input.packets }}"
         state_class: total_increasing
       - name: "Bracelets RF updates"
@@ -138,7 +138,7 @@ automation:
     actions:
       - action: notify.notify
         data:
-          message: "Net2RF controller has had no DDP input for 2 minutes"
+          message: "Net2RF controller has had no show input for 2 minutes"
 ```
 
 ## Dashboard card

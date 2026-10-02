@@ -66,7 +66,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
                 "e131_multicast": true, "start_channel": 1, "timeout_s": 300},
   "radio":     {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000,
                 "repeats": 3, "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
-                "lbt_enabled": false, "lbt_threshold_dbm": -85},
+                "lbt_enabled": false, "lbt_threshold_dbm": -75},
   "zones": [
     {"enabled": true, "name": "Left side", "addr": "00FF", "start": 1},
     {"enabled": true, "name": "Right side", "addr": "01FF", "start": 4}
@@ -85,10 +85,10 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 - `radio.type`: `cc1101` or `sx1278`. `tx_power` is clamped to the module's range. `refresh_ms` defaults to 0
   (send on change only): the bracelets latch, and extra airtime only adds interference.
 - `radio.lbt_enabled` (listen before transmit, off by default): before each update the radio listens for 2.5 ms
-  and only transmits if the strongest signal stayed below `lbt_threshold_dbm` (-120..-30, default -85).
+  and only transmits if the strongest signal stayed below `lbt_threshold_dbm` (-120..-30, default -75).
   Otherwise it backs off a random 3-15 ms and listens again, for at most 250 ms, then sends anyway. Set the
   threshold about 10 dB above the quiet reading shown on *Bracelets & Radio* (`radio.lbt.last_rssi_dbm` in
-  `/api/status`). See *Multiple controllers* in the README.
+  `/api/status`). See [RF.md](RF.md#multiple-controllers).
 - `input.timeout_s`: blank the bracelets after this long without input. 0 = hold the last colour. On protocol 1 the
   blank is one broadcast "off" to every group (so it also reaches bracelets in groups no zone uses).
 - Test mode (`/api/test`) on protocol 1 also uses one broadcast per colour change rather than one packet per zone.
@@ -109,7 +109,8 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 }
 ```
 
-`input.packets`/`frames` count every valid DDP packet and PUSH frame; `output.suppressed` counts zone updates that
+`input.packets`/`frames` count every valid DDP or E1.31 packet and frame (`ddp_packets` / `e131_packets` split
+them; `last_source` is the protocol of the last one, `source` its sender's IP); `output.suppressed` counts zone updates that
 were consumed while output was disabled. With listen before transmit on, `lbt_checks` counts updates that
 listened first, `lbt_waits` those that found the channel busy, `lbt_forced` those sent anyway after 250 ms, and
 `lbt_wait_ms` the total delay. A steadily rising `lbt_forced` means the channel is saturated: lower the load

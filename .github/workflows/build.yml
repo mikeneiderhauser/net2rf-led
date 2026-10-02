@@ -84,7 +84,8 @@ jobs:
             **Update:** upload `net2rf-led-${{ env.FW_VERSION }}.bin` in the controller's web UI (System → Update firmware).
 
   pages:
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Pages needs a public repo (or a paid plan) and Settings → Pages → Source: GitHub Actions.
+    if: startsWith(github.ref, 'refs/tags/v') && !github.event.repository.private
     needs: build
     runs-on: ubuntu-latest
     environment:

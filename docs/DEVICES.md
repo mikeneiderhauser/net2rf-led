@@ -22,6 +22,7 @@ that isn't listed, please [report it](#reporting-a-device): every report widens 
 | Controls | push button |
 | Protocol | **0, Shenzen New Dody** (lights red in *Tools → Which bracelet do I have?*) |
 | Colours | The protocol's 10 fixed colours |
+| Effects | Built-in effects A / B / C sent, no reaction (the effect codes are unconfirmed) |
 | Address | **Group 3:** answers `0008000F` (and the all-groups default `00FFFF0F`), not the other single-bit masks. Other bracelets may be on different groups. |
 | Tested with | WT32-ETH01 + CC1101, xLights over DDP in pixel mode: follows the sequence |
 
@@ -50,7 +51,7 @@ one of these two protocols or something else. Try *Tools → Which bracelet do I
 | Part | Status | Notes |
 |---|---|---|
 | WT32-ETH01 (ESP32 + LAN8720) | ✅ | Ethernet and Wi-Fi both used. Not the WT32-ETH01-EVO (different chip and pinout). |
-| CC1101 433 MHz module, blue 2×4 header + SMA ([AOICRIE](https://www.amazon.com/gp/product/B0D2TMTV5Z)) | ✅ | Reports chip version `0x14`; data-line self-test passes; drives the Banana Ball bracelet. |
+| CC1101 433 MHz module, blue 2×4 header + SMA (AOICRIE, see [parts](ASSEMBLY.md#parts)) | ✅ | Reports chip version `0x14`; data-line self-test passes; drives the Banana Ball bracelet. |
 | Ai-Thinker Ra-02 (SX1278) on a breakout | 🧪 | Driver written to the datasheet; never run. |
 | SSD1306 0.96" I²C OLED | ✅ | Including detection of swapped SDA/SCL. |
 | SH1106 1.3" I²C OLED | 🧪 | Selectable under *System → Display*. |
@@ -62,13 +63,14 @@ one of these two protocols or something else. Try *Tools → Which bracelet do I
 | | Status |
 |---|---|
 | xLights → DDP, pixel mode | ✅ (controller profile WLED / WLED / Generic ESP32, Keep Channel Numbers off) |
-| xLights → DDP, DMX mode / vendor mode | 🧪 |
-| E1.31 (sACN), unicast / multicast | 🧪 |
+| DDP, DMX mode | ✅ colour (with a DDP test sender); built-in effects unconfirmed |
+| DDP, vendor mode | 🧪 |
+| E1.31 (sACN) | ✅ unicast (other universes ignored); 🧪 multicast |
 | Falcon Player (FPP) as the show player | 🧪 (should work over DDP / E1.31 like xLights) |
 | Web UI, setup hotspot, Wi-Fi join, firmware update with rollback | ✅ |
 | Test mode, zone walk, address probe | ✅ |
-| Several controllers (live list, `net2rf.local` election) | 🧪 (one controller so far) |
-| Listen before transmit | 🧪 (needs two radios in range) |
+| Several controllers (live list, `net2rf.local` election) | ✅ against simulated controllers (`tools/peer_sim.py`); 🧪 with two real ones |
+| Listen before transmit | 🧪 channel sensing works (quiet CC1101 reads -84 to -87 dBm); backing off needs two radios in range |
 | Home Assistant examples | 🧪 |
 
 ## Reporting a device

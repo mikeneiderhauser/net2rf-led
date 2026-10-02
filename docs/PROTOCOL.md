@@ -16,7 +16,7 @@ Device details and photos: [DEVICES.md](DEVICES.md).
 
 ## Device behaviour (protocol 0 bracelet, as observed)
 
-- **Wake with the button.** Out of the packet the bracelet ignores the radio until its button is pressed. After
+- **Wake with the button.** Out of the package the bracelet ignores the radio until its button is pressed. After
   that it follows commands.
 - **Latching.** It holds the last colour (or off) indefinitely, so the controller only transmits on change.
 - **Idle colour.** About 20 minutes after the last command it turns **red by itself**, but keeps listening: the
@@ -45,8 +45,8 @@ share one channel ([RF.md](RF.md#multiple-controllers)).
 |---|---|
 | `01 nn` | colour nn: 00 red, 01 green, 02 blue, 03 pink, 04 white, 05 yellow, 08 violet, 09 orange, 0A indigo, 0B cyan (06/07 unused by the app) |
 | `00 AA` | off |
-| `05 AA` / `06 AA` | built-in effects |
-| full packet `D0 FF FF FF 55 00 22` | built-in effect |
+| `05 AA` / `06 AA` | built-in effects (unconfirmed: no reaction from the tested Banana Ball bracelet) |
+| full packet `D0 FF FF FF 55 00 22` | built-in effect (unconfirmed, as above) |
 
 ## Protocol 1: RGB with group codes
 

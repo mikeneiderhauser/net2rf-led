@@ -22,7 +22,7 @@ APP = {
     "bracelets": {"protocol": 1, "mode": "pixel", "color_order": "RGB"},
     "radio": {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
-              "lbt_enabled": True, "lbt_threshold_dbm": -85},
+              "lbt_enabled": True, "lbt_threshold_dbm": -75},
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
               "e131_multicast": True, "start_channel": 1, "timeout_s": 300},
     "zones": [

@@ -109,7 +109,8 @@ password.
 
 ## Firmware updates
 
-**System → Update firmware** with `firmware.bin` (not the factory image used for the first flash). RF output pauses
+**System → Update firmware** with `net2rf-led-<version>.bin` from the [latest release](https://github.com/mikeneiderhauser/net2rf-led/releases/latest) (or
+`firmware.bin` if you built it), not the `.factory.bin` used for the first flash. RF output pauses
 while it uploads, then the controller reboots.
 
 **Automatic rollback:** a new build is only kept once the controller has come back up and stayed reachable for
@@ -135,7 +136,7 @@ at `net2rf.local`. Controllers in radio range of each other share the 433 MHz ch
 | Can't find it after a network change (bad static IP, wrong Wi-Fi) | Hold USER 5 s (network reset), then connect via Ethernet/DHCP or the setup hotspot |
 | Forgot the admin password | Hold USER 5 s (network reset) |
 | Everything is wrong | Hold USER 15 s (factory reset), or *System → Factory reset* |
-| A firmware update misbehaves | It rolls back by itself; otherwise flash `firmware.factory.bin` over serial ([ASSEMBLY.md](ASSEMBLY.md#flashing)) |
+| A firmware update misbehaves | It rolls back by itself; otherwise flash the `.factory.bin` over serial ([ASSEMBLY.md](ASSEMBLY.md#flashing)) |
 | Radio *not detected* | Check the radio's wiring and 3.3 V, and that the right module is selected under *Bracelets & Radio* |
 | Radio *data line fault* | The CC1101's GDO0 isn't reaching IO33: check that wire |
 | Bracelets don't react | Press their button (they may be asleep), check they're on the right protocol and group, move closer, raise TX power |

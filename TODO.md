@@ -28,6 +28,9 @@ To sort out:
 - [ ] Address probe: log the address shown about 0.5 s before "Bracelet reacted" is clicked (allowing
       for reaction time), and default the step time to 3 s.
 - [ ] Update docs/PROTOCOL.md "Addressing" once confirmed.
+- [ ] Built-in effects: `05 AA`, `06 AA` and the `D0 FF FF FF 55 00 22` packet got no reaction from the Banana Ball
+      bracelet (2026-10-02; green sent just before worked). Capture a real effect command (vendor remote /
+      transmitter, Flipper), or drop effects for protocol 0 if they don't exist on these bracelets.
 
 ## xLights integration
 
@@ -40,11 +43,11 @@ To sort out:
 
 ## Controller discovery / multiple controllers
 
-- [ ] Flash the controller (192.168.250.230, currently offline) and test the heartbeat with
-      `tools/peer_sim.py --to <ip>`: simulated peers appear with state, one goes offline after ~15 s,
-      hello is answered, `net2rf.local` follows the lowest ID.
-- [ ] Test listen before transmit with two radios in range: pick a sensible default threshold from the quiet
-      readings, check `lbt_waits` / `lbt_forced` while both run busy sequences, verify the SX1278 RX path
+- [x] Heartbeat tested on hardware with `tools/peer_sim.py --to <ip>` (2026-10-02): simulated peers appear
+      with state, one goes offline after ~15 s, hello is answered (also across subnets), `net2rf.local`
+      follows the lowest ID and is reclaimed when it leaves.
+- [ ] Test listen before transmit with two radios in range (default threshold now -75 dBm: a quiet CC1101
+      read -84 to -87, so -85 waited on noise every time), check `lbt_waits` / `lbt_forced` while both run busy sequences, verify the SX1278 RX path
       (packet mode, DIO2 = TimeOut) doesn't disturb its TX data line. Then decide whether to turn it on by
       default.
 - [ ] FPP discovery: answer FPP's ping protocol (multicast 239.70.80.80, UDP 32320) so controllers show up in

@@ -61,7 +61,7 @@ struct AppConfig {
     uint8_t lbt_enabled;    // listen before transmit: wait for a clear channel (other controllers, key fobs)
     int8_t lbt_threshold;   // dBm; a channel louder than this counts as busy
 };
-static const int8_t LBT_DEFAULT_THRESHOLD = -85;
+static const int8_t LBT_DEFAULT_THRESHOLD = -75;
 
 struct NetConfig {
     uint32_t magic;

@@ -107,7 +107,7 @@ exact settings for its current zones.
      setting). Place each one where that part of the audience stands.
    - **DMX mode (4 per zone, untested):** a *DmxFloodlight* per zone (start 1, 5, 9...) with Red 1, Green 2,
      Blue 3. Channel 4 is an effect channel: 0-19 follow RGB, 20-39 off, 40-59 / 60-79 / 80-99 the bracelets'
-     built-in effects A / B / C (protocol 0).
+     built-in effects A / B / C (protocol 0; the tested bracelet ignores them, see [DEVICES.md](DEVICES.md)).
    - **Vendor mode (5 per zone, LedGiftSupplier, untested):** the vendor DMX transmitter's own layout. Per
      zone, a 2-channel DMX model at the zone's start channel with channel 1 = 85 (transmit) and channel 2 =
      group, plus a 1-node *Single Line* at start + 2 for the colour. An existing DMX setup for the vendor's

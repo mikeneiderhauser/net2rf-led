@@ -51,7 +51,7 @@ a{color:var(--accent)}.ver{color:var(--dim);font-size:13px}
     </ol>
   </div>
 
-  <p class="ver">Updating an installed controller? Use <b>System → Update firmware</b> in its web UI with <span class="mono">firmware.bin</span> from the <a href="__RELEASES_URL__">latest release</a>. No cable needed.</p>
+  <p class="ver">Updating an installed controller? Use <b>System → Update firmware</b> in its web UI with the <span class="mono">.bin</span> (not the <span class="mono">.factory.bin</span>) from the <a href="__RELEASES_URL__">latest release</a>. No cable needed.</p>
 </main>
 <script>
 fetch('manifest.json').then(r=>r.json()).then(m=>{document.getElementById('ver').textContent='Version '+m.version}).catch(()=>{});
