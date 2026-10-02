@@ -17,23 +17,22 @@ connecting and everyday use, and [SETUP.md](SETUP.md) covers adding the bracelet
 
 | Part | Notes |
 |---|---|
-| **WT32-ETH01** ([Amazon](https://link.amazon/B0dhw3WVx)) | ESP32 + LAN8720 Ethernet. Power it with 5 V; its own 3.3 V regulator also supplies the radio and OLED. (Not the "WT32-ETH01-EVO", which is a different chip and pinout.) |
+| **WT32-ETH01** ([Amazon](https://www.amazon.com/dp/B09Z298QJQ)) | ESP32 + LAN8720 Ethernet. Power it with 5 V; its own 3.3 V regulator also supplies the radio and OLED. (Not the "WT32-ETH01-EVO", which is a different chip and pinout.) |
 | **Radio, one of:** | Chosen in the web UI (*Bracelets & Radio → Radio module*), no recompiling. Fit only one. |
-| CC1101 module, **433 MHz** | The blue 2×4-header board with an SMA jack, e.g. [AOICRIE CC1101 + antenna](https://link.amazon/B01N1My5M). −30 to +10 dBm. **Tested.** Multi-band listings ("315/433/868/915") are only tuned for one band: make sure yours is 433 MHz. |
+| CC1101 module, **433 MHz** | The blue 2×4-header board with an SMA jack, e.g. [AOICRIE CC1101 + antenna](https://www.amazon.com/dp/B0D2TMTV5Z). −30 to +10 dBm. **Tested.** Multi-band listings ("315/433/868/915") are only tuned for one band: make sure yours is 433 MHz. |
 | Ai-Thinker Ra-02 (SX1278, 433 MHz) | [Ra-02 module](https://www.amazon.com/SX1278-Ai-Thinker-Wireless-Spectrum-Transmission/dp/B0CP778J3T): +2 to +17 dBm, the long-range option. **Supported, not yet tested on hardware.** It has a u.FL antenna connector and 2 mm pads, so use a breakout: [ACROBOTIC Ra-02 breakout](https://www.amazon.com/ACROBOTIC-Breakout-Arduino-ESP8266-Raspberry/dp/B07MNH5W65), or [Adafruit RFM96W 433 MHz](https://www.adafruit.com/product/3073) (equivalent chip, 0.1" header). |
 | 433 MHz antenna | Included with the linked CC1101. For the Ra-02: a u.FL→SMA pigtail + 433 MHz SMA whip. Mount it high. |
-| 128×64 I²C OLED (optional) | SSD1306 (0.96", e.g. [this one](https://link.amazon/B02HvgaxI)) or SH1106 (1.3"), selectable under *System → Display*. Shows IP, radio status, input rate, zone colours. Everything works without it. |
-| 3 × tactile buttons ([Amazon](https://link.amazon/B0hlGzwXD)) | EN (reset), BOOT (IO0), and an optional USER button on IO39. |
-| 10 kΩ resistor ([Amazon](https://link.amazon/B0c0j9YNy)) | Pull-up for the USER button (IO39 has no internal pull-up). |
+| 128×64 I²C OLED (optional) | SSD1306 (0.96", e.g. [this one](https://www.amazon.com/dp/B09T6SJBV5)) or SH1106 (1.3"), selectable under *System → Display*. Shows IP, radio status, input rate, zone colours. Everything works without it. |
+| 3 × tactile buttons ([Amazon](https://www.amazon.com/dp/B01E38OS7K)) | EN (reset), BOOT (IO0), and an optional USER button on IO39. |
+| 10 kΩ resistor ([Amazon](https://www.amazon.com/dp/B0BR68QQPF)) | Pull-up for the USER button (IO39 has no internal pull-up). |
 | 330 Ω–1 kΩ resistor | In series with the radio data line (IO33). Cheap insurance against two outputs fighting. |
-| 3.3 V USB-serial adapter | FT232 / CH340 / CP2102 "FTDI" board, e.g. [this FT232RL USB-C one](https://link.amazon/B06ELCsnT), for the first flash only. Set it to **3.3 V**. |
+| 3.3 V USB-serial adapter | FT232 / CH340 / CP2102 "FTDI" board, e.g. [this FT232RL USB-C one](https://www.amazon.com/dp/B0DDGLRY1D), for the first flash only. Set it to **3.3 V**. |
 | 5 V / 1 A supply | The controller draws ~400 mA worst case. |
-| Breadboard ([Amazon](https://link.amazon/B0095rlYy)) and Dupont jumper wires ([Amazon](https://link.amazon/B0dpNu1Bk)) | For a solderless build like the prototype. |
+| Breadboard ([Amazon](https://www.amazon.com/dp/B07LFD4LT6)) and Dupont jumper wires ([Amazon](https://www.amazon.com/dp/B01EV70C78)) | For a solderless build like the prototype. |
 
 **Avoid** UART "LoRa" modules (EBYTE E32/E22, DL-LL02): they can't send raw OOK.
 
-As an Amazon Associate I earn from qualifying purchases. Links are examples of matching parts, not
-endorsements. Listings change, so check the band (433 MHz) before buying.
+Links are examples of matching parts, not endorsements. Listings change, so check the band (433 MHz) before buying.
 
 ### Pinout
 
