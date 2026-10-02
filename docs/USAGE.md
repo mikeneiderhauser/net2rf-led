@@ -81,6 +81,8 @@ resistor is fitted (IO39 reads high at boot), so a missing button can't trigger 
 
 ### Status LED
 
+The WT32-ETH01's onboard LED (IO2):
+
 | Pattern | Meaning |
 |---|---|
 | Short blink every 2 s | Running, radio ready |

@@ -37,7 +37,7 @@ endorsements. Listings change, so check the band (433 MHz) before buying.
 
 ### Pinout
 
-![Wiring diagram: WT32-ETH01 to CC1101, optional OLED, buttons and LED](images/wiring.svg)
+![Wiring diagram: WT32-ETH01 to CC1101, optional OLED and buttons](images/wiring.svg)
 
 The WT32-ETH01 silkscreen labels some pins by their original serial-bridge function; both names are given below.
 
@@ -65,14 +65,14 @@ on the dashboard, instead of the radio silently keying up with nothing on it.
 | IO5 | RXD | I²C SDA | OLED SDA (optional) |
 | IO17 | TXD | I²C SCL | OLED SCL (optional) |
 | IO39 | IO39 | USER button (optional) | button to GND, 10 kΩ pull-up to 3V3 |
-| IO2 | IO2 | Status LED (optional) | LED + 1 kΩ to GND |
 | IO1 | TXD0 | Serial TX | adapter **RX** (first flash) |
 | IO3 | RXD0 | Serial RX | adapter **TX** (first flash) |
 | EN | EN | Reset | button to GND |
 | IO0 | IO0 | BOOT | button to GND |
 
 - Leave **IO12** unconnected: it must be low at boot.
-- Don't put pull-ups on **IO2**: they break serial flashing.
+- **IO2** drives the WT32-ETH01's onboard LED (the status LED). Don't wire anything else to it: pull-ups on
+  IO2 break serial flashing.
 - **IO0** is also the Ethernet 50 MHz clock once running. Only press BOOT while resetting, and keep wiring
   on it short.
 - The OLED pins are labelled `RXD`/`TXD`, not `TXD0`/`RXD0`, which is easy to mix up. If SDA and SCL are

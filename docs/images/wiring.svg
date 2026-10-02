@@ -77,18 +77,14 @@
 <circle cx="490" cy="510" r="4" fill="#607d8b"/>
 <line x1="490" y1="510" x2="550" y2="510" stroke="#607d8b" stroke-width="3" stroke-linecap="round"/>
 <text x="560" y="514" fill="#1f2421">user button to GND + 10 kΩ pull-up to 3V3</text>
-<text x="478" y="544" text-anchor="end" font-weight="600" fill="#1f2421">IO2</text>
-<circle cx="490" cy="540" r="4" fill="#607d8b"/>
-<line x1="490" y1="540" x2="550" y2="540" stroke="#607d8b" stroke-width="3" stroke-linecap="round"/>
-<text x="560" y="544" fill="#1f2421">status LED + 1 kΩ to GND</text>
-<text x="478" y="584" text-anchor="end" font-weight="600" fill="#1f2421">EN</text>
+<text x="478" y="554" text-anchor="end" font-weight="600" fill="#1f2421">EN</text>
+<circle cx="490" cy="550" r="4" fill="#607d8b"/>
+<line x1="490" y1="550" x2="550" y2="550" stroke="#607d8b" stroke-width="3" stroke-linecap="round"/>
+<text x="560" y="554" fill="#1f2421">RESET button to GND</text>
+<text x="478" y="584" text-anchor="end" font-weight="600" fill="#1f2421">IO0</text>
 <circle cx="490" cy="580" r="4" fill="#607d8b"/>
 <line x1="490" y1="580" x2="550" y2="580" stroke="#607d8b" stroke-width="3" stroke-linecap="round"/>
-<text x="560" y="584" fill="#1f2421">RESET button to GND</text>
-<text x="478" y="614" text-anchor="end" font-weight="600" fill="#1f2421">IO0</text>
-<circle cx="490" cy="610" r="4" fill="#607d8b"/>
-<line x1="490" y1="610" x2="550" y2="610" stroke="#607d8b" stroke-width="3" stroke-linecap="round"/>
-<text x="560" y="614" fill="#1f2421">BOOT button to GND (press only while resetting)</text>
+<text x="560" y="584" fill="#1f2421">BOOT button to GND (press only while resetting)</text>
 <text x="262" y="114" font-weight="600" fill="#1f2421">5V</text>
 <circle cx="250" cy="110" r="4" fill="#d32f2f"/>
 <line x1="250" y1="110" x2="180" y2="110" stroke="#d32f2f" stroke-width="3" stroke-linecap="round"/>

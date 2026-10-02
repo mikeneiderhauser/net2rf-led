@@ -128,9 +128,6 @@ python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the netwo
 | `lib/cc1101_ook`, `lib/sx1278_ook` | Minimal radio drivers for OOK transmit and listen-before-talk |
 | `lib/net2rf_heartbeat` | Controller heartbeat format (unit tested) |
 
-Releases: pushing a tag like `v1.0.0` runs the tests, builds, attaches the `.bin` files to a
-[GitHub release](https://github.com/mikeneiderhauser/net2rf-led/releases/latest) and deploys the [browser flasher](https://mikeneiderhauser.github.io/net2rf-led/) to GitHub Pages ([`.github/workflows/build.yml`](.github/workflows/build.yml)).
-
 ## License and legal
 
 Copyright (C) 2026 Mike Neiderhauser and contributors.
