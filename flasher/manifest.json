@@ -1,0 +1,11 @@
+{
+  "name": "Net2RF LED",
+  "version": "__VERSION__",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [{ "path": "firmware.factory.bin", "offset": 0 }]
+    }
+  ]
+}

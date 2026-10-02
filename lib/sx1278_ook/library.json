@@ -1,0 +1,7 @@
+{
+  "name": "sx1278_ook",
+  "version": "0.1.0",
+  "description": "Minimal Semtech SX1276/77/78 (Ra-02, RFM96W) driver for continuous-mode OOK transmission: an external pulse source (e.g. ESP32 RMT) drives DIO2.",
+  "keywords": "sx1278, sx1276, ra-02, rfm96w, ook, 433mhz, rf",
+  "license": "GPL-3.0-or-later"
+}

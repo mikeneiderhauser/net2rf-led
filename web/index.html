@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Net2RF LED</title>
+<style>
+:root{--bg:#f3f4f1;--panel:#fff;--ink:#1f2421;--dim:#6a716c;--rule:#dfe2dc;--field:#fff;--accent:#0f766e;--accent-ink:#fff;--good:#15803d;--warn:#b45309;--bad:#b91c1c;--side:#e8ebe5}
+@media (prefers-color-scheme:dark){:root{--bg:#121513;--panel:#1a1e1b;--ink:#e6e9e4;--dim:#98a19a;--rule:#2b312d;--field:#222723;--accent:#2dd4bf;--accent-ink:#06201d;--good:#4ade80;--warn:#fbbf24;--bad:#f87171;--side:#161a17}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--accent)}
+.shell{display:grid;grid-template-columns:200px minmax(0,1fr);min-height:100vh}
+aside{background:var(--side);border-right:1px solid var(--rule);padding:16px 12px;position:sticky;top:0;height:100vh}
+.brand{font-weight:700;font-size:15px;letter-spacing:.2px;padding:0 8px 2px}
+.zone{color:var(--dim);font-size:12px;padding:0 8px 14px}
+nav a{display:block;padding:8px 10px;border-radius:8px;color:var(--ink);text-decoration:none;margin-bottom:2px}
+nav a.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+nav a:not(.on):hover{background:var(--rule)}
+.ver{position:absolute;bottom:14px;left:20px;color:var(--dim);font-size:12px}
+main{padding:20px 24px 40px;max-width:1180px;width:100%;min-width:0}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:18px}
+.bar h1{font-size:20px;margin:0}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--panel);border-radius:999px;padding:3px 10px;font-size:12px;white-space:nowrap}
+.led{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.led.good{background:var(--good)}.led.warn{background:var(--warn)}.led.bad{background:var(--bad)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.grid .card{margin-bottom:0}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim);margin:0 0 10px;font-weight:600}
+.big{font-size:30px;font-weight:700;line-height:1.1}
+.unit{font-size:13px;color:var(--dim);font-weight:500;margin-left:4px}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;margin:8px 0 0}
+dl.kv dt{color:var(--dim)}dl.kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:12px;color:var(--dim);font-weight:600;padding:6px 6px;border-bottom:1px solid var(--rule);white-space:nowrap}
+.tbl td{padding:6px;border-bottom:1px solid var(--rule);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.scroll{overflow-x:auto}
+.sw{display:inline-block;width:22px;height:22px;border-radius:5px;border:1px solid var(--rule);vertical-align:middle}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+.dim{color:var(--dim)}.small{font-size:12px}
+.badge{display:inline-block;border-radius:6px;padding:1px 7px;font-size:12px;font-weight:600}
+.badge.good{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.badge.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.badge.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+input,select,button,textarea{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--rule);border-radius:7px;padding:6px 8px}
+input[type=checkbox]{width:17px;height:17px;padding:0;accent-color:var(--accent)}
+input[type=color]{padding:1px;width:40px;height:32px}
+button{cursor:pointer;background:var(--panel)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--rule))}
+button:disabled{opacity:.5;cursor:default}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px 16px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--dim)}
+.form label.inline{flex-direction:row;align-items:center;gap:8px;color:var(--ink);font-size:14px}
+.form .hint{font-size:11.5px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;border-right:1px solid var(--rule)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.note{border-left:3px solid var(--warn);padding:6px 10px;background:color-mix(in srgb,var(--warn) 8%,transparent);border-radius:0 6px 6px 0;margin:8px 0;font-size:13px}
+pre{background:var(--field);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;overflow-x:auto;margin:0;font-size:12.5px}
+progress{width:100%;height:10px}
+.hide{display:none!important}
+.nw{white-space:nowrap}
+#toast{position:fixed;right:16px;bottom:16px;background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80vw}
+#toast.show{opacity:1}
+#ask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+#ask.hide{display:none}
+#ask .box{background:var(--panel);color:var(--ink);border-radius:10px;padding:18px;max-width:440px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+#ask p{margin:0 0 14px;white-space:pre-line;line-height:1.4}
+#ask .actions{justify-content:flex-end;margin-top:0}
+.w70{width:70px}.w90{width:90px}.w120{width:120px}.w150{width:150px}
+@media (max-width:760px){.shell{grid-template-columns:minmax(0,1fr)}aside{min-width:0}aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule);padding:10px 12px}nav{display:flex;gap:4px;overflow-x:auto}nav a{white-space:nowrap}.ver{display:none}main{padding:14px 16px 32px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside>
+  <div class="brand">Net2RF LED</div>
+  <div class="zone" id="zoneLabel">&nbsp;</div>
+  <nav id="nav">
+    <a href="#dashboard">Dashboard</a>
+    <a href="#zones">Zones</a>
+    <a href="#output">Bracelets &amp; Radio</a>
+    <a href="#network">Network</a>
+    <a href="#tools">Tools</a>
+    <a href="#system">System</a>
+  </nav>
+  <div class="ver" id="verLabel"></div>
+</aside>
+<main>
+  <div id="cnaNote" class="card hide" style="border-left:4px solid var(--warn)"><b>You're in the Wi-Fi sign-in window.</b>
+    Network settings can be saved here, but this window can't pick files (firmware update, settings import).
+    For those, open <b>http://192.168.4.1/</b> in Safari or Chrome while still joined to this access point.</div>
+  <div class="bar"><h1 id="pageTitle">Dashboard</h1><div class="pills" id="pills"></div></div>
+
+  <!-- DASHBOARD -->
+  <section data-page="dashboard">
+    <div class="grid">
+      <div class="card"><h2>Input (DDP)</h2>
+        <div class="big" id="d_fps">–<span class="unit">fps</span></div>
+        <div id="d_inState" class="small"></div>
+        <dl class="kv">
+          <dt>Packets (DDP / E1.31)</dt><dd id="d_pk">–</dd><dt>Frames</dt><dd id="d_fr">–</dd>
+          <dt>Malformed</dt><dd id="d_bad">–</dd><dt>Ignored</dt><dd id="d_ign">–</dd>
+          <dt>Data</dt><dd id="d_bytes">–</dd><dt>Source</dt><dd id="d_src">–</dd>
+        </dl>
+        <div class="note hide" id="d_range"></div></div>
+      <div class="card"><h2>Output (RF)</h2>
+        <div class="big" id="d_air">–<span class="unit">% airtime</span></div>
+        <div class="small dim">share of the last 10 s spent transmitting</div>
+        <div class="actions" style="margin-top:8px"><span id="d_outState"></span><button id="d_outToggle"></button>
+          <button class="danger" id="d_allOff" title="Send off to every bracelet in range">All off</button></div>
+        <dl class="kv">
+          <dt>Updates sent</dt><dd id="d_up">–</dd><dt>Frames sent</dt><dd id="d_tf">–</dd>
+          <dt>Manual / test</dt><dd id="d_man">–</dd><dt>Errors</dt><dd id="d_err">–</dd>
+          <dt>Queue</dt><dd id="d_q">–</dd><dt>Suppressed (output off)</dt><dd id="d_sup">–</dd>
+        </dl></div>
+      <div class="card"><h2>Radio</h2>
+        <div class="big" id="d_radio">–</div>
+        <div id="d_radioState" class="small"></div>
+        <dl class="kv">
+          <dt>Detail</dt><dd id="d_rdet">–</dd><dt>TX power</dt><dd id="d_pw">–</dd>
+          <dt>Protocol 0</dt><dd id="d_f0">–</dd><dt>Protocol 1</dt><dd id="d_f1">–</dd>
+        </dl></div>
+      <div class="card"><h2>Device</h2>
+        <div class="big" id="d_ip">–</div>
+        <div id="d_iface" class="small"></div>
+        <dl class="kv">
+          <dt>Uptime</dt><dd id="d_upt">–</dd><dt>Firmware</dt><dd id="d_fw">–</dd>
+          <dt>Free memory</dt><dd id="d_heap">–</dd><dt>Last reset</dt><dd id="d_rst">–</dd>
+        </dl></div>
+    </div>
+    <div class="card"><h2>Zones &mdash; last received</h2>
+      <div class="scroll"><table class="tbl"><thead><tr><th>#</th><th>Zone</th><th>Channels</th><th>Colour</th><th></th><th>Sent packet</th><th>Updates</th><th>Last sent</th></tr></thead><tbody id="d_zones"></tbody></table></div>
+      <div class="actions"><button id="resetStats">Reset counters</button><span class="dim small" id="d_timeoutNote"></span></div>
+    </div>
+    <div class="card"><h2>Controllers on this network</h2>
+      <div class="scroll"><table class="tbl"><thead><tr><th>Name</th><th>Address</th><th>IP</th><th>State</th><th>Last seen</th><th>Firmware</th><th></th></tr></thead><tbody id="d_peers"></tbody></table></div>
+      <div class="actions"><button id="d_peersRefresh">Refresh</button><span class="dim small" id="d_alias"></span></div>
+    </div>
+    <div class="card"><h2>Test mode</h2>
+      <p class="dim small" style="margin-top:0">Overrides DDP input for every enabled zone until switched off.</p>
+      <div class="actions" style="margin-top:0"><div class="seg" id="testSeg"><button data-m="off">Off</button><button data-m="solid">Solid</button><button data-m="cycle">Cycle R/G/B/W</button></div>
+      <input type="color" id="testColor" value="#ffffff"></div>
+    </div>
+  </section>
+
+  <!-- ZONES -->
+  <section data-page="zones" class="hide">
+    <div class="card"><h2>Zones</h2>
+      <p class="dim small" style="margin-top:0">Each zone is one set of bracelets that share an address. Zones take consecutive DDP channels from the start channel (<span id="z_widthNote"></span>). Disabling a zone keeps the channel layout.</p>
+      <div class="scroll"><table class="tbl"><thead><tr><th>#</th><th>On</th><th>Name</th><th>Group / address</th><th>Channels</th><th>Test</th></tr></thead><tbody id="z_rows"></tbody></table></div>
+      <div class="note hide" id="z_mixNote"></div>
+      <div class="actions"><button id="z_add">+ Add zone</button><button id="z_del">&minus; Remove last</button><span style="flex:1"></span><button class="primary" id="z_save">Save zones</button></div>
+    </div>
+    <div class="card"><h2>Zone walk</h2>
+      <p class="dim small" style="margin-top:0">Lights one saved zone at a time so you can see which bracelets belong to which zone. Wake the bracelets first (press their button). Pause xLights while walking, or its input will overwrite the colours. Unsaved zone edits are not used: save first.</p>
+      <div class="form">
+        <label>Colour<input id="w_col" type="color" value="#ffffff"></label>
+        <label>Step time (ms)<input id="w_dwell" type="number" value="3000" min="500"></label>
+        <label class="inline"><input type="checkbox" id="w_off" checked> Turn the previous zone off</label>
+      </div>
+      <div class="actions"><button class="primary" id="w_start">Start</button><button id="w_pause">Pause</button><button id="w_prev">&larr; Back</button><button id="w_next">Next &rarr;</button><button id="w_stop">Stop (all off)</button></div>
+      <div style="margin-top:12px"><span class="dim small">Lit now</span> <span class="big" id="w_cur">&mdash;</span> <span class="dim small mono" id="w_step"></span></div>
+    </div>
+  </section>
+
+  <!-- ZONE & OUTPUT -->
+  <section data-page="output" class="hide">
+    <div class="card"><h2>Bracelets</h2>
+      <p class="dim small" style="margin-top:0">One controller drives one kind of bracelet in one input mode. Use another controller for a different bracelet type.</p>
+      <div class="form">
+        <label>Controller name<input id="b_name" maxlength="23"></label>
+        <label>Bracelet protocol<select id="b_proto"><option value="0">0 &middot; Shenzen New Dody (433.889, 10 colours)</option><option value="1">1 &middot; LedGiftSupplier.com (433.920, RGB)</option></select><span class="hint">changing it resets zone addresses to the default</span></label>
+        <label>Input mode<select id="b_mode"><option value="pixel">Pixel (R, G, B)</option><option value="dmx">DMX (R, G, B, FX)</option><option value="vendor">Vendor DMX transmitter (85, group, R, G, B)</option></select><span class="hint" id="b_modeHint">3 or 4 DDP channels per zone</span></label>
+        <label id="b_orderWrap">Colour order<select id="b_order"><option>RGB</option><option>RBG</option><option>GRB</option><option>GBR</option><option>BRG</option><option>BGR</option></select><span class="hint">match the xLights model's string type</span></label>
+      </div></div>
+    <div class="card"><h2>Radio</h2>
+      <div class="form">
+        <label>Radio module<select id="r_type"><option value="cc1101">CC1101</option><option value="sx1278">SX1278 / Ra-02</option></select><span class="hint">changing the module reboots the controller</span></label>
+        <label class="rf">TX power (dBm)<input id="r_power" type="number"><span class="hint" id="r_powerHint"></span></label>
+        <label class="rf">Protocol 0 frequency (Hz)<input id="r_f0" type="number"></label>
+        <label class="rf">Protocol 1 frequency (Hz)<input id="r_f1" type="number"></label>
+        <label>Frames per update<input id="r_rep" type="number" min="1" max="10"><span class="hint">each frame is ~47 ms on air</span></label>
+        <label>Refresh unchanged (ms)<input id="r_ref" type="number" min="0" max="60000"><span class="hint">0 = only on change (recommended: bracelets hold their colour)</span></label>
+        <label>TX jitter (ms)<input id="r_jit" type="number" min="0" max="200"><span class="hint">random delay; helps when zones overlap</span></label>
+        <label>Protocol 0 off threshold<input id="r_thr" type="number" min="0" max="255"></label>
+        <label class="inline"><input type="checkbox" id="r_lbt"> Listen before transmit
+          <span class="hint">wait for a clear channel</span></label>
+        <label>Busy above (dBm)<input id="r_lbtThr" type="number" min="-120" max="-30">
+          <span class="hint" id="r_lbtHint">set it ~10 dB above the quiet reading</span></label>
+      </div>
+      <div class="note">Strong 433&nbsp;MHz signals can stop some <b>car key fobs</b> working nearby. Use the lowest TX power that reaches your audience, keep refresh at 0, and don't keep the bracelets busy all show long.</div>
+    </div>
+    <div class="card"><h2>Input</h2>
+      <div class="form">
+        <label class="inline"><input type="checkbox" id="i_ddp"> DDP</label>
+        <label>DDP port<input id="i_port" type="number" min="1" max="65535"></label>
+      </div>
+      <div class="form" style="margin-top:12px">
+        <label class="inline"><input type="checkbox" id="i_e131"> E1.31 (sACN)</label>
+        <label>E1.31 universe<input id="i_univ" type="number" min="1" max="63999"><span class="hint">UDP 5568, one universe</span></label>
+        <label class="inline"><input type="checkbox" id="i_mcast"> Join multicast</label>
+      </div>
+      <div class="form" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--rule)">
+        <label>Start channel<input id="i_start" type="number" min="1" max="512"><span class="hint">channel of zone 1 (DDP and E1.31)</span></label>
+        <label>Blank after no input (s)<input id="i_to" type="number" min="0" max="86400"><span class="hint">0 = hold the last colour forever</span></label>
+      </div></div>
+    <div class="actions"><button class="primary" id="o_save">Save</button></div>
+  </section>
+
+  <!-- NETWORK -->
+  <section data-page="network" class="hide">
+    <div class="card"><h2>Current connection</h2><dl class="kv" id="n_status" style="max-width:520px"></dl></div>
+    <div class="card"><h2>Settings</h2>
+      <div class="form">
+        <label>Hostname<input id="n_host" maxlength="32"><span class="hint">also reachable as &lt;hostname&gt;.local</span></label>
+        <label class="inline"><input type="checkbox" id="n_eth"> Use Ethernet</label>
+      </div>
+      <h2 style="margin-top:18px">Wi-Fi</h2>
+      <div class="form">
+        <label>Network (SSID)<input id="n_ssid" maxlength="32" list="n_ssidList"><datalist id="n_ssidList"></datalist></label>
+        <label>Password<input id="n_pass" type="password" maxlength="64" placeholder=""></label>
+        <label>&nbsp;<button id="n_scan">Scan for networks</button></label>
+      </div>
+      <h2 style="margin-top:18px">IP address</h2>
+      <div class="form">
+        <label class="inline"><input type="checkbox" id="n_dhcp"> Get address automatically (DHCP)</label>
+      </div>
+      <div class="form" id="n_static" style="margin-top:10px">
+        <label>IP address<input id="n_ip" placeholder="192.168.1.60"></label>
+        <label>Subnet mask<input id="n_mask" placeholder="255.255.255.0"></label>
+        <label>Gateway<input id="n_gw" placeholder="192.168.1.1"></label>
+        <label>DNS<input id="n_dns" placeholder="optional"></label>
+      </div>
+      <h2 style="margin-top:18px">Setup access point</h2>
+      <div class="form">
+        <label>Open access point<select id="n_ap"><option value="no_connection">When not connected</option><option value="always">Always</option><option value="never">Never</option></select></label>
+        <label>AP password<input id="n_appass" type="password" maxlength="64" placeholder="unchanged"><span class="hint">8+ characters</span></label>
+      </div>
+      <div class="note">Saving reboots the controller. If the IP address changes, reconnect at the new address or <span class="mono" id="n_mdns"></span>. If you lose access, hold the front-panel button for 5&nbsp;s to reset networking.</div>
+      <div class="actions"><button class="primary" id="n_save">Save &amp; reboot</button></div>
+    </div>
+  </section>
+
+  <!-- TOOLS -->
+  <section data-page="tools" class="hide">
+    <div class="card"><h2>xLights setup</h2><pre id="t_xl"></pre></div>
+    <div class="card"><h2>Which bracelet do I have?</h2>
+      <p class="dim small" style="margin-top:0">Switch a bracelet on, <b>press its button</b> so it listens, and hold it near the antenna. This alternates between the two bracelet protocols, each broadcast to all groups:
+        <b style="color:#e53935">red</b> = protocol 0 (Shenzen New Dody), <b style="color:#43a047">green</b> = protocol 1 (LedGiftSupplier.com).</p>
+      <div class="actions" style="margin-top:0"><button class="primary" id="id_start">Start test</button><button id="id_stop">Stop</button>
+        <span class="small" id="id_now"></span></div>
+      <div class="actions"><span class="small dim">Bracelet showed:</span><button id="id_p0">Red → use protocol 0</button><button id="id_p1">Green → use protocol 1</button></div>
+      <p class="dim small">Nothing at all? Check the bracelet's power switch and battery, bring it closer, raise TX power, and confirm the radio shows <i>ready</i> on the dashboard.
+        If it only reacts to protocol 1 once you pick a group, use the Address probe below on <i>Group (byte 1)</i> in sweep mode.</p>
+    </div>
+    <div class="card"><h2>Send raw packet</h2>
+      <div class="form">
+        <label>Protocol<select id="t_p"><option value="0">0 &middot; 433.889 MHz</option><option value="1" selected>1 &middot; 433.920 MHz</option></select></label>
+        <label>Preset<select id="t_pre"><option value="">&mdash;</option></select></label>
+        <label>Packet (7 bytes hex)<input id="t_hex" class="mono" value="55000FFFFF55FF"></label>
+        <label>Frames<input id="t_rep" type="number" min="1" max="20" value="3"></label>
+        <label class="inline"><input type="checkbox" id="t_fix" checked> Fix checksum</label>
+      </div>
+      <div class="actions"><button class="primary" id="t_send">Send</button><span class="mono small dim" id="t_prev"></span></div>
+    </div>
+    <div class="card"><h2>Address probe</h2>
+      <p class="dim small" style="margin-top:0">Steps through candidate address values while you watch the bracelets. Mark the steps where a bracelet reacts, then enter that value as a zone address.</p>
+      <div class="form">
+        <label>Protocol<select id="p_p"><option value="0">0</option><option value="1" selected>1</option></select></label>
+        <label>Base address<input id="p_base" class="mono"></label>
+        <label>Field<select id="p_field"></select></label>
+        <label>Mode<select id="p_mode"><option value="bits">Walk single bits</option><option value="sweep">Sweep a range</option></select></label>
+        <label>From<input id="p_from" type="number" value="0"></label>
+        <label>To<input id="p_to" type="number" value="255"></label>
+        <label>Colour<input id="p_col" type="color" value="#ff0000"></label>
+        <label>Step time (ms)<input id="p_dwell" type="number" value="1500" min="300"></label>
+        <label class="inline"><input type="checkbox" id="p_off" checked> Send off between steps</label>
+      </div>
+      <div class="actions"><button class="primary" id="p_start">Start</button><button id="p_pause">Pause</button><button id="p_prev">&larr; Back</button><button id="p_next">Next &rarr;</button><button id="p_stop">Stop</button><button id="p_mark">&#9733; Bracelet reacted</button></div>
+      <div style="margin-top:12px"><span class="dim small">Current address</span> <span class="big mono" id="p_cur">&mdash;</span> <span class="dim small" id="p_step"></span></div>
+      <div class="mono small" id="p_log" style="margin-top:6px"></div>
+    </div>
+  </section>
+
+  <!-- SYSTEM -->
+  <section data-page="system" class="hide">
+    <div class="grid">
+      <div class="card"><h2>Firmware</h2><dl class="kv" id="s_info"></dl></div>
+      <div class="card"><h2>Update firmware</h2>
+        <p class="dim small" style="margin-top:0">Upload a <span class="mono">firmware.bin</span> build. The controller reboots when done.</p>
+        <input type="file" id="s_file" accept=".bin">
+        <div class="small cnaOnly hide">File picker does nothing? You're in the Wi-Fi sign-in window: open http://192.168.4.1/ in Safari or Chrome.</div>
+        <div class="actions"><button class="primary" id="s_upload" disabled>Upload</button></div>
+        <progress id="s_prog" class="hide" max="100" value="0"></progress><div class="small dim" id="s_upMsg"></div>
+      </div>
+    </div>
+    <div class="card"><h2>Display (OLED)</h2>
+      <p class="small" style="margin-top:0" id="o_state"></p>
+      <div class="form">
+        <label>Display type<select id="o_type"><option value="ssd1306">SSD1306 (0.96", most common)</option><option value="sh1106">SH1106 (1.3")</option></select>
+          <span class="hint">pick SH1106 if the picture is shifted or garbled</span></label>
+      </div>
+      <div class="actions"><button class="primary" id="o_dispSave">Apply</button><button id="o_scan">Scan I²C bus</button></div>
+      <pre class="hide" id="o_scanOut" style="margin-top:10px"></pre>
+      <p class="dim small">Wiring: SDA → IO5 (pin labelled <span class="mono">RXD</span>), SCL → IO17 (<span class="mono">TXD</span>), VCC → 3V3, GND → GND. The controller keeps looking at 0x3C and 0x3D every 5&nbsp;s, so a fixed connection comes alive without a reboot.</p>
+    </div>
+    <div class="card"><h2>Admin password</h2>
+      <p class="small" style="margin-top:0" id="a_state"></p>
+      <div class="form">
+        <label>New password<input id="a_pw1" type="password" maxlength="64" autocomplete="new-password"><span class="hint">8+ characters; user name is <span class="mono">admin</span></span></label>
+        <label>Confirm<input id="a_pw2" type="password" maxlength="64" autocomplete="new-password"></label>
+      </div>
+      <div class="actions"><button class="primary" id="a_set">Set password</button><button class="danger hide" id="a_clear">Remove password</button></div>
+      <p class="dim small">The dashboard and <span class="mono">/api/stats</span> stay readable without it. Forgot it? Hold the front-panel button 5&nbsp;s (network reset) to clear it.</p>
+    </div>
+    <div class="card"><h2>Configuration</h2>
+      <div class="actions" style="margin-top:0"><a href="/api/export"><button>Export settings</button></a>
+        <label class="small dim" style="display:flex;align-items:center;gap:6px"><input type="file" id="s_import" accept=".json"> </label>
+        <label class="small" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="s_impNet"> include network settings</label>
+        <button id="s_importBtn" disabled>Import</button></div>
+      <p class="dim small">Exports never include the Wi-Fi password.</p>
+    </div>
+    <div class="card"><h2>Maintenance</h2>
+      <div class="actions" style="margin-top:0"><button id="s_reboot">Reboot</button><button class="danger" id="s_factory">Factory reset</button></div>
+    </div>
+  </section>
+</main>
+</div>
+<div id="toast"></div>
+<div id="ask" class="hide" role="dialog" aria-modal="true"><div class="box"><p id="askMsg"></p>
+  <div class="actions"><button id="askNo">Cancel</button><button class="primary" id="askYes">OK</button></div></div></div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const PAGES={dashboard:'Dashboard',zones:'Zones',output:'Bracelets & Radio',network:'Network',tools:'Tools',system:'System'};
+const ORDERS=['RGB','RBG','GRB','GBR','BRG','BGR'];
+const PROTOS=['0 · Shenzen New Dody · 433.889','1 · LedGiftSupplier · 433.920'];
+let S=null,C=null;
+
+function toast(msg,ms=1800){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms)}
+async function api(path,body){
+  const opt=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};
+  const r=await fetch('/api/'+path,opt);let j={};try{j=await r.json()}catch(e){}
+  if(r.status===401){toast('Admin password required',3500);throw new Error('401')}
+  if(!r.ok||j.ok===false){toast(j.error||('Error '+r.status),3500);throw new Error(j.error||r.status)}
+  return j}
+// In-page confirmation. Native confirm() is suppressed in phone captive-portal windows (setup AP),
+// where it returns false without showing anything.
+function ask(msg,yes='OK'){return new Promise(res=>{const d=$('ask');$('askMsg').textContent=msg;$('askYes').textContent=yes;
+  const done=v=>{d.classList.add('hide');$('askYes').onclick=$('askNo').onclick=d.onclick=null;document.onkeydown=null;res(v)};
+  $('askYes').onclick=()=>done(true);$('askNo').onclick=()=>done(false);d.onclick=e=>{if(e.target===d)done(false)};
+  document.onkeydown=e=>{if(e.key==='Escape')done(false);else if(e.key==='Enter')done(true)};
+  d.classList.remove('hide');$('askYes').focus()})}
+const CNA=/AppleWebKit/.test(navigator.userAgent)&&!/Safari|Chrome|CriOS|FxiOS|EdgiOS|Firefox/.test(navigator.userAgent)||/; wv\)/.test(navigator.userAgent);
+function afterSave(j,what){if(j.reboot){toast(what+' saved. Rebooting…',4000);setTimeout(()=>location.reload(),6000)}else toast(what+' saved')}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hx=(n,w=2)=>Number(n).toString(16).toUpperCase().padStart(w,'0');
+const bytes=h=>(String(h).replace(/[^0-9a-f]/gi,'').match(/../g)||[]).map(x=>parseInt(x,16));
+const fmtN=n=>Number(n).toLocaleString();
+function fmtBytes(b){b=Number(b);return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB'}
+function fmtAge(ms){if(ms<0)return'never';const s=ms/1000;return s<1?'just now':s<60?Math.round(s)+'s ago':s<3600?Math.round(s/60)+'m ago':Math.round(s/3600)+'h ago'}
+function fmtUp(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+'d ':'')+(h?h+'h ':'')+m+'m'}
+const mhz=hz=>(hz/1e6).toFixed(3)+' MHz';
+const pill=(cls,txt)=>`<span class="pill"><span class="led ${cls}"></span>${txt}</span>`;
+function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}
+
+// ---------- navigation ----------
+function show(page){if(!PAGES[page])page='dashboard';
+  document.querySelectorAll('section[data-page]').forEach(s=>s.classList.toggle('hide',s.dataset.page!==page));
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+page));
+  $('pageTitle').textContent=PAGES[page];if(page==='tools')xlights()}
+window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
+
+// ---------- status polling ----------
+async function poll(){try{S=await api('status');render()}catch(e){$('pills').innerHTML=pill('bad','offline')}}
+function inputState(i){if(S.engine.test.mode!=='off')return['warn','Test mode'];if(i.out_of_range_channel)return['bad','Wrong channels'];if(!i.seen)return['','No DDP yet'];if(i.timed_out)return['warn','Timed out (blank)'];return i.age_ms<3000?['good','Receiving']:['','Idle']}
+function radioState(r){return r.state==='ready'&&r.data_line==='fault'?['bad','data line fault']:r.state==='ready'?['good','ready']:r.state==='not_detected'?['bad','not detected']:['warn','initializing']}
+function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.toggle('hide',!(ap&&CNA));
+  {const L=S.engine.radio.lbt,o=S.engine.output;if(L)$('r_lbtHint').textContent=!L.supported?'not supported by this radio':
+    !L.enabled||L.last_rssi_dbm<=-127?'set it ~10 dB above the quiet reading (shown here once enabled)':
+    `last reading ${L.last_rssi_dbm} dBm (${L.last_busy?'busy':'clear'}) · waited ${o.lbt_waits}× · sent anyway ${o.lbt_forced}×`}
+  document.querySelectorAll('.cnaOnly').forEach(e=>e.classList.toggle('hide',!ap));
+  const d=S.device,n=S.network,e=S.engine,i=e.input,o=e.output,r=e.radio;
+  $('zoneLabel').textContent=d.name;$('verLabel').textContent='v'+d.firmware;
+  const [ic,it]=inputState(i),[rc,rt]=radioState(r);
+  $('pills').innerHTML=(o.enabled?'':pill('bad','RF output off'))+(d.update_rolled_back?pill('bad','update rolled back'):'')+pill(rc,r.name+' '+rt)+pill(ic,it)+pill(n.interface==='none'?'bad':n.interface==='ap'?'warn':'good',n.interface+' · '+n.ip);
+  $('d_fps').innerHTML=i.fps+'<span class="unit">fps</span>';
+  $('d_inState').innerHTML=`<span class="badge ${ic}">${it}</span> <span class="dim">${i.seen?(i.last_source==='e131'?'E1.31':'DDP')+' · last packet '+fmtAge(i.age_ms):''}</span>`;
+  $('d_pk').textContent=`${fmtN(i.ddp_packets)} / ${fmtN(i.e131_packets)}`;$('d_fr').textContent=fmtN(i.frames);$('d_bad').textContent=fmtN(i.malformed);
+  $('d_ign').textContent=fmtN(i.ignored);
+  $('d_range').classList.toggle('hide',!i.out_of_range_channel);if(i.out_of_range_channel)$('d_range').innerHTML=
+    `<b>Input is aimed at channel ${fmtN(i.out_of_range_channel)}</b>, past this controller's 512 channels, so it is ignored. `+
+    `In xLights, open this controller and <b>untick "Keep Channel Numbers"</b> (DDP), or check the E1.31 universe / start channel.`;$('d_bytes').textContent=fmtBytes(i.bytes);$('d_src').textContent=i.source||'–';
+  $('d_air').innerHTML=o.airtime_pct+'<span class="unit">% airtime</span>';
+  $('d_up').textContent=fmtN(o.updates);$('d_tf').textContent=fmtN(o.frames);$('d_man').textContent=fmtN(o.manual);$('d_err').textContent=fmtN(o.errors);$('d_q').textContent=r.queue;$('d_sup').textContent=fmtN(o.suppressed);
+  $('d_outState').innerHTML=o.enabled?'<span class="badge good">RF output on</span>':'<span class="badge bad">RF output off</span> <span class="dim small">DDP is consumed, nothing is sent</span>';
+  $('d_outToggle').textContent=o.enabled?'Disable output':'Enable output';$('d_outToggle').className=o.enabled?'danger':'primary';
+  $('d_radio').textContent=r.name;$('d_radioState').innerHTML=`<span class="badge ${rc}">${rt}</span>`;
+  $('d_rdet').textContent=r.detail||'–';
+  if(C){const a=C.app.radio;$('d_pw').textContent=Math.max(r.min_power,Math.min(r.max_power,a.tx_power))+' dBm';
+    $('d_f0').textContent=mhz(a.freq_p0);$('d_f1').textContent=mhz(a.freq_p1)}
+  $('d_ip').textContent=n.ip;$('d_iface').innerHTML=`<span class="dim">${n.interface}${n.ethernet.link&&n.interface==='ethernet'?' · '+n.ethernet.speed+' Mbps':''}${n.wifi.connected&&n.interface==='wifi'?' · '+n.wifi.rssi+' dBm':''} · ${n.hostname}.local</span>`;
+  $('d_upt').textContent=fmtUp(d.uptime_s);$('d_fw').textContent=d.firmware;$('d_heap').textContent=fmtBytes(d.free_heap);$('d_rst').textContent=d.reset_reason;
+  $('d_timeoutNote').textContent=i.timeout_s?`Bracelets blank after ${i.timeout_s>=60?Math.round(i.timeout_s/60)+' min':i.timeout_s+' s'} without input.`:'Bracelets hold the last colour when input stops.';
+  // live zones
+  const w=C?({dmx:4,vendor:5}[C.app.bracelets.mode]||3):3;
+  const rows=e.zones.map((g,k)=>{const cfg=C&&C.app.zones[k];if(!cfg)return'';
+    return `<tr class="${cfg.enabled?'':'dim'}"><td class="dim">${k+1}</td><td class="nw">${esc(cfg.name)}</td><td class="dim nw">${cfg.start}-${cfg.start+w-1}</td><td class="nw"><span class="sw" style="background:#${g.rgb}"></span> <span class="mono">#${g.rgb}</span></td><td class="small dim nw">${w===4?'fx '+g.fx:w===5?(g.gated?'<span class="badge warn">held: ch1 ≠ 85</span>':'group '+g.group):''}</td><td class="mono nw">${g.packet?g.packet.match(/../g).join(' '):'–'}</td><td>${fmtN(g.tx)}</td><td class="dim">${fmtAge(g.tx_age_ms)}</td></tr>`}).join('');
+  $('d_zones').innerHTML=rows;
+  document.querySelectorAll('#testSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===e.test.mode));
+  renderNetStatus();sysInfo();if(location.hash==='#tools')xlights();
+}
+
+// ---------- config ----------
+async function loadConfig(){C=await api('config');fillOutput();fillNetwork();if(!zonesDirty)renderZones()}
+
+// zones editor
+let zonesDirty=false;
+const addrLen=()=>C.app.bracelets.protocol==0?8:4;
+const defAddr=()=>C.app.bracelets.protocol==0?'00FFFF0F':'00FF';
+function zoneWidth(){return {dmx:4,vendor:5}[C.app.bracelets.mode]||3}
+// Protocol 1 addresses are "group code" (byte 1; 0 = all groups) + byte 6 (kept as-is, normally FF).
+function addrCell(z,start){
+  if(C.app.bracelets.protocol==0)return `<input data-f="addr" class="mono w90" maxlength="8" value="${z.addr}">`;
+  const grp=parseInt(z.addr.slice(0,2),16)||0,b6=z.addr.slice(2,4)||'FF';
+  if(C.app.bracelets.mode==='vendor')return `<input type="hidden" data-f="addr" value="${z.addr}"><span class="dim small nw">group from channel ${start+1}</span>`;
+  return `<span class="nw"><input data-f="group" type="number" class="w70" min="0" max="255" value="${grp}"> <span class="dim small">${grp==0?'all groups':''}</span></span><input type="hidden" data-f="b6" value="${b6}">`}
+function zoneRow(z,k){const w=zoneWidth(),start=C.app.input.start_channel+k*w;
+  return `<td class="dim">${k+1}</td><td><input type="checkbox" data-f="enabled" ${z.enabled?'checked':''}></td>
+  <td><input data-f="name" class="w150" maxlength="23" value="${esc(z.name)}"></td>
+  <td>${addrCell(z,start)}</td>
+  <td class="dim">${start}-${start+w-1}</td>
+  <td style="white-space:nowrap"><input type="color" class="tc" value="#ff0000"> <button class="ts">Send</button> <button class="to">Off</button>
+   <select class="tfx ${C.app.bracelets.protocol==0?'':'hide'}"><option value="">FX…</option><option value="fxa">A</option><option value="fxb">B</option><option value="fxc">C</option></select></td>`}
+function renderZones(){const tb=$('z_rows');tb.innerHTML='';C.app.zones.forEach((z,k)=>{const tr=tb.insertRow();tr.innerHTML=zoneRow(z,k);bindZone(tr,k)});
+  mixCheck();
+  $('z_widthNote').textContent={3:'3 channels each: R, G, B',4:'4 channels each: R, G, B, FX',5:'5 channels each: boot code (85 = transmit), group, R, G, B'}[zoneWidth()]}
+function readZone(tr){const f=n=>tr.querySelector(`[data-f=${n}]`);
+  const addr=f('group')?hx(Math.max(0,Math.min(255,+f('group').value||0)))+f('b6').value:f('addr').value.replace(/[^0-9a-f]/gi,'').toUpperCase();
+  return{enabled:f('enabled').checked,name:f('name').value,addr}}
+function bindZone(tr,k){tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>{zonesDirty=true;mixCheck()}));
+  tr.querySelector('.ts').onclick=()=>api('send',{zone:k,action:'color',rgb:tr.querySelector('.tc').value.slice(1)});
+  tr.querySelector('.to').onclick=()=>api('send',{zone:k,action:'off'});
+  tr.querySelector('.tfx').onchange=ev=>{if(ev.target.value)api('send',{zone:k,action:ev.target.value});ev.target.value=''}}
+// Warn when an "all groups" zone is mixed with specific groups: its changes override every group.
+function mixCheck(){const b=C.app.bracelets,note=$('z_mixNote');
+  if(b.protocol!=1||b.mode==='vendor'){note.classList.add('hide');return}
+  const zs=[...$('z_rows').rows].map((tr,k)=>({k,z:readZone(tr)})).filter(x=>x.z.enabled);
+  const all=zs.filter(x=>x.z.addr.slice(0,2)==='00'),some=zs.filter(x=>x.z.addr.slice(0,2)!=='00');
+  note.classList.toggle('hide',!(all.length&&some.length));
+  if(all.length&&some.length)note.innerHTML=`Zone ${all.map(x=>x.k+1).join(', ')} is <b>all groups</b>: whenever its colour changes, every bracelet follows it, including the bracelets in zone ${some.map(x=>x.k+1).join(', ')}. Use it as a deliberate "everyone" layer, or give it a specific group.`}
+function collectZones(){return[...$('z_rows').rows].map(readZone)}
+$('z_add').onclick=()=>{const zs=collectZones();if(zs.length>=16)return toast('16 zones maximum');
+  zs.push({enabled:true,name:'Zone '+(zs.length+1),addr:defAddr()});C.app.zones=zs;zonesDirty=true;renderZones()};
+$('z_del').onclick=()=>{const zs=collectZones();if(zs.length<=1)return;zs.pop();C.app.zones=zs;zonesDirty=true;renderZones()};
+$('z_save').onclick=async()=>{const zs=collectZones(),need=addrLen();
+  for(const [k,z] of zs.entries())if(z.addr.length!==need)return toast(`Zone ${k+1}: address must be ${need/2} bytes (${need} hex digits)`,4000);
+  const j=await api('config',{zones:zs});zonesDirty=false;afterSave(j,'Zones');await loadConfig()};
+
+// bracelets & radio
+function fillOutput(){const a=C.app;$('b_name').value=a.name;$('b_proto').value=a.bracelets.protocol;$('b_mode').value=a.bracelets.mode;$('b_order').value=a.bracelets.color_order;$('i_start').value=a.input.start_channel;modeUi();
+  $('i_ddp').checked=a.input.ddp_enabled;$('i_e131').checked=a.input.e131_enabled;$('i_univ').value=a.input.e131_universe;$('i_mcast').checked=a.input.e131_multicast;
+  $('r_type').value=a.radio.type;$('r_power').value=a.radio.tx_power;$('r_f0').value=a.radio.freq_p0;$('r_f1').value=a.radio.freq_p1;
+  $('r_rep').value=a.radio.repeats;$('r_ref').value=a.radio.refresh_ms;$('r_jit').value=a.radio.tx_jitter_ms;$('r_thr').value=a.radio.off_threshold;
+  $('r_lbt').checked=a.radio.lbt_enabled;$('r_lbtThr').value=a.radio.lbt_threshold_dbm;
+  $('i_port').value=a.input.ddp_port;$('i_to').value=a.input.timeout_s;radioTypeUi()}
+const POWER={cc1101:[-30,10],sx1278:[2,17]};
+function radioTypeUi(){const t=$('r_type').value,[lo,hi]=POWER[t]||POWER.cc1101;$('r_power').min=lo;$('r_power').max=hi;$('r_powerHint').textContent=`${lo} to ${hi} dBm for this module`}
+$('r_type').onchange=radioTypeUi;
+function modeUi(){const m=$('b_mode').value;$('b_orderWrap').classList.toggle('hide',m!=='pixel');
+  if(m==='vendor')$('b_proto').value='1';$('b_proto').disabled=m==='vendor';
+  $('b_modeHint').textContent={pixel:'3 channels per zone',dmx:'4 channels per zone',vendor:'5 channels per zone, same layout as the vendor transmitter; LedGiftSupplier only'}[m]}
+$('b_mode').onchange=modeUi;
+$('b_proto').onchange=()=>{if($('b_proto').value==='0'&&$('b_mode').value==='vendor'){$('b_mode').value='pixel';modeUi()}};
+$('o_save').onclick=async()=>{const t=$('r_type').value,[lo,hi]=POWER[t];
+  if(t!==C.app.radio.type&&!await ask('Changing the radio module reboots the controller. Continue?'))return;
+  if(+$('b_proto').value!==C.app.bracelets.protocol&&!await ask('Changing the bracelet protocol resets every zone address to the default. Continue?'))return;
+  const body={name:$('b_name').value,bracelets:{protocol:+$('b_proto').value,mode:$('b_mode').value,color_order:$('b_order').value},
+    radio:{type:t,tx_power:Math.max(lo,Math.min(hi,+$('r_power').value||0)),freq_p0:+$('r_f0').value,freq_p1:+$('r_f1').value,repeats:+$('r_rep').value,refresh_ms:+$('r_ref').value,tx_jitter_ms:+$('r_jit').value,off_threshold:+$('r_thr').value,
+      lbt_enabled:$('r_lbt').checked,lbt_threshold_dbm:Math.max(-120,Math.min(-30,+$('r_lbtThr').value||-85))},
+    input:{ddp_enabled:$('i_ddp').checked,ddp_port:+$('i_port').value,e131_enabled:$('i_e131').checked,e131_universe:+$('i_univ').value,e131_multicast:$('i_mcast').checked,start_channel:+$('i_start').value,timeout_s:+$('i_to').value}};
+  if(!body.input.ddp_enabled&&!body.input.e131_enabled&&!await ask('Both DDP and E1.31 are off: the controller will ignore all input. Continue?'))return;
+  const j=await api('config',body);afterSave(j,'Settings');if(!j.reboot)loadConfig()};
+
+// network
+function fillNetwork(){const n=C.network;$('n_host').value=n.hostname;$('n_eth').checked=n.eth_enabled;$('n_ssid').value=n.wifi_ssid;
+  $('n_pass').value='';$('n_pass').placeholder=n.wifi_pass_set?'unchanged':'';$('n_dhcp').checked=n.dhcp;$('n_ip').value=n.ip;$('n_mask').value=n.subnet||'255.255.255.0';
+  $('n_gw').value=n.gateway;$('n_dns').value=n.dns;$('n_ap').value=n.ap_mode;$('n_mdns').textContent=n.hostname+'.local';staticUi()}
+function staticUi(){$('n_static').classList.toggle('hide',$('n_dhcp').checked)}
+$('n_dhcp').onchange=staticUi;
+function renderNetStatus(){if(!S)return;const n=S.network,rows=[['Active',n.interface],['IP address',n.ip],['Hostname',n.hostname+'.local']];
+  rows.push(['Ethernet',n.ethernet.enabled?(n.ethernet.link?`link up, ${n.ethernet.speed} Mbps${n.ethernet.full_duplex?' full duplex':''}`:'no link'):'disabled']);
+  rows.push(['Wi-Fi',n.wifi.ssid?(n.wifi.connected?`${esc(n.wifi.ssid)} (${n.wifi.rssi} dBm)`:(n.wifi.error?`<span style="color:var(--bad)">can't join ${esc(n.wifi.ssid)}: ${esc(n.wifi.error)}</span>${n.wifi.paused?' (retries paused while the setup AP is in use)':''}`:n.wifi.active?'connecting to '+esc(n.wifi.ssid):'standby (Ethernet in use)')):'not configured']);
+  rows.push(['Access point',n.ap.active?`${esc(n.ap.ssid)} · ${n.ap.ip} · ${n.ap.clients} connected`:'off']);
+  if(n.ethernet.mac)rows.push(['Ethernet MAC',n.ethernet.mac]);rows.push(['Wi-Fi MAC',n.wifi.mac]);kv($('n_status'),rows)}
+$('n_scan').onclick=async ev=>{ev.preventDefault();await api('wifi/scan',{});toast('Scanning…');
+  for(let k=0;k<20;k++){await new Promise(r=>setTimeout(r,700));const s=await api('wifi/scan');if(!s.running){
+    $('n_ssidList').innerHTML=s.networks.map(w=>`<option value="${esc(w.ssid)}">${w.rssi} dBm${w.secure?'':' (open)'}</option>`).join('');toast(s.networks.length+' networks found');return}}};
+$('n_save').onclick=async()=>{const body={hostname:$('n_host').value,eth_enabled:$('n_eth').checked,wifi_ssid:$('n_ssid').value,dhcp:$('n_dhcp').checked,
+    ip:$('n_ip').value,subnet:$('n_mask').value,gateway:$('n_gw').value,dns:$('n_dns').value,ap_mode:$('n_ap').value};
+  if($('n_pass').value)body.wifi_pass=$('n_pass').value;if($('n_appass').value)body.ap_pass=$('n_appass').value;
+  if(!body.wifi_ssid&&!body.eth_enabled&&!await ask('Ethernet is disabled and no Wi-Fi network is set: only the setup access point will be reachable. Continue?'))return;
+  if(!await ask('Save network settings and reboot?','Save & reboot'))return;
+  const onAp=S&&S.network.interface==='ap';
+  await api('network',body);
+  const addr=body.dhcp?`http://${body.hostname}.local/`:`http://${body.ip}/`;
+  if(onAp){
+    // The phone/laptop is on the setup AP, which disappears on reboot: redirecting can't work from here.
+    await ask(`Saved. The controller is rebooting and will join ${body.wifi_ssid?'"'+body.wifi_ssid+'"':'the network'}.\n\n`+
+      `1. Reconnect this device to your normal Wi-Fi.\n2. Open ${addr} (or http://net2rf.local/, or look up the IP on the OLED / your router).\n\n`+
+      `If it can't join, the setup AP "${S.network.ap.ssid}" comes back within about 20 s; reconnect to it and this page will show why.`,'OK');
+    return}
+  toast('Saved. Rebooting…',6000);setTimeout(()=>{location.href=addr},8000)};
+
+// tools: xLights helper
+function xlights(){if(!C||!S)return;const a=C.app,w={dmx:4,vendor:5}[a.bracelets.mode]||3,n=a.zones.length,first=a.input.start_channel,last=first+n*w-1;
+  const pal=a.bracelets.protocol==0?'\nProtocol 0 bracelets have 10 colours; other colours snap to the nearest.':'';
+  let models;
+  if(w===3){models=`Option A: one model for the whole controller
+  Single Line, 1 string x ${n} node${n>1?'s':''}, String Type "${a.bracelets.color_order} Nodes", start channel ${first}
+  (node 1 = ${esc(a.zones[0].name)}${n>1?', node 2 = '+esc(a.zones[1].name):''}${n>2?', ...':''})
+
+Option B: one model per zone
+`+
+    a.zones.map((z,k)=>`  "${z.name}": Single Line, 1 node, "${a.bracelets.color_order} Nodes", start channel ${first+k*3}`).join('\n')+
+    `
+
+Either way, add the model(s) to an existing model group (e.g. your floods)
+and they follow whatever effect it plays.`}
+  else if(w===5){models=a.zones.map((z,k)=>{const b=first+k*5;return `  "${z.name} codes": DMX model, Flood Light, 2 channels (R/G/B/W channel 0), start channel ${b}
+      DMX effect: channel 1 = 85 to transmit (0 = transmitter off), channel 2 = group (0 = all)
+  "${z.name} RGB": Single Line, 1 node, "RGB Nodes", start channel ${b+2}`}).join('\n')+
+    `
+
+Same layout as the LedGiftSupplier DMX transmitter: sequences made for it work unchanged.
+Tip: set channel 1 to 0 between bracelet moments to stop transmitting (car key fobs).`}
+  else{models=a.zones.map((z,k)=>`  "${z.name}": DmxFloodlight, start channel ${first+k*4}  (R=1 G=2 B=3, FX = channel ${first+k*4+3})`).join('\n')+
+    `
+
+FX channel: 0-19 follow RGB, 20-39 off, 40-59 / 60-79 / 80-99 built-in effects A / B / C.`}
+  const ctl=[];if(a.input.ddp_enabled)ctl.push(`  Protocol: DDP     IP: ${S.network.ip}     Port: ${a.input.ddp_port}\n  Channels: ${last}     Keep Channel Numbers: OFF`);
+  if(a.input.e131_enabled)ctl.push(`  Protocol: E1.31   IP: ${a.input.e131_multicast?'multicast (or '+S.network.ip+')':S.network.ip}\n  Universe: ${a.input.e131_universe}, 512 channels (zones use ${first}-${last})`);
+  $('t_xl').textContent=`Controller (Controllers tab > Add E1.31/Artnet/DDP), ${ctl.length>1?'either':'using'}:
+${ctl.join('\n or\n')||'  (no input protocol enabled!)'}
+  Vendor: WLED   Model: WLED   Variant: Generic ESP32  (keeps the visualiser; it shows 8 ports, use port 1 only)
+
+Models (Layout tab), all assigned to this controller (port 1)
+${models}${pal}
+
+Expect roughly 5-10 colour changes per second across all zones.`}
+
+// tools: raw packet
+const PRESETS=[['P0 red','0','00FFFF0F0100'],['P0 green','0','00FFFF0F0101'],['P0 blue','0','00FFFF0F0102'],['P0 off','0','00FFFF0F00AA'],['P0 built-in A','0','00FFFF0F05AA'],['P0 built-in B','0','00FFFF0F06AA'],['P0 built-in C','0','D0FFFFFF5500'],['P1 red','1','55000FFFFF00FF'],['P1 green','1','5500FF0FFF00FF'],['P1 blue','1','5500FFFF0F00FF'],['P1 off','1','5500FFFFFF00FF']];
+$('t_pre').innerHTML+=PRESETS.map((p,k)=>`<option value="${k}">${p[0]}</option>`).join('');
+function fixSum(p,b){if(p==0)b[6]=b.slice(0,6).reduce((a,c)=>a+c,0)&255;else b[5]=b[2]^b[3]^b[4]^0x5A;return b}
+function rawPrev(){const p=+$('t_p').value,b=bytes($('t_hex').value);if(b.length!==7){$('t_prev').textContent='needs 7 bytes';return null}
+  if($('t_fix').checked)fixSum(p,b);$('t_prev').textContent='sends '+b.map(x=>hx(x)).join(' ');return b}
+['t_p','t_hex','t_fix'].forEach(id=>$(id).addEventListener('input',rawPrev));
+$('t_pre').onchange=ev=>{const p=PRESETS[ev.target.value];if(!p)return;$('t_p').value=p[1];$('t_hex').value=(p[2]+'00').slice(0,14);rawPrev()};
+$('t_send').onclick=()=>{const b=rawPrev();if(b)api('raw',{protocol:+$('t_p').value,hex:b.map(x=>hx(x)).join(''),repeats:+$('t_rep').value,fix:false}).then(()=>toast('Sent'))};
+
+// tools: identify bracelet type (alternates protocol 0 red / protocol 1 green, default broadcast addresses)
+let ID={timer:null,step:0};
+async function idStep(){const p=ID.step%2,A0=[0x00,0xFF,0xFF,0x0F],A1=[0x00,0xFF];
+  const send=(proto,pk)=>api('raw',{protocol:proto,hex:pk.map(x=>hx(x)).join(''),repeats:4,fix:false});
+  try{if(p===0){await send(1,buildPkt(1,A1,[0,0,0],true));await send(0,buildPkt(0,A0,[255,0,0],false));
+      $('id_now').innerHTML='Now sending: <b style="color:#e53935">protocol 0, red</b>'}
+    else{await send(0,buildPkt(0,A0,[0,0,0],true));await send(1,buildPkt(1,A1,[0,255,0],false));
+      $('id_now').innerHTML='Now sending: <b style="color:#43a047">protocol 1, green</b>'}}catch(e){idStop();return}
+  ID.step++;if(ID.step>=16)idStop()}
+function idStop(){clearInterval(ID.timer);ID.timer=null;if(ID.step)$('id_now').textContent='Stopped';}
+$('id_start').onclick=()=>{idStop();ID.step=0;idStep();ID.timer=setInterval(idStep,2500)};
+$('id_stop').onclick=idStop;
+async function idUse(proto){idStop();if(C.app.bracelets.protocol===proto)return toast('Already using protocol '+proto);
+  if(!await ask(`Switch this controller to protocol ${proto} (${proto?'LedGiftSupplier.com':'Shenzen New Dody'})? Zone addresses reset to the default.`))return;
+  const body={bracelets:{protocol:proto}};if(proto===0&&C.app.bracelets.mode==='vendor')body.bracelets.mode='pixel';
+  const j=await api('config',body);afterSave(j,'Protocol');await loadConfig()}
+$('id_p0').onclick=()=>idUse(0);$('id_p1').onclick=()=>idUse(1);
+
+// zones: zone walk (one saved zone lit at a time)
+let W={list:[],i:-1,lit:-1,timer:null,paused:false};
+async function walkShow(i){if(!W.list.length)return;W.i=(i+W.list.length)%W.list.length;const k=W.list[W.i],z=C.app.zones[k];
+  $('w_cur').textContent=`Zone ${k+1} · ${z.name||'(unnamed)'}`;$('w_step').textContent=`${z.addr} · ${W.i+1} of ${W.list.length}${W.paused?' · paused':''}`;
+  try{if($('w_off').checked&&W.lit>=0&&W.lit!==k)await api('send',{zone:W.lit,action:'off'});
+    await api('send',{zone:k,action:'color',rgb:$('w_col').value.slice(1).toUpperCase()});W.lit=k}catch(e){walkStop(false)}}
+function walkTimer(){clearInterval(W.timer);W.timer=W.paused?null:setInterval(()=>walkShow(W.i+1),Math.max(500,+$('w_dwell').value))}
+function walkPause(p){W.paused=p;$('w_pause').textContent=p?'Resume':'Pause';walkTimer()}
+async function walkStop(off=true){clearInterval(W.timer);W.timer=null;W.paused=false;$('w_pause').textContent='Pause';
+  const was=W.list.length;W.list=[];W.lit=-1;$('w_cur').textContent='—';$('w_step').textContent='';if(off&&was)try{await api('all-off',{})}catch(e){}}
+$('w_start').onclick=async()=>{if(zonesDirty)return toast('Save the zones first',3000);
+  W.list=C.app.zones.map((z,k)=>z.enabled?k:-1).filter(k=>k>=0);if(!W.list.length)return toast('No enabled zones');
+  if(S&&S.engine.test.mode!=='off')await api('test',{mode:'off',rgb:'000000'});
+  W.lit=-1;W.paused=false;$('w_pause').textContent='Pause';await walkShow(0);walkTimer()};
+$('w_pause').onclick=()=>{if(W.list.length)walkPause(!W.paused)};
+$('w_prev').onclick=()=>{if(W.list.length){walkPause(true);walkShow(W.i-1)}};
+$('w_next').onclick=()=>{if(W.list.length){walkPause(true);walkShow(W.i+1)}};
+$('w_stop').onclick=()=>walkStop(true);
+
+// tools: address probe
+const PAL=[[0,255,0,0],[1,0,255,0],[2,0,0,255],[3,255,0,128],[4,255,255,255],[5,255,255,0],[8,148,0,211],[9,255,128,0],[10,75,0,130],[11,0,255,255]];
+const p1c=v=>((15-Math.floor((15*v+127)/255))<<4)|15;
+function nearest(r,g,b){let best=1e12,c=0;const mx=Math.max(r,g,b)||1;for(const e of PAL){const d=Math.min((r-e[1])**2+(g-e[2])**2+(b-e[3])**2,(r*255/mx-e[1])**2+(g*255/mx-e[2])**2+(b*255/mx-e[3])**2);if(d<best){best=d;c=e[0]}}return c}
+function buildPkt(p,a,rgb,off){return fixSum(p,p==0?[a[0],a[1],a[2],a[3],off?0:1,off?0xAA:nearest(...rgb),0]:[0x55,a[0],...(off?[0,0,0]:rgb).map(p1c),0,a[1]])}
+const FIELDS={0:[['m16','Mask bytes 1-2 (16 bits)',16],['b3','Byte 3',8],['b0','Byte 0',8]],1:[['b1','Group (byte 1)',8],['b6','Byte 6',8]]};
+let P={list:[],i:0,timer:null,paused:false,marks:[]};
+function probeFields(){const p=$('p_p').value;$('p_field').innerHTML=FIELDS[p].map(f=>`<option value="${f[0]}">${f[1]}</option>`).join('');
+  $('p_base').value=C&&C.app.bracelets.protocol==p?C.app.zones[0].addr:(p==0?'00FFFF0F':'00FF')}
+$('p_p').onchange=probeFields;
+function probeList(){const p=+$('p_p').value,field=$('p_field').value,base=bytes($('p_base').value),bits=field==='m16'?16:8,vals=[];
+  if($('p_mode').value==='bits'){for(let k=0;k<bits;k++)vals.push(1<<k)}else{for(let v=+$('p_from').value;v<=+$('p_to').value&&vals.length<4096;v++)vals.push(v)}
+  return vals.map(v=>{const a=base.slice();if(p==0){if(field==='m16'){a[1]=v>>8&255;a[2]=v&255}else if(field==='b3')a[3]=v&255;else a[0]=v&255}else{if(field==='b1')a[0]=v&255;else a[1]=v&255}
+    return{p,a,label:a.slice(0,p==0?4:2).map(x=>hx(x)).join('')}})}
+async function probeStep(){const s=P.list[P.i];if(!s)return;$('p_cur').textContent=s.label;$('p_step').textContent=`step ${P.i+1} of ${P.list.length}`;
+  const rgb=[1,3,5].map(k=>parseInt($('p_col').value.substr(k,2),16));const send=pk=>api('raw',{protocol:s.p,hex:pk.map(x=>hx(x)).join(''),fix:false});
+  if($('p_off').checked)await send(buildPkt(s.p,s.a,rgb,true));await send(buildPkt(s.p,s.a,rgb,false))}
+function probeTick(){if(P.paused)return;probeStep();P.i++;if(P.i>=P.list.length){clearInterval(P.timer);P.timer=null;P.i=P.list.length-1;$('p_step').textContent+=' · done'}}
+$('p_start').onclick=()=>{P.list=probeList();P.i=0;P.paused=false;clearInterval(P.timer);probeTick();P.timer=setInterval(probeTick,Math.max(300,+$('p_dwell').value))};
+$('p_pause').onclick=()=>{P.paused=!P.paused;$('p_pause').textContent=P.paused?'Resume':'Pause'};
+$('p_stop').onclick=()=>{clearInterval(P.timer);P.timer=null;P.paused=false;$('p_pause').textContent='Pause'};
+$('p_prev').onclick=()=>{P.paused=true;$('p_pause').textContent='Resume';P.i=Math.max(0,P.i-2);probeStep();P.i++};
+$('p_next').onclick=()=>{P.paused=true;$('p_pause').textContent='Resume';P.i=Math.min(P.list.length-1,P.i);probeStep();P.i++};
+$('p_mark').onclick=()=>{const t=$('p_cur').textContent;if(t==='—')return;P.marks.push(`p${$('p_p').value}:${t}`);$('p_log').textContent='Reacted: '+P.marks.join(', ')+'  (enter the address on the Zones page)'};
+
+// controllers on the network
+// Other controllers: live state from their UDP heartbeat, presence from mDNS.
+function peerState(c){const st=c.state;if(!st)return'<span class="dim small">no live status (mDNS only)</span>';
+  const b=[];
+  b.push(st.radio==='ready'?'<span class="badge good">radio</span>':st.radio==='not_detected'?'<span class="badge bad">no radio</span>':'<span class="badge warn">radio starting</span>');
+  b.push({live:'<span class="badge good">live</span>',idle:'<span class="badge">idle</span>',timed_out:'<span class="badge warn">timed out</span>',none:'<span class="badge">no input</span>'}[st.input]||'');
+  if(!st.output_enabled)b.push('<span class="badge bad">OUTPUT OFF</span>');
+  if(st.test)b.push('<span class="badge warn">TEST</span>');
+  if(st.airtime_pct)b.push(`<span class="small ${st.airtime_pct>=50?'badge warn':'dim'}" title="RF airtime, last 10 s">air ${st.airtime_pct}%</span>`);
+  return b.join(' ')}
+function peerSeen(c){if(c.self)return'–';if(!c.state)return`mDNS ${fmtAge(c.last_seen_ms)}`;return c.online?fmtAge(c.last_seen_ms):`<span class="badge warn">offline</span> ${fmtAge(c.last_seen_ms)}`}
+async function pollPeers(){try{const d=await api('discover');
+  $('d_peers').innerHTML=d.controllers.map(c=>`<tr class="${c.self||c.online||!c.state?'':'dim'}"><td>${esc(c.name||'–')}${c.self?' <span class="badge good">this</span>':''}</td><td class="mono small"><a href="http://${esc(c.hostname)}.local/">${esc(c.hostname)}.local</a></td>
+    <td class="mono small"><a href="http://${esc(c.ip)}/">${esc(c.ip)}</a></td><td class="nw">${peerState(c)}</td><td class="small nw">${peerSeen(c)}</td><td class="small">${esc(c.firmware||'')}</td><td class="dim small">${c.self?'':'<a href="http://'+esc(c.ip)+'/">open</a>'}</td></tr>`).join('');
+  $('d_alias').innerHTML=d.running?'searching…':`Any controller: <span class="mono">http://${esc(d.alias)}/</span>${d.alias_claimed?' (this one)':''}`}catch(e){}}
+$('d_peersRefresh').onclick=async()=>{await api('discover',{});setTimeout(pollPeers,4000);toast('Searching for controllers…')};
+setInterval(()=>{if(location.hash===''||location.hash==='#dashboard')pollPeers()},5000);
+
+// dashboard actions
+$('d_allOff').onclick=async()=>{
+  await api('all-off',{});poll();
+  toast(C&&C.app.bracelets.protocol==1?'All off sent to every group. Bracelets stay off until xLights changes a colour.':'Off sent to every zone. Bracelets stay off until xLights changes a colour.',4500)};
+$('d_outToggle').onclick=async()=>{const on=!S.engine.output.enabled;
+  if(!on&&!await ask('Stop all RF transmission? DDP will be received but ignored until output is re-enabled.'))return;
+  await api('output',{enabled:on});toast(on?'RF output enabled':'RF output disabled');poll()};
+$('resetStats').onclick=()=>api('stats/reset',{}).then(()=>toast('Counters reset'));
+document.querySelectorAll('#testSeg button').forEach(b=>b.onclick=()=>api('test',{mode:b.dataset.m,rgb:$('testColor').value.slice(1)}).then(poll));
+$('testColor').oninput=()=>{if(S&&S.engine.test.mode==='solid')api('test',{mode:'solid',rgb:$('testColor').value.slice(1)})};
+
+// system
+function authUi(){const on=!!S.device.auth;
+  $('a_state').innerHTML=on?'<span class="badge good">Password set</span> Settings, tests and firmware updates need the admin password.':'<span class="badge warn">No password</span> Anyone on the network can change settings or update firmware.';
+  $('a_set').textContent=on?'Change password':'Set password';$('a_clear').classList.toggle('hide',!on)}
+$('a_set').onclick=async()=>{const a=$('a_pw1').value,b=$('a_pw2').value;
+  if(a.length<8)return toast('Use at least 8 characters',3000);if(a!==b)return toast('Passwords do not match',3000);
+  await api('auth',{password:a});$('a_pw1').value=$('a_pw2').value='';toast('Admin password set. Your browser will ask for it next time.',4000);poll()};
+$('a_clear').onclick=async()=>{if(!await ask('Remove the admin password? Anyone on the network will be able to change settings.'))return;
+  await api('auth',{password:''});toast('Admin password removed');poll()};
+function displayUi(){const di=S.device.display_info;if(!di)return;
+  $('o_state').innerHTML=di.present?`<span class="badge good">${di.type.toUpperCase()} at ${di.address}</span>`+(di.pins_swapped?' <span class="badge warn">SDA/SCL wired swapped (working anyway)</span>':''):'<span class="badge warn">No display found</span> <span class="dim">(looking at 0x3C / 0x3D every 5 s)</span>';
+  if(document.activeElement!==$('o_type'))$('o_type').value=di.type}
+$('o_dispSave').onclick=async()=>{await api('display',{type:$('o_type').value});toast('Display type saved; re-detecting…');setTimeout(poll,1500)};
+$('o_scan').onclick=async()=>{const r=await api('i2c/scan');const out=$('o_scanOut');out.classList.remove('hide');
+  out.textContent=(r.devices.length?'Devices found: '+r.devices.join(', '):'No I2C devices answered.')+
+    `\nSDA (IO5) idle: ${r.sda_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+
+    `\nSCL (IO17) idle: ${r.scl_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+
+    `\nScanned with ${r.orientation}`+
+    (r.devices.length&&!r.devices.some(a=>a==='0x3C'||a==='0x3D')?'\nA device answered, but not at 0x3C/0x3D: is it a display?':'')};
+function sysInfo(){authUi();displayUi();const d=S.device;
+  const upd=d.update_pending?'<span class="badge warn">new update, confirming…</span>':d.update_rolled_back?'<span class="badge bad">last update failed and was rolled back</span>':'<span class="badge good">confirmed</span>';
+  kv($('s_info'),[['Version',d.firmware],['Update state',upd],['Built',d.built],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',`${fmtBytes(d.free_heap)} (min ${fmtBytes(d.min_free_heap)})`],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`${d.display_info.type.toUpperCase()} at ${d.display_info.address}`:'none']])}
+$('s_file').onchange=()=>{$('s_upload').disabled=!$('s_file').files.length};
+$('s_upload').onclick=async()=>{const f=$('s_file').files[0];if(!f)return;if(!await ask(`Flash ${f.name} (${fmtBytes(f.size)})?`))return;
+  try{await api('config')}catch(e){return}  // log in first so the upload isn't sent twice
+  const fd=new FormData();fd.append('firmware',f,f.name);const x=new XMLHttpRequest();const pr=$('s_prog');pr.classList.remove('hide');$('s_upload').disabled=true;
+  x.upload.onprogress=ev=>{if(ev.lengthComputable){pr.value=ev.loaded/ev.total*100;$('s_upMsg').textContent=Math.round(pr.value)+'%'}};
+  x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}if(x.status===401)j.error='admin password required';if(x.status===200&&j.ok){$('s_upMsg').textContent='Update complete. Rebooting…';setTimeout(()=>location.reload(),9000)}else{$('s_upMsg').textContent='Update failed: '+(j.error||x.status);$('s_upload').disabled=false}};
+  x.onerror=()=>{$('s_upMsg').textContent='Upload failed';$('s_upload').disabled=false};x.open('POST','/update');x.send(fd)};
+$('s_import').onchange=()=>{$('s_importBtn').disabled=!$('s_import').files.length};
+$('s_importBtn').onclick=async()=>{let cfg;try{cfg=JSON.parse(await $('s_import').files[0].text())}catch(e){return toast('Not a valid JSON file',3000)}
+  cfg.include_network=$('s_impNet').checked;if(!await ask('Import these settings and reboot?'))return;const j=await api('import',cfg);afterSave(j,'Settings')};
+$('s_reboot').onclick=async()=>{if(await ask('Reboot the controller?')){await api('reboot',{});toast('Rebooting…',5000);setTimeout(()=>location.reload(),7000)}};
+$('s_factory').onclick=async()=>{if(await ask('Erase ALL settings (zones, bracelets, radio, network) and reboot?')&&await ask('Really? Network settings go back to DHCP.','Erase everything')){await api('factory-reset',{});toast('Factory reset. Rebooting…',6000)}};
+
+// boot
+show(location.hash.slice(1));
+(async()=>{pollPeers();try{await loadConfig();$('p_p').value=C.app.bracelets.protocol;$('t_p').value=C.app.bracelets.protocol}catch(e){}probeFields();rawPrev();await poll();setInterval(poll,1000)})();
+</script>
+</body>
+</html>

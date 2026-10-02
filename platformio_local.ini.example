@@ -1,0 +1,6 @@
+; Copy to platformio_local.ini (git-ignored) to override settings on this machine only.
+;
+; Keep PlatformIO's build output and downloaded libraries (normally ./.pio) outside the repo, e.g. when the repo
+; lives in OneDrive / Dropbox / iCloud, which otherwise sync (and can lock) thousands of build files.
+[platformio]
+workspace_dir = ${sysenv.HOME}/.platformio-workspaces/net2rf-led

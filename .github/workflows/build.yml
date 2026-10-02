@@ -1,0 +1,95 @@
+# Build + test on every push / PR. On a version tag (v1.2.3): publish a GitHub release with the
+# binaries and deploy the browser flasher (flasher/) with that firmware to GitHub Pages.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags, for the version string
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(git describe --tags --always)"; v="${v#v}"; fi
+          echo "FW_VERSION=$v" >> "$GITHUB_ENV"
+          echo "Version: $v"
+
+      - name: Unit tests
+        run: pio test -e native
+
+      - name: Build firmware
+        run: pio run -e wt32-eth01
+
+      - name: Collect binaries
+        run: |
+          mkdir -p dist
+          cp .pio/build/wt32-eth01/firmware.bin "dist/net2rf-led-${FW_VERSION}.bin"
+          cp .pio/build/wt32-eth01/firmware.factory.bin "dist/net2rf-led-${FW_VERSION}.factory.bin"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ env.FW_VERSION }}
+          path: dist/
+
+      - name: Assemble flasher site
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mkdir -p site
+          cp flasher/index.html site/
+          cp .pio/build/wt32-eth01/firmware.factory.bin site/
+          sed "s/__VERSION__/${FW_VERSION}/" flasher/manifest.json > site/manifest.json
+          sed -i "s|__RELEASES_URL__|https://github.com/${GITHUB_REPOSITORY}/releases/latest|" site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          path: site
+
+      - name: GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            **New install:** use the browser flasher (Chrome/Edge) at https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+            or `python3 -m esptool --chip esp32 write-flash 0x0 net2rf-led-${{ env.FW_VERSION }}.factory.bin`.
+
+            **Update:** upload `net2rf-led-${{ env.FW_VERSION }}.bin` in the controller's web UI (System → Update firmware).
+
+  pages:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

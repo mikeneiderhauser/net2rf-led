@@ -1,0 +1,7 @@
+{
+  "name": "cc1101_ook",
+  "version": "0.1.0",
+  "description": "Minimal TI CC1101 driver for asynchronous (raw) OOK transmission: an external pulse source (e.g. ESP32 RMT) drives GDO0.",
+  "keywords": "cc1101, ook, ask, 433mhz, sub-ghz, rf",
+  "license": "GPL-3.0-or-later"
+}

@@ -1,0 +1,9 @@
+.pio/
+.vscode/
+src/web_ui.h
+__pycache__/
+*.pyc
+.DS_Store
+platformio_local.ini
+# Carrier board: kept local until it has been built and tested
+hardware/
