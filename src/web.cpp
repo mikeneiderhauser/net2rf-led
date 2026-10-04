@@ -234,9 +234,10 @@ static const char *reset_reason() {
     }
 }
 
-static bool output_enabled() {
+// Why a transmission was refused (409).
+static const char *tx_refused_reason() {
     StateLock lock;
-    return g_app.output_enabled;
+    return g_app.radio_off ? "radio is shut down" : !g_app.output_enabled ? "RF output is disabled" : "transmit queue full";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -351,6 +352,29 @@ static void handle_output() {
     send_json(200, out);
 }
 
+// Radio power. Off = the radio chip is put to sleep (persisted); nothing is transmitted until it is switched
+// back on, which re-initialises the chip and re-sends the current colours.
+static void handle_radio() {
+    JsonDocument doc;
+    if (!parse_body(doc))
+        return;
+    if (!doc["power"].is<bool>()) {
+        send_error(400, "expected {\"power\": true|false}");
+        return;
+    }
+    AppConfig saved;
+    {
+        StateLock lock;
+        g_app.radio_off = !doc["power"].as<bool>();
+        saved = g_app;
+    }
+    config_save_app(saved);
+    JsonDocument out;
+    out["ok"] = true;
+    out["power"] = doc["power"].as<bool>();
+    send_json(200, out);
+}
+
 // Compact counters for monitoring (Home Assistant REST sensor, Grafana, scripts).
 static void handle_stats() {
     JsonDocument full;
@@ -420,7 +444,7 @@ static void handle_send() {
     bool ok = zone < 0 && action == bracelet::ACTION_OFF ? g_engine.all_off()
                                                          : g_engine.send_zone(zone, action, rgb[0], rgb[1], rgb[2]);
     if (!ok) {
-        send_error(409, output_enabled() ? "transmit queue full" : "RF output is disabled");
+        send_error(409, tx_refused_reason());
         return;
     }
     send_ok();
@@ -450,7 +474,7 @@ static void handle_raw() {
     }
     repeats = doc["repeats"] | repeats;
     if (!g_engine.send_raw(doc["protocol"] | 1, pkt, repeats, doc["fix"] | true)) {
-        send_error(409, output_enabled() ? "transmit queue full" : "RF output is disabled");
+        send_error(409, tx_refused_reason());
         return;
     }
     send_ok();
@@ -656,6 +680,7 @@ void begin() {
                 }));
     s_server.on("/api/raw", HTTP_POST, protect(handle_raw));
     s_server.on("/api/output", HTTP_POST, protect(handle_output));
+    s_server.on("/api/radio", HTTP_POST, protect(handle_radio));
     s_server.on("/api/stats/reset", HTTP_POST, protect([]() {
                     g_engine.reset_stats();
                     send_ok();

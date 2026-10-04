@@ -113,7 +113,7 @@ progress{width:100%;height:10px}
       <div class="card"><h2>Output (RF)</h2>
         <div class="big" id="d_air">–<span class="unit">% airtime</span></div>
         <div class="small dim">share of the last 10 s spent transmitting</div>
-        <div class="actions" style="margin-top:8px"><span id="d_outState"></span><button id="d_outToggle"></button>
+        <div class="actions" style="margin-top:8px"><span id="d_outState"></span><button id="d_outToggle"></button><button id="d_radioToggle" title="Put the radio chip to sleep to save power, or wake it"></button>
           <button class="danger" id="d_allOff" title="Send off to every bracelet in range">All off</button></div>
         <dl class="kv">
           <dt>Updates sent</dt><dd id="d_up">–</dd><dt>Frames sent</dt><dd id="d_tf">–</dd>
@@ -284,7 +284,7 @@ progress{width:100%;height:10px}
         <label class="inline"><input type="checkbox" id="p_off" checked> Send off between steps</label>
       </div>
       <div class="actions"><button class="primary" id="p_start">Start</button><button id="p_pause">Pause</button><button id="p_prev">&larr; Back</button><button id="p_next">Next &rarr;</button><button id="p_stop">Stop</button><button id="p_mark">&#9733; Bracelet reacted</button></div>
-      <div style="margin-top:12px"><span class="dim small">Current address</span> <span class="big mono" id="p_cur">&mdash;</span> <span class="dim small" id="p_step"></span></div>
+      <div style="margin-top:12px"><span class="dim small">Current address</span> <span class="big mono" id="p_cur">&mdash;</span> <b id="p_grp"></b> <span class="dim small" id="p_step"></span></div>
       <div class="mono small" id="p_log" style="margin-top:6px"></div>
     </div>
   </section>
@@ -381,7 +381,7 @@ window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
 // ---------- status polling ----------
 async function poll(){try{S=await api('status');render()}catch(e){$('pills').innerHTML=pill('bad','offline')}}
 function inputState(i){if(S.engine.test.mode!=='off')return['warn','Test mode'];if(i.out_of_range_channel)return['bad','Wrong channels'];if(!i.seen)return['','No DDP yet'];if(i.timed_out)return['warn','Timed out (blank)'];return i.age_ms<3000?['good','Receiving']:['','Idle']}
-function radioState(r){return r.state==='ready'&&r.data_line==='fault'?['bad','data line fault']:r.state==='ready'?['good','ready']:r.state==='not_detected'?['bad','not detected']:['warn','initializing']}
+function radioState(r){return r.state==='ready'&&r.data_line==='fault'?['bad','data line fault']:r.state==='ready'?['good','ready']:r.state==='not_detected'?['bad','not detected']:r.state==='off'?['','shut down']:['warn','initializing']}
 function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.toggle('hide',!(ap&&CNA));
   {const L=S.engine.radio.lbt,o=S.engine.output;if(L)$('r_lbtHint').textContent=!L.supported?'not supported by this radio':
     !L.enabled||L.last_rssi_dbm<=-127?'set it ~10 dB above the quiet reading (shown here once enabled)':
@@ -402,6 +402,8 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
   $('d_up').textContent=fmtN(o.updates);$('d_tf').textContent=fmtN(o.frames);$('d_man').textContent=fmtN(o.manual);$('d_err').textContent=fmtN(o.errors);$('d_q').textContent=r.queue;$('d_sup').textContent=fmtN(o.suppressed);
   $('d_outState').innerHTML=o.enabled?'<span class="badge good">RF output on</span>':'<span class="badge bad">RF output off</span> <span class="dim small">DDP is consumed, nothing is sent</span>';
   $('d_outToggle').textContent=o.enabled?'Disable output':'Enable output';$('d_outToggle').className=o.enabled?'danger':'primary';
+  if(r.power===false)$('d_outState').innerHTML='<span class="badge bad">Radio shut down</span> <span class="dim small">nothing is sent until it is powered on</span>';
+  $('d_radioToggle').textContent=r.power===false?'Power radio on':'Shut down radio';$('d_radioToggle').className=r.power===false?'primary':'';
   $('d_radio').textContent=r.name;$('d_radioState').innerHTML=`<span class="badge ${rc}">${rt}</span>`;
   $('d_rdet').textContent=r.detail||'–';
   if(C){const a=C.app.radio;$('d_pw').textContent=Math.max(r.min_power,Math.min(r.max_power,a.tx_power))+' dBm';
@@ -424,7 +426,7 @@ async function loadConfig(){C=await api('config');fillOutput();fillNetwork();if(
 // zones editor
 let zonesDirty=false;
 const addrLen=()=>C.app.bracelets.protocol==0?8:4;
-const defAddr=()=>C.app.bracelets.protocol==0?'00FFFF0F':'00FF';
+const defAddr=k=>{const p0=C.app.bracelets.protocol==0;if(!k||k>15)return p0?'00FFFF0F':'00FF';return p0?'00'+hx(1<<k&255)+hx(1<<k>>8)+'0F':hx(k)+'FF'};
 function zoneWidth(){return {dmx:4,vendor:5}[C.app.bracelets.mode]||3}
 // Protocol 1 addresses are "group code" (byte 1; 0 = all groups) + byte 6 (kept as-is, normally FF).
 function addrCell(z,start){
@@ -458,7 +460,7 @@ function mixCheck(){const b=C.app.bracelets,note=$('z_mixNote');
   if(all.length&&some.length)note.innerHTML=`Zone ${all.map(x=>x.k+1).join(', ')} is <b>all groups</b>: whenever its colour changes, every bracelet follows it, including the bracelets in zone ${some.map(x=>x.k+1).join(', ')}. Use it as a deliberate "everyone" layer, or give it a specific group.`}
 function collectZones(){return[...$('z_rows').rows].map(readZone)}
 $('z_add').onclick=()=>{const zs=collectZones();if(zs.length>=16)return toast('16 zones maximum');
-  zs.push({enabled:true,name:'Zone '+(zs.length+1),addr:defAddr()});C.app.zones=zs;zonesDirty=true;renderZones()};
+  zs.push({enabled:true,name:zs.length?'Zone '+zs.length:'All Zones',addr:defAddr(zs.length)});C.app.zones=zs;zonesDirty=true;renderZones()};
 $('z_del').onclick=()=>{const zs=collectZones();if(zs.length<=1)return;zs.pop();C.app.zones=zs;zonesDirty=true;renderZones()};
 $('z_save').onclick=async()=>{const zs=collectZones(),need=addrLen();
   for(const [k,z] of zs.entries())if(z.addr.length!==need)return toast(`Zone ${k+1}: address must be ${need/2} bytes (${need} hex digits)`,4000);
@@ -609,15 +611,18 @@ const p1c=v=>((15-Math.floor((15*v+127)/255))<<4)|15;
 function nearest(r,g,b){let best=1e12,c=0;const mx=Math.max(r,g,b)||1;for(const e of PAL){const d=Math.min((r-e[1])**2+(g-e[2])**2+(b-e[3])**2,(r*255/mx-e[1])**2+(g*255/mx-e[2])**2+(b*255/mx-e[3])**2);if(d<best){best=d;c=e[0]}}return c}
 function buildPkt(p,a,rgb,off){return fixSum(p,p==0?[a[0],a[1],a[2],a[3],off?0:1,off?0xAA:nearest(...rgb),0]:[0x55,a[0],...(off?[0,0,0]:rgb).map(p1c),0,a[1]])}
 const FIELDS={0:[['m16','Mask bytes 1-2 (16 bits)',16],['b3','Byte 3',8],['b0','Byte 0',8]],1:[['b1','Group (byte 1)',8],['b6','Byte 6',8]]};
-let P={list:[],i:0,timer:null,paused:false,marks:[]};
+// which bracelet group(s) an address reaches: protocol 0 = one bit per group (byte 1 = groups 0-7, byte 2 = 8-15), protocol 1 = group code (0 = all)
+function addrGroups(p,a){if(p==1)return a[0]?`group ${a[0]}`:'all groups';const m=a[1]|a[2]<<8,b=[];for(let k=0;k<16;k++)if(m>>k&1)b.push(k);
+  return m===0xFFFF?'all groups':!b.length?'no group':(b.length>1?'groups ':'group ')+b.join(', ')}
+let P={list:[],i:0,timer:null,paused:false,marks:[],cur:null};
 function probeFields(){const p=$('p_p').value;$('p_field').innerHTML=FIELDS[p].map(f=>`<option value="${f[0]}">${f[1]}</option>`).join('');
   $('p_base').value=C&&C.app.bracelets.protocol==p?C.app.zones[0].addr:(p==0?'00FFFF0F':'00FF')}
 $('p_p').onchange=probeFields;
 function probeList(){const p=+$('p_p').value,field=$('p_field').value,base=bytes($('p_base').value),bits=field==='m16'?16:8,vals=[];
   if($('p_mode').value==='bits'){for(let k=0;k<bits;k++)vals.push(1<<k)}else{for(let v=+$('p_from').value;v<=+$('p_to').value&&vals.length<4096;v++)vals.push(v)}
-  return vals.map(v=>{const a=base.slice();if(p==0){if(field==='m16'){a[1]=v>>8&255;a[2]=v&255}else if(field==='b3')a[3]=v&255;else a[0]=v&255}else{if(field==='b1')a[0]=v&255;else a[1]=v&255}
-    return{p,a,label:a.slice(0,p==0?4:2).map(x=>hx(x)).join('')}})}
-async function probeStep(){const s=P.list[P.i];if(!s)return;$('p_cur').textContent=s.label;$('p_step').textContent=`step ${P.i+1} of ${P.list.length}`;
+  return vals.map(v=>{const a=base.slice();if(p==0){if(field==='m16'){a[1]=v&255;a[2]=v>>8&255}else if(field==='b3')a[3]=v&255;else a[0]=v&255}else{if(field==='b1')a[0]=v&255;else a[1]=v&255}
+    return{p,a,label:a.slice(0,p==0?4:2).map(x=>hx(x)).join(''),grp:addrGroups(p,a)}})}
+async function probeStep(){const s=P.list[P.i];if(!s)return;P.cur=s;$('p_cur').textContent=s.label;$('p_grp').textContent=s.grp;$('p_step').textContent=`step ${P.i+1} of ${P.list.length}`;
   const rgb=[1,3,5].map(k=>parseInt($('p_col').value.substr(k,2),16));const send=pk=>api('raw',{protocol:s.p,hex:pk.map(x=>hx(x)).join(''),fix:false});
   if($('p_off').checked)await send(buildPkt(s.p,s.a,rgb,true));await send(buildPkt(s.p,s.a,rgb,false))}
 function probeTick(){if(P.paused)return;probeStep();P.i++;if(P.i>=P.list.length){clearInterval(P.timer);P.timer=null;P.i=P.list.length-1;$('p_step').textContent+=' · done'}}
@@ -626,13 +631,14 @@ $('p_pause').onclick=()=>{P.paused=!P.paused;$('p_pause').textContent=P.paused?'
 $('p_stop').onclick=()=>{clearInterval(P.timer);P.timer=null;P.paused=false;$('p_pause').textContent='Pause'};
 $('p_prev').onclick=()=>{P.paused=true;$('p_pause').textContent='Resume';P.i=Math.max(0,P.i-2);probeStep();P.i++};
 $('p_next').onclick=()=>{P.paused=true;$('p_pause').textContent='Resume';P.i=Math.min(P.list.length-1,P.i);probeStep();P.i++};
-$('p_mark').onclick=()=>{const t=$('p_cur').textContent;if(t==='—')return;P.marks.push(`p${$('p_p').value}:${t}`);$('p_log').textContent='Reacted: '+P.marks.join(', ')+'  (enter the address on the Zones page)'};
+$('p_mark').onclick=()=>{const c=P.cur;if(!c)return;const t=`${c.label} = ${c.grp} (protocol ${c.p})`;if(!P.marks.includes(t))P.marks.push(t);
+  $('p_log').innerHTML='<b>Bracelet reacted to:</b><br>'+P.marks.map(esc).join('<br>')+'<br><span class="dim">Enter the address as a zone on the Zones page.</span>'};
 
 // controllers on the network
 // Other controllers: live state from their UDP heartbeat, presence from mDNS.
 function peerState(c){const st=c.state;if(!st)return'<span class="dim small">no live status (mDNS only)</span>';
   const b=[];
-  b.push(st.radio==='ready'?'<span class="badge good">radio</span>':st.radio==='not_detected'?'<span class="badge bad">no radio</span>':'<span class="badge warn">radio starting</span>');
+  b.push(st.radio==='ready'?'<span class="badge good">radio</span>':st.radio==='not_detected'?'<span class="badge bad">no radio</span>':st.radio==='off'?'<span class="badge">radio off</span>':'<span class="badge warn">radio starting</span>');
   b.push({live:'<span class="badge good">live</span>',idle:'<span class="badge">idle</span>',timed_out:'<span class="badge warn">timed out</span>',none:'<span class="badge">no input</span>'}[st.input]||'');
   if(!st.output_enabled)b.push('<span class="badge bad">OUTPUT OFF</span>');
   if(st.test)b.push('<span class="badge warn">TEST</span>');
@@ -653,6 +659,9 @@ $('d_allOff').onclick=async()=>{
 $('d_outToggle').onclick=async()=>{const on=!S.engine.output.enabled;
   if(!on&&!await ask('Stop all RF transmission? DDP will be received but ignored until output is re-enabled.'))return;
   await api('output',{enabled:on});toast(on?'RF output enabled':'RF output disabled');poll()};
+$('d_radioToggle').onclick=async()=>{const on=S.engine.radio.power===false;
+  if(!on&&!await ask('Shut down the radio chip? Nothing is transmitted until you power it on again. This setting survives a reboot.'))return;
+  await api('radio',{power:on});toast(on?'Radio powered on':'Radio shut down');poll()};
 $('resetStats').onclick=()=>api('stats/reset',{}).then(()=>toast('Counters reset'));
 document.querySelectorAll('#testSeg button').forEach(b=>b.onclick=()=>api('test',{mode:b.dataset.m,rgb:$('testColor').value.slice(1)}).then(poll));
 $('testColor').oninput=()=>{if(S&&S.engine.test.mode==='solid')api('test',{mode:'solid',rgb:$('testColor').value.slice(1)})};

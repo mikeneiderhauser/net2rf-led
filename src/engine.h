@@ -19,7 +19,7 @@ class StateLock {
     StateLock &operator=(const StateLock &) = delete;
 };
 
-enum class RadioState : uint8_t { INITIALIZING, READY, NOT_DETECTED };
+enum class RadioState : uint8_t { INITIALIZING, READY, NOT_DETECTED, OFF };
 enum class TestMode : uint8_t { OFF, SOLID, CYCLE };
 
 const char *radio_state_name(RadioState s);
@@ -129,6 +129,8 @@ class Engine {
                       InputSource source);
     void update_wants_(uint32_t now);
     bool pick_job_(uint32_t now, Job &job);
+    bool zone_changed_(uint8_t zone) const;
+    bool held_back_(uint8_t zone) const;  // a broader overlapping zone must be sent first
     void transmit_(const Job &job);
     bool wait_for_clear_channel_(int8_t threshold);  // false if it gave up (busy too long)
     void tick_stats_(uint32_t now);

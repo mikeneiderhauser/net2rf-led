@@ -23,8 +23,9 @@ To sort out:
 
 ## Protocol 0 addressing
 
-- [ ] Confirm the 16-bit group-mask theory (bytes 1-2): `0000000F` should not light a group-3 bracelet;
-      test a second bracelet or batch to see if it sits on another bit.
+- [ ] Confirm the 16-bit group-mask theory (bytes 1-2). A second bracelet sits on group 2 (`0004000F`,
+      2026-10-04), next to the first on group 3. Still to check: `0000000F` lights neither, and a combined mask
+      (`000C000F`) lights both.
 - [ ] Address probe: log the address shown about 0.5 s before "Bracelet reacted" is clicked (allowing
       for reaction time), and default the step time to 3 s.
 - [ ] Update docs/PROTOCOL.md "Addressing" once confirmed.

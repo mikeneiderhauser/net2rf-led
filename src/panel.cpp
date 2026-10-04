@@ -326,6 +326,7 @@ static void draw_page(uint32_t now) {
         String radio = String(s.radio_name) + ": ";
         radio += s.radio_state == RadioState::READY          ? "ready"
                  : s.radio_state == RadioState::NOT_DETECTED ? "NOT DETECTED"
+                 : s.radio_state == RadioState::OFF          ? "OFF"
                                                               : "starting";
         s_oled->drawString(0, 38, radio);
         s_oled->drawString(0, 50, "v" FW_VERSION);
@@ -370,7 +371,7 @@ static void draw_page(uint32_t now) {
 static void update_led(uint32_t now) {
     EngineSnapshot s = g_engine.snapshot();
     bool on;
-    if (s.radio_state != RadioState::READY)
+    if (s.radio_state != RadioState::READY && s.radio_state != RadioState::OFF)
         on = (now / 150) % 2;  // fast blink: radio problem
     else if (net::ap_active() && !net::connected())
         on = (now % 1000) < 100 || ((now % 1000) > 200 && (now % 1000) < 300);  // double blink: AP mode

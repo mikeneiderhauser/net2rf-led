@@ -23,7 +23,7 @@ that isn't listed, please [report it](#reporting-a-device): every report widens 
 | Protocol | **0, Shenzen New Dody** (lights red in *Tools → Which bracelet do I have?*) |
 | Colours | The protocol's 10 fixed colours |
 | Effects | Built-in effects A / B / C sent, no reaction (the effect codes are unconfirmed) |
-| Address | **Group 3:** answers `0008000F` (and the all-groups default `00FFFF0F`), not the other single-bit masks. Other bracelets may be on different groups. |
+| Address | Two bracelets tested: one on **group 3** (`0008000F`), one on **group 2** (`0004000F`). Both answer the all-groups address `00FFFF0F`. Other bracelets may be on different groups. |
 | Tested with | WT32-ETH01 + CC1101, xLights over DDP in pixel mode: follows the sequence |
 
 What to know:
@@ -32,8 +32,8 @@ What to know:
 - **Idle red.** About 20 minutes after the last command it turns red by itself, but keeps listening. The next
   colour change brings it back. It's not yet known whether this is idle or low battery, and whether it sleeps
   later.
-- **One unit tested.** This bracelet is on group 3; others (even from the same event) may be on different
-  groups. Use the address probe to check yours.
+- **Two units tested,** on groups 2 and 3. Bracelets from the same event can be on different groups. Use the
+  address probe to check yours.
 
 ### 🧪 LedGiftSupplier.com bracelets and light sticks (protocol 1)
 

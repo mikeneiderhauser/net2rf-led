@@ -28,7 +28,7 @@ a bracelet following an xLights sequence, and the web UI.
 
 | | |
 |---|---|
-| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), one bracelet · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · controller list and `net2rf.local` election (against simulated controllers) |
+| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · controller list and `net2rf.local` election (against simulated controllers) |
 | 🧪 **Built, not yet tested on hardware** | **LedGiftSupplier** bracelets (protocol 1, RGB + group codes) · **vendor DMX** input mode · E1.31 multicast · **Ra-02 / SX1278** radio · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
 | ❌ **Not working yet** | Protocol 0 built-in effects: the tested bracelet ignores them |
 | 🛠 **Coming soon** | A carrier board and enclosure |
@@ -38,7 +38,7 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
 - **Waking up:** they need a press of their button before they listen to the radio.
 - **Idle behaviour:** they turn red by themselves after ~20 minutes without a command, but keep listening.
 - **Effects:** colours and off work; the built-in effect commands don't (yet).
-- **Zones:** protocol 0 uses a 16-bit group mask. The tested bracelet is on group 3; others may differ. See
+- **Zones:** protocol 0 uses a 16-bit group mask. The tested bracelets are on groups 2 and 3; others may differ. See
   [PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Features

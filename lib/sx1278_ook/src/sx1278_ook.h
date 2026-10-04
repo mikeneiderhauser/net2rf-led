@@ -52,6 +52,8 @@ class Sx1278Ook {
     bool tx_on();
     // Back to STANDBY.
     void tx_off();
+    // Sleep: oscillator off (about 0.2 uA). Call begin() and tune() again before the next use.
+    void power_down();
     // Listen-before-talk: enter RX on the tuned frequency and read the received signal strength, then
     // rx_off(). RX runs in packet mode with DIO2 mapped to an idle-low signal: in continuous mode DIO2 would
     // become a data *output* and fight the MCU driving the TX data line.

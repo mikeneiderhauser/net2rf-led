@@ -59,7 +59,11 @@ The pill row at the top of every page shows the radio, input and network state a
 - **Test mode** overrides the show input for every enabled zone until it's switched off. Use it to check range
   and wiring without running xLights.
 - **RF output off** stops all transmission while still receiving and counting the show data. Turning it back on
-  re-sends the current colours.
+  re-sends the current colours. The radio already sits idle between updates, so this changes nothing on air
+  beyond stopping the updates.
+- **Shut down radio** also puts the radio chip to sleep, to save a little power when the controller isn't in
+  use. Nothing is sent until you press **Power radio on**, which restarts the radio and re-sends the current
+  colours. The setting survives a reboot.
 - **All off** blanks every bracelet once. They stay dark until the show input changes a colour.
 - **Input timeout:** if no show data arrives for 5 minutes (configurable, or 0 for never), the bracelets are
   switched off.

@@ -23,6 +23,8 @@ const char *radio_state_name(RadioState s) {
             return "ready";
         case RadioState::NOT_DETECTED:
             return "not_detected";
+        case RadioState::OFF:
+            return "off";
         default:
             return "initializing";
     }
@@ -186,7 +188,7 @@ void Engine::update_wants_(uint32_t now) {
 void Engine::queue_broadcast_(Action action, uint8_t r, uint8_t g, uint8_t b) {
     // Called with StateLock held. Group 0 = all groups; byte 6 as normally sent (FF).
     static const uint8_t ALL_GROUPS[4] = {0x00, 0xFF, 0x00, 0x00};
-    if (!g_app.output_enabled || this->manual_.size() >= MAX_MANUAL_QUEUE)
+    if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE)
         return;
     Job job{};
     job.protocol = 1;
@@ -208,6 +210,27 @@ void Engine::mark_zones_sent_(uint32_t now) {
     }
 }
 
+bool Engine::zone_changed_(uint8_t i) const {
+    const ZoneState &zs = this->zones_[i];
+    return g_app.zones[i].enabled && zs.have_want && (!zs.have_sent || memcmp(zs.want, zs.sent, PACKET_LEN) != 0);
+}
+
+// When zones that reach the same bracelets change together, the broader address (All Zones) must go out first
+// so the more specific colour lands last. A changed zone therefore waits while a broader, overlapping zone is
+// also waiting to be sent. Zones that don't overlap keep taking turns.
+bool Engine::held_back_(uint8_t i) const {
+    const uint8_t *mine = this->zones_[i].want;
+    uint8_t breadth = address_breadth(g_app.protocol, mine);
+    for (uint8_t j = 0; j < g_app.num_zones; j++) {
+        if (j == i || !this->zone_changed_(j))
+            continue;
+        const uint8_t *other = this->zones_[j].want;
+        if (address_breadth(g_app.protocol, other) > breadth && addresses_overlap(g_app.protocol, mine, other))
+            return true;
+    }
+    return false;
+}
+
 bool Engine::pick_job_(uint32_t now, Job &job) {
     if (!this->manual_.empty()) {
         job = this->manual_.front();
@@ -222,9 +245,9 @@ bool Engine::pick_job_(uint32_t now, Job &job) {
             ZoneState &zs = this->zones_[i];
             if (!g_app.zones[i].enabled || !zs.have_want)
                 continue;
-            bool changed = !zs.have_sent || memcmp(zs.want, zs.sent, PACKET_LEN) != 0;
+            bool changed = this->zone_changed_(i);
             bool refresh = g_app.refresh_ms > 0 && now - zs.last_tx_ms >= g_app.refresh_ms;
-            if (pass == 0 ? !changed : !refresh)
+            if (pass == 0 ? !changed || this->held_back_(i) : !refresh)
                 continue;
             job.protocol = g_app.protocol;
             memcpy(job.packet, zs.want, PACKET_LEN);
@@ -364,8 +387,23 @@ void Engine::run_() {
     uint32_t last_cycle_step = 0;
     for (;;) {
         uint32_t now = millis();
-        if (this->radio_state_ == RadioState::NOT_DETECTED && (int32_t) (now - this->next_init_ms_) >= 0)
-            this->try_init_radio_();
+        bool want_off;
+        {
+            StateLock lock;
+            want_off = g_app.radio_off;
+        }
+        if (want_off) {
+            if (this->radio_state_ != RadioState::OFF) {
+                this->radio_->shutdown();
+                StateLock lock;
+                this->radio_state_ = RadioState::OFF;
+                this->tuned_ = false;
+                log_i("%s shut down", this->radio_->name());
+            }
+        } else if (this->radio_state_ == RadioState::OFF ||
+                   (this->radio_state_ == RadioState::NOT_DETECTED && (int32_t) (now - this->next_init_ms_) >= 0)) {
+            this->try_init_radio_();  // also wakes the chip after a shutdown
+        }
 
         Job job;
         bool have_job = false;
@@ -405,7 +443,7 @@ void Engine::run_() {
             if (this->blank_broadcast_) {
                 // One broadcast "off" blanks every group, including ones no zone is configured for.
                 this->blank_broadcast_ = false;
-                if (g_app.output_enabled) {
+                if (tx_allowed(g_app)) {
                     this->queue_broadcast_(ACTION_OFF, 0, 0, 0);
                     this->mark_zones_sent_(now);
                 }
@@ -416,7 +454,7 @@ void Engine::run_() {
                 this->mark_zones_sent_(now);
             }
 
-            bool enabled = g_app.output_enabled;
+            bool enabled = tx_allowed(g_app);
             if (enabled != this->output_was_enabled_) {
                 log_i("RF output %s", enabled ? "enabled" : "disabled");
                 if (enabled) {
@@ -457,7 +495,7 @@ void Engine::run_() {
 
 bool Engine::send_raw(uint8_t protocol, const uint8_t *packet, uint8_t repeats, bool fix) {
     StateLock lock;
-    if (!g_app.output_enabled || this->manual_.size() >= MAX_MANUAL_QUEUE)
+    if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE)
         return false;
     Job job{};
     job.protocol = protocol ? 1 : 0;
@@ -472,7 +510,7 @@ bool Engine::send_raw(uint8_t protocol, const uint8_t *packet, uint8_t repeats, 
 
 bool Engine::send_zone(int zone, Action action, uint8_t r, uint8_t g, uint8_t b) {
     StateLock lock;
-    if (!g_app.output_enabled || this->manual_.size() >= MAX_MANUAL_QUEUE || zone >= (int) g_app.num_zones)
+    if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE || zone >= (int) g_app.num_zones)
         return false;
     if (zone < 0 && this->can_broadcast_()) {  // "all zones" = one packet to every group
         this->queue_broadcast_(action, r, g, b);
@@ -497,7 +535,7 @@ bool Engine::send_zone(int zone, Action action, uint8_t r, uint8_t g, uint8_t b)
 
 bool Engine::all_off() {
     StateLock lock;
-    if (!g_app.output_enabled)
+    if (!tx_allowed(g_app))
         return false;
     this->test_mode_ = TestMode::OFF;
     this->test_sent_ = false;
@@ -562,6 +600,7 @@ void Engine::status_json(JsonObject o) {
     radio["type"] = radio_type_name(g_app.radio_type);
     radio["name"] = this->radio_->name();
     radio["state"] = radio_state_name(this->radio_state_);
+    radio["power"] = !g_app.radio_off;
     radio["detail"] = this->radio_->detail();
     radio["data_line"] = this->radio_->data_line();
     radio["min_power"] = this->radio_->min_power();

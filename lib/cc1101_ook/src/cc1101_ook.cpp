@@ -3,7 +3,7 @@
 
 namespace {
 // Command strobes
-constexpr uint8_t SRES = 0x30, SCAL = 0x33, SRX = 0x34, STX = 0x35, SIDLE = 0x36;
+constexpr uint8_t SRES = 0x30, SCAL = 0x33, SRX = 0x34, STX = 0x35, SIDLE = 0x36, SPWD = 0x39;
 // Configuration registers
 constexpr uint8_t IOCFG0 = 0x02, FREQ2 = 0x0D, PATABLE = 0x3E;
 // Status registers (read with the burst bit set)
@@ -100,6 +100,11 @@ bool Cc1101Ook::tx_on() {
 void Cc1101Ook::tx_off() {
     this->strobe_(SIDLE);
     this->write_(IOCFG0, GDO_HIZ);
+}
+
+void Cc1101Ook::power_down() {
+    this->tx_off();
+    this->strobe_(SPWD);  // takes effect when CS goes high; the next SPI access wakes the chip again
 }
 
 bool Cc1101Ook::rx_on() {

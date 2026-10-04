@@ -60,7 +60,10 @@ struct AppConfig {
     // layout saved by older firmware and fills these with defaults) ----
     uint8_t lbt_enabled;    // listen before transmit: wait for a clear channel (other controllers, key fobs)
     int8_t lbt_threshold;   // dBm; a channel louder than this counts as busy
+    uint8_t radio_off;      // radio chip powered down: nothing is transmitted until it is switched back on
 };
+// True when transmissions may be queued (call with StateLock held).
+inline bool tx_allowed(const AppConfig &c) { return c.output_enabled && !c.radio_off; }
 static const int8_t LBT_DEFAULT_THRESHOLD = -75;
 
 struct NetConfig {

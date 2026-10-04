@@ -68,6 +68,24 @@ inline void fix_checksum(uint8_t protocol, uint8_t *pkt) {
         pkt[5] = p1_checksum(pkt);
 }
 
+// How many groups a packet's address reaches (larger = broader). Protocol 0: the set bits of the group mask in
+// bytes 1-2 (FFFF = all 16). Protocol 1: group 0 is the broadcast to every group, any other code one group.
+inline uint8_t address_breadth(uint8_t protocol, const uint8_t *pkt) {
+    if (protocol != 0)
+        return pkt[1] == 0 ? 255 : 1;
+    uint8_t n = 0;
+    for (uint16_t m = (uint16_t) (pkt[1] << 8 | pkt[2]); m; m >>= 1)
+        n += m & 1;
+    return n;
+}
+
+// True when two packets' addresses reach at least one common group.
+inline bool addresses_overlap(uint8_t protocol, const uint8_t *a, const uint8_t *b) {
+    if (protocol != 0)
+        return a[1] == 0 || b[1] == 0 || a[1] == b[1];
+    return ((a[1] & b[1]) | (a[2] & b[2])) != 0;
+}
+
 // 8-bit channel value -> protocol 1 byte: inverted 4-bit level in the high nibble, low nibble 0xF.
 inline uint8_t p1_channel(uint8_t v) {
     uint8_t level = (15 * v + 127) / 255;

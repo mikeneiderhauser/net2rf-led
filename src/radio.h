@@ -30,6 +30,8 @@ class Radio {
     virtual bool listen_on() { return false; }
     virtual int16_t rssi_dbm() { return -127; }
     virtual void listen_off() {}
+    // Put the chip in its lowest-power state. init() brings it back.
+    virtual void shutdown() {}
 };
 
 Radio *create_radio(RadioType type);

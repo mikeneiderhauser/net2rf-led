@@ -43,6 +43,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST | `/api/discover` | Run an mDNS search now (otherwise every 60 s; heartbeats arrive continuously) |
 | POST 🔒 | `/api/auth` | `{"password": "..."}`: set or change the admin password (8-64 characters); `""` removes it |
 | POST 🔒 | `/api/output` | `{"enabled": true\|false}`: global RF switch (persisted). Disabled = DDP is consumed and counted, nothing is transmitted. |
+| POST 🔒 | `/api/radio` | `{"power": true\|false}`: radio chip power (persisted). `false` puts the chip to sleep: `radio.state` reads `off`, show data is still counted, and sends return 409 (`radio is shut down`). `true` re-initialises it and re-sends the current colours. |
 | POST 🔒 | `/api/test` | `{"mode": "off"\|"solid"\|"cycle", "rgb": "FF0000"}`: override DDP input |
 | POST 🔒 | `/api/send` | `{"zone": 0, "action": "color"\|"off"\|"fxa"\|"fxb"\|"fxc", "rgb": "FF0000"}`; `"zone": "all"` (or -1) = every bracelet: one broadcast packet on protocol 1, one per enabled zone on protocol 0. `"all"` + `"off"` behaves like `/api/all-off`. 400 for a zone that isn't saved; 409 when output is disabled. |
 | POST 🔒 | `/api/all-off` | Leave test mode and switch every bracelet off. Bracelets then stay off until the input changes a colour. 409 when output is disabled. |
@@ -66,7 +67,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
                 "e131_multicast": true, "start_channel": 1, "timeout_s": 300},
   "radio":     {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000,
                 "repeats": 3, "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
-                "lbt_enabled": false, "lbt_threshold_dbm": -75},
+                "lbt_enabled": false, "lbt_threshold_dbm": -75, "power": true},
   "zones": [
     {"enabled": true, "name": "Left side", "addr": "00FF", "start": 1},
     {"enabled": true, "name": "Right side", "addr": "01FF", "start": 4}
@@ -79,11 +80,17 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 - `bracelets.mode`: `pixel` (3 channels per zone: R G B in `color_order`), `dmx` (4: R, G, B, FX) or `vendor`
   (5: boot code, group, R, G, B, the LedGiftSupplier DMX transmitter's layout; protocol 1 only). In `vendor` mode a
   zone only transmits while its first channel is 85, and the group comes from its second channel.
-- `zones[].addr`: protocol 0 = 4 bytes (packet bytes 0-3, default `00FFFF0F`); protocol 1 = group code byte + byte 6
-  (default `00FF` = group 0, all groups; `01FF` = group 1). `zones[].start` is read-only: zone *k* starts at
+- `zones[].addr`: protocol 0 = 4 bytes (packet bytes 0-3; `00FFFF0F` = all groups, `0002000F` = group 1,
+  `0004000F` = group 2, ...); protocol 1 = group code byte + byte 6 (`00FF` = group 0, all groups; `01FF` =
+  group 1). Factory default: protocol 0 with four zones, *All Zones* and *Zone 1* to *3* (groups 1-3). Zone
+  *k* defaults to group *k*, and zone 0 to all groups. `zones[].start` is read-only: zone *k* starts at
   `start_channel + k × (3, 4 or 5)`.
+- Transmit order: zones are sent when their colour changes, taking turns. When zones that reach the same
+  bracelets change together, the broader address goes first (all groups before a single group), so the more
+  specific colour lands last.
 - `radio.type`: `cc1101` or `sx1278`. `tx_power` is clamped to the module's range. `refresh_ms` defaults to 0
   (send on change only): the bracelets latch, and extra airtime only adds interference.
+- `radio.power`: `false` = radio chip shut down (same as `POST /api/radio`).
 - `radio.lbt_enabled` (listen before transmit, off by default): before each update the radio listens for 2.5 ms
   and only transmits if the strongest signal stayed below `lbt_threshold_dbm` (-120..-30, default -75).
   Otherwise it backs off a random 3-15 ms and listens again, for at most 250 ms, then sends anyway. Set the

@@ -73,6 +73,8 @@ bool Sx1278Ook::tx_on() {
 
 void Sx1278Ook::tx_off() { this->set_mode_(MODE_STDBY); }
 
+void Sx1278Ook::power_down() { this->set_mode_(MODE_SLEEP); }
+
 bool Sx1278Ook::rx_on() {
     this->set_mode_(MODE_STDBY);
     this->write_(REG_RX_TIMEOUT1, 0x00);  // no RSSI timeout: DIO2 (TimeOut) stays low

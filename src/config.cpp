@@ -42,21 +42,37 @@ void default_address(uint8_t protocol, uint8_t *addr) {
 // Defaults / persistence
 // ---------------------------------------------------------------------------------------------
 
+// Zone 0 reaches every bracelet; zone N (1-15) reaches group N only.
+static void zone_default_address(uint8_t protocol, uint8_t index, uint8_t *addr) {
+    default_address(protocol, addr);
+    if (index == 0 || index >= MAX_ZONES)
+        return;
+    if (protocol == 0) {  // one bit per group: byte 1 = groups 0-7, byte 2 = groups 8-15
+        addr[1] = (1u << index) & 0xFF;
+        addr[2] = (1u << index) >> 8;
+    } else {
+        addr[0] = index;  // group code
+    }
+}
+
 static void zone_defaults(ZoneConfig &z, uint8_t index, uint8_t protocol) {
     memset(&z, 0, sizeof(z));
     z.enabled = 1;
-    default_address(protocol, z.addr);
-    snprintf(z.name, sizeof(z.name), "Zone %u", index + 1);
+    zone_default_address(protocol, index, z.addr);
+    if (index == 0)
+        strlcpy(z.name, "All Zones", sizeof(z.name));
+    else
+        snprintf(z.name, sizeof(z.name), "Zone %u", index);
 }
 
 void config_defaults_app(AppConfig &c) {
     memset(&c, 0, sizeof(c));
     c.magic = APP_MAGIC;
     strlcpy(c.name, "Net2RF LED", sizeof(c.name));
-    c.protocol = 1;
+    c.protocol = 0;  // the protocol tested on real bracelets
     c.mode = MODE_PIXEL;
     c.color_order = bracelet::ORDER_RGB;
-    c.num_zones = 1;
+    c.num_zones = 4;  // All Zones + Zone 1-3
     c.start_channel = 1;
     c.ddp_port = 4048;
     c.input_timeout_s = 300;
@@ -75,9 +91,9 @@ void config_defaults_app(AppConfig &c) {
     c.e131_universe = 1;
     for (uint8_t i = 0; i < MAX_ZONES; i++)
         zone_defaults(c.zones[i], i, c.protocol);
-    strlcpy(c.zones[0].name, "All bracelets", sizeof(c.zones[0].name));
     c.lbt_enabled = 0;  // optional until tested with several controllers in range of each other
     c.lbt_threshold = LBT_DEFAULT_THRESHOLD;
+    c.radio_off = 0;
 }
 
 // AppConfig as saved by firmware before the listen-before-talk fields were appended.
@@ -279,6 +295,7 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     radio["tx_jitter_ms"] = c.tx_jitter_ms;
     radio["lbt_enabled"] = (bool) c.lbt_enabled;
     radio["lbt_threshold_dbm"] = c.lbt_threshold;
+    radio["power"] = !c.radio_off;
 
     JsonArray zones = o["zones"].to<JsonArray>();
     for (uint8_t i = 0; i < c.num_zones; i++) {
@@ -365,6 +382,8 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
             return false;
         if (!radio["lbt_enabled"].isNull())
             c.lbt_enabled = radio["lbt_enabled"].as<bool>();
+        if (radio["power"].is<bool>())
+            c.radio_off = !radio["power"].as<bool>();
     }
 
     JsonArrayConst zones = in["zones"];
@@ -393,8 +412,8 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
         c.num_zones = n;
     } else if (c.protocol != old_protocol) {
         // Addresses mean different bytes in each protocol: reset them unless new ones were given.
-        for (auto &z : c.zones)
-            default_address(c.protocol, z.addr);
+        for (uint8_t i = 0; i < MAX_ZONES; i++)
+            zone_default_address(c.protocol, i, c.zones[i].addr);
     }
 
     if (c.mode == MODE_VENDOR && c.protocol != 1) {

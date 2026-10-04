@@ -63,6 +63,7 @@ class Cc1101Radio : public Radio {
     bool listen_on() override { return this->chip_.rx_on(); }
     int16_t rssi_dbm() override { return this->chip_.rssi_dbm(); }
     void listen_off() override { this->chip_.tx_off(); }
+    void shutdown() override { this->chip_.power_down(); }
 
  private:
     // GDO0 is the CC1101's TX data input, so if it isn't wired to the RMT pin the chip keys up but radiates
@@ -116,6 +117,7 @@ class Sx1278Radio : public Radio {
     bool listen_on() override { return this->chip_.rx_on(); }
     int16_t rssi_dbm() override { return this->chip_.rssi_dbm(); }
     void listen_off() override { this->chip_.rx_off(); }
+    void shutdown() override { this->chip_.power_down(); }
 
  private:
     Sx1278Ook chip_{s_spi, pins::RADIO_CS, pins::RADIO_RESET};

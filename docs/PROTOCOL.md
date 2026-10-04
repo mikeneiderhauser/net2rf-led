@@ -10,7 +10,7 @@ addressable: a device is one colour. Devices **latch**: they hold the last colou
 
 | | Protocol 0 (Shenzen New Dody) | Protocol 1 (LedGiftSupplier.com) |
 |---|---|---|
-| Tested with real devices | **Yes**, one bracelet (Banana Ball giveaway, board `SD-B15ST1K1`) driven from xLights | Not yet: encoding from the Flipper app and the vendor's DMX guide |
+| Tested with real devices | **Yes**, two bracelets (Banana Ball giveaway, board `SD-B15ST1K1`) driven from xLights | Not yet: encoding from the Flipper app and the vendor's DMX guide |
 
 Device details and photos: [DEVICES.md](DEVICES.md).
 
@@ -68,13 +68,14 @@ Byte 6 (`A1`) has always been `FF`. The controller's *Vendor DMX transmitter* in
 
 - **Protocol 1:** addressing is the group code in byte 1 (0 = broadcast to all groups). A zone's address is its
   group number.
-- **Protocol 0:** a **16-bit group mask** in bytes 1-2, as far as one bracelet shows. The app always sends
+- **Protocol 0:** a **16-bit group mask** in bytes 1-2, as far as two bracelets show. The app always sends
   `00 FF FF 0F` (every bit set, reaching every bracelet). Walking single bits with the web UI's **Address probe**,
-  the bracelet tested answers only to `00 00 08 0F` (bit 3): it's on **group 3**. Other bracelets may be on other
-  groups. If the mask reading holds:
+  one bracelet answers to `00 08 00 0F` (bit 3 of byte 1, **group 3**) and a second to `00 04 00 0F`
+  (**group 2**). Groups 0-7 are the bits of byte 1 and groups 8-15 those of byte 2; the probe shows the group
+  next to each address. Other bracelets may be on other groups. If the mask reading holds:
   - a zone address is `00` + mask + `0F`;
   - a bracelet answers when its group's bit is set;
-  - masks combine (`00 00 09 0F` = groups 0 and 3).
+  - masks combine (`00 09 00 0F` = groups 0 and 3).
 
   Bytes 0 and 3 (`00`, `0F`) haven't been explored. The next step is testing more bracelets, ideally from
   different batches. Reports welcome.

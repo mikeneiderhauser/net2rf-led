@@ -22,7 +22,7 @@ APP = {
     "bracelets": {"protocol": 1, "mode": "pixel", "color_order": "RGB"},
     "radio": {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
-              "lbt_enabled": True, "lbt_threshold_dbm": -75},
+              "lbt_enabled": True, "lbt_threshold_dbm": -75, "power": True},
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
               "e131_multicast": True, "start_channel": 1, "timeout_s": 300},
     "zones": [
@@ -71,7 +71,7 @@ def status():
                     "ap": {"active": False}},
         "engine": {
             "radio": {"type": APP["radio"]["type"], "name": {"cc1101": "CC1101", "sx1278": "SX1278"}[APP["radio"]["type"]],
-                      "state": "ready", "detail": "version 0x14",
+                      "state": "ready" if APP["radio"]["power"] else "off", "power": APP["radio"]["power"], "detail": "version 0x14",
                       "min_power": -30, "max_power": 10, "queue": 0,
                       "lbt": {"enabled": APP["radio"]["lbt_enabled"], "supported": True,
                               "threshold_dbm": APP["radio"]["lbt_threshold_dbm"], "last_rssi_dbm": -97, "last_busy": False}},
@@ -153,8 +153,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/output":
             APP["output_enabled"] = bool(body.get("enabled"))
             return self.send(200, {"ok": True, "enabled": APP["output_enabled"]})
+        if path == "/api/radio":
+            APP["radio"]["power"] = bool(body.get("power"))
+            return self.send(200, {"ok": True, "power": APP["radio"]["power"]})
         if path == "/api/all-off":
             TEST.update(mode="off")
+        if path in ("/api/send", "/api/raw", "/api/all-off") and not APP["radio"]["power"]:
+            return self.send(409, {"ok": False, "error": "radio is shut down"})
         if path in ("/api/send", "/api/raw", "/api/all-off") and not APP["output_enabled"]:
             return self.send(409, {"ok": False, "error": "RF output is disabled"})
         if path == "/api/config":

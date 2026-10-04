@@ -97,6 +97,30 @@ void test_fx_channel(void) {
     TEST_ASSERT_EQUAL(ACTION_COLOR, fx_action(200));
 }
 
+void test_address_breadth() {
+    const uint8_t all0[7] = {0x00, 0xFF, 0xFF, 0x0F, 1, 0, 0}, g3[7] = {0x00, 0x08, 0x00, 0x0F, 1, 0, 0};
+    const uint8_t g23[7] = {0x00, 0x0C, 0x00, 0x0F, 1, 0, 0}, g12[7] = {0x00, 0x00, 0x10, 0x0F, 1, 0, 0};
+    const uint8_t none[7] = {0x00, 0x00, 0x00, 0x0F, 1, 0, 0};
+    TEST_ASSERT_EQUAL_UINT8(16, address_breadth(0, all0));
+    TEST_ASSERT_EQUAL_UINT8(1, address_breadth(0, g3));
+    TEST_ASSERT_EQUAL_UINT8(2, address_breadth(0, g23));
+    TEST_ASSERT_EQUAL_UINT8(1, address_breadth(0, g12));
+    TEST_ASSERT_EQUAL_UINT8(0, address_breadth(0, none));
+    const uint8_t p1_all[7] = {0x55, 0x00, 0x0F, 0x0F, 0x0F, 0, 0xFF}, p1_g2[7] = {0x55, 0x02, 0x0F, 0x0F, 0x0F, 0, 0xFF};
+    TEST_ASSERT_TRUE(address_breadth(1, p1_all) > address_breadth(1, p1_g2));  // broadcast beats any single group
+    TEST_ASSERT_TRUE(address_breadth(1, p1_all) > address_breadth(0, all0));
+
+    TEST_ASSERT_TRUE(addresses_overlap(0, all0, g3));
+    TEST_ASSERT_TRUE(addresses_overlap(0, g23, g3));
+    TEST_ASSERT_TRUE(addresses_overlap(0, all0, g12));
+    TEST_ASSERT_FALSE(addresses_overlap(0, g3, g12));
+    TEST_ASSERT_FALSE(addresses_overlap(0, none, all0));
+    const uint8_t p1_g3[7] = {0x55, 0x03, 0x0F, 0x0F, 0x0F, 0, 0xFF};
+    TEST_ASSERT_TRUE(addresses_overlap(1, p1_all, p1_g2));
+    TEST_ASSERT_TRUE(addresses_overlap(1, p1_g2, p1_g2));
+    TEST_ASSERT_FALSE(addresses_overlap(1, p1_g2, p1_g3));
+}
+
 void test_fix_checksum(void) {
     uint8_t p0[7] = {0x00, 0x01, 0x00, 0x0F, 0x01, 0x02, 0x00};
     fix_checksum(0, p0);
@@ -119,5 +143,6 @@ int main(int, char **) {
     RUN_TEST(test_color_order);
     RUN_TEST(test_fx_channel);
     RUN_TEST(test_fix_checksum);
+    RUN_TEST(test_address_breadth);
     return UNITY_END();
 }

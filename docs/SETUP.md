@@ -42,10 +42,15 @@ and raise **TX power**.
 Every bracelet in a **zone** shows the same colour, and each zone is one pixel in xLights. Choose how many you
 need:
 
-- **One look for the whole audience:** a single zone that reaches every bracelet. This is the default, and
-  the simplest way to start.
+- **One look for the whole audience:** a single zone that reaches every bracelet. The simplest way to start:
+  use only the first zone, **All Zones**.
 - **Sections:** one zone per group of bracelets, for example left and right of the yard, or kids' and adults'
   bracelets. It only works if your bracelets come in different groups. Find out with the steps below.
+
+A new controller starts on protocol 0 with four zones: **All Zones** (every bracelet), then **Zone 1**,
+**Zone 2** and **Zone 3** (groups 1 to 3). Remove the ones you don't need on the **Zones** page; *Add zone*
+continues with the next group. A colour sent to All Zones overrides the single-group zones, and the other way
+round, so sequence one or the other at any moment (see the xLights example in step 5).
 
 ### Protocol 1 (LedGiftSupplier)
 
@@ -59,11 +64,13 @@ all of them (the Zones page warns you).
 ### Protocol 0 (Shenzen New Dody)
 
 The default address `00FFFF0F` reaches every bracelet. Bytes 2-3 (`FFFF`) look like a 16-bit **group mask**,
-one bit per group. The one bracelet tested so far is on group 3 (`0008000F`); yours may be on another.
+one bit per group. The two bracelets tested so far are on groups 2 (`0004000F`) and 3 (`0008000F`); yours may be
+on others.
 
 1. **Tools → Address probe:** protocol 0, field *Mask bytes 1-2*, mode *Walk single bits*, step time **3 s** or
-   more. Wake the bracelet first, then press **★ Bracelet reacted** when it lights. The mark records the address
-   on screen, so a slow press can land on the next step; repeat to be sure.
+   more. It steps through groups 0 to 15, showing each address and its group. Wake the bracelet first, then
+   press **★ Bracelet reacted** when it lights. The mark records the address and group on screen, so a slow
+   press can land on the next step; repeat to be sure.
 2. Add a zone with that address (`00` + mask + `0F`), save, and check it with the **Zone walk** on the Zones
    page. Combining bits (`0009000F` = groups 0 and 3) should address several groups at once.
 
@@ -105,7 +112,24 @@ exact settings for its current zones.
    - **Pixel mode (3 channels per zone, recommended):** one *Single Line* model with 1 node per zone, or a 1-node
      *Single Line* per zone at start channels 1, 4, 7..., string type *RGB Nodes* (matching the colour order
      setting). Place each one where that part of the audience stands.
-   - **DMX mode (4 per zone, untested):** a *DmxFloodlight* per zone (start 1, 5, 9...) with Red 1, Green 2,
+
+     Example for the default four zones (tested): four 1-node *Single Line* models, *RGB Nodes*, all on
+     **Pixel Port 1**, each chained after the one before so xLights assigns the channels. With *Auto Size* on, the
+     controller ends up with 12 channels.
+
+     | Model | Chained after | Channels | Controller zone |
+     |---|---|---|---|
+     | `RF-All` | (first on port 1) | 1-3 | All Zones |
+     | `RF-Zone1` | `RF-All` | 4-6 | Zone 1 |
+     | `RF-Zone2` | `RF-Zone1` | 7-9 | Zone 2 |
+     | `RF-Zone3` | `RF-Zone2` | 10-12 | Zone 3 |
+
+     Sequence either `RF-All` or the single zones at any moment, not both: a colour on `RF-All` overrides the
+     zones, and going black on it switches every bracelet off. Handing over on the same frame is fine (an
+     `RF-All` effect ends exactly where a zone effect starts): the controller sends the All Zones change first
+     and the zone's colour after it. What doesn't work is ending an `RF-All` effect while a zone is holding a
+     steady colour: that zone goes dark until its colour next changes.
+   - **DMX mode (4 per zone; colours tested, effects unconfirmed):** a *DmxFloodlight* per zone (start 1, 5, 9...) with Red 1, Green 2,
      Blue 3. Channel 4 is an effect channel: 0-19 follow RGB, 20-39 off, 40-59 / 60-79 / 80-99 the bracelets'
      built-in effects A / B / C (protocol 0; the tested bracelet ignores them, see [DEVICES.md](DEVICES.md)).
    - **Vendor mode (5 per zone, LedGiftSupplier, untested):** the vendor DMX transmitter's own layout. Per

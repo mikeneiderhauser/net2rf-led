@@ -58,6 +58,9 @@ class Cc1101Ook {
     bool tx_on();
     // Back to IDLE (from TX or RX), GDO0 released to high impedance.
     void tx_off();
+    // Sleep: crystal oscillator and regulator off (about 200 nA). The PA table is lost, so call begin() and
+    // tune() again before the next use.
+    void power_down();
     // Listen-before-talk: enter RX on the tuned frequency (GDO0 stays high impedance), read the received
     // signal strength, then tx_off() to go back to IDLE.
     bool rx_on();
