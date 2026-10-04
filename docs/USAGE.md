@@ -50,7 +50,7 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 | **Bracelets & Radio** | Controller name, bracelet protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
 | **Network** | Current connection and the settings above |
 | **Tools** | **xLights setup** (exact controller and model settings for the current zones); **Which bracelet do I have?**; **Send raw packet**; **Address probe** (find which group a bracelet is in) |
-| **System** | Firmware info and **Update firmware**; OLED display type and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
+| **System** | Firmware info and **Update firmware** (from GitHub releases or a file); OLED display type and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
 
 The pill row at the top of every page shows the radio, input and network state at a glance.
 
@@ -115,9 +115,18 @@ password.
 
 ## Firmware updates
 
-**System → Update firmware** with `net2rf-led-<version>.bin` from the [latest release](https://github.com/mikeneiderhauser/net2rf-led/releases/latest) (or
-`firmware.bin` if you built it), not the `.factory.bin` used for the first flash. RF output pauses
-while it uploads, then the controller reboots.
+Two ways, both under **System → Update firmware**. RF output pauses while the firmware is written, then the
+controller reboots.
+
+- **From GitHub:** press **Check for updates**. Your browser asks GitHub for the latest release and shows
+  whether it's newer than what's running. **Install** then has the controller download and flash it itself,
+  so the controller needs internet access. If it can't reach GitHub, the page says so and gives a download link
+  for the manual way. The check only runs when you press the button.
+- **Upload a file:** choose `net2rf-led-<version>.bin` from the [latest release](https://github.com/mikeneiderhauser/net2rf-led/releases/latest) (or
+  `firmware.bin` if you built it), not the `.factory.bin` used for the first flash.
+
+**Release source** on the same card sets which GitHub repository is checked (`owner/name`, default
+`mikeneiderhauser/net2rf-led`). Change it only if you run firmware from a fork.
 
 **Automatic rollback:** a new build is only kept once the controller has come back up and stayed reachable for
 30 s. If it crashes or never becomes reachable within 3 minutes, it returns to the previous firmware by itself,

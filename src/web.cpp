@@ -11,6 +11,7 @@
 #include "net.h"
 #include "ota_guard.h"
 #include "panel.h"
+#include "updater.h"
 #include "web_ui.h"
 
 namespace web {
@@ -266,6 +267,7 @@ static void handle_status() {
     dev["suffix"] = device_suffix();
     dev["update_pending"] = ota_guard::pending();
     dev["update_rolled_back"] = ota_guard::rolled_back();
+    updater::status_json(dev["update_job"].to<JsonObject>());
     {
         StateLock lock;
         dev["auth"] = (bool) g_net.auth_enabled;
@@ -603,6 +605,10 @@ static void handle_update_upload() {
             s_update_error = "unauthorized";
             return;
         }
+        if (updater::busy() || updater::reboot_due()) {
+            s_update_error = "an update is already running";
+            return;
+        }
         log_i("Firmware upload: %s", up.filename.c_str());
         g_engine.set_suspended(true);  // no RF while flashing
         if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH))
@@ -622,6 +628,25 @@ static void handle_update_upload() {
         g_engine.set_suspended(false);  // resume RF
         s_update_error = "upload aborted";
     }
+}
+
+// Install a release from GitHub: {"tag": "v1.2.3", "asset": "net2rf-led-1.2.3.bin"}. The repository is the
+// configured update source. Progress is reported in /api/status (device.update_job).
+static void handle_update_github() {
+    JsonDocument doc;
+    if (!parse_body(doc))
+        return;
+    String repo;
+    {
+        StateLock lock;
+        repo = g_app.update_repo;
+    }
+    String err;
+    if (!updater::start(repo, doc["tag"] | "", doc["asset"] | "", err)) {
+        send_error(err.startsWith("an update") ? 409 : 400, err);
+        return;
+    }
+    send_ok();
 }
 
 static void handle_not_found() {
@@ -707,12 +732,15 @@ void begin() {
                 }));
     // Upload handler checks credentials itself before writing flash.
     s_server.on("/update", HTTP_POST, handle_update_done, handle_update_upload);
+    s_server.on("/api/update/github", HTTP_POST, protect(handle_update_github));
     s_server.onNotFound(handle_not_found);
     s_server.begin();
 }
 
 void loop() {
     s_server.handleClient();
+    if (updater::reboot_due() && !s_reboot_at)
+        schedule_reboot(2500);  // let the UI read the result first
     if (s_reboot_at && (int32_t) (millis() - s_reboot_at) >= 0) {
         log_i("Rebooting");
         delay(100);

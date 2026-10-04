@@ -61,6 +61,7 @@ struct AppConfig {
     uint8_t lbt_enabled;    // listen before transmit: wait for a clear channel (other controllers, key fobs)
     int8_t lbt_threshold;   // dBm; a channel louder than this counts as busy
     uint8_t radio_off;      // radio chip powered down: nothing is transmitted until it is switched back on
+    char update_repo[64];   // GitHub "owner/name" whose releases the firmware update checks and installs
 };
 // True when transmissions may be queued (call with StateLock held).
 inline bool tx_allowed(const AppConfig &c) { return c.output_enabled && !c.radio_off; }

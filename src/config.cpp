@@ -1,4 +1,5 @@
 #include "config.h"
+#include "updater.h"
 
 #include <Preferences.h>
 #include <esp_mac.h>
@@ -94,10 +95,13 @@ void config_defaults_app(AppConfig &c) {
     c.lbt_enabled = 0;  // optional until tested with several controllers in range of each other
     c.lbt_threshold = LBT_DEFAULT_THRESHOLD;
     c.radio_off = 0;
+    strlcpy(c.update_repo, updater::DEFAULT_REPO, sizeof(c.update_repo));
 }
 
 // AppConfig as saved by firmware before the listen-before-talk fields were appended.
 static const size_t APP_V4_SIZE = (offsetof(AppConfig, lbt_enabled) + 3) & ~(size_t) 3;
+// ... and before the update source was appended.
+static const size_t APP_V5_SIZE = (offsetof(AppConfig, update_repo) + 3) & ~(size_t) 3;
 
 void config_defaults_net(NetConfig &c) {
     memset(&c, 0, sizeof(c));
@@ -115,7 +119,7 @@ void config_load() {
     p.begin(NVS_NS, true);
     size_t app_len = p.getBytesLength("app");
     bool app_ok = false;
-    if (app_len == sizeof(AppConfig) || app_len == APP_V4_SIZE) {
+    if (app_len == sizeof(AppConfig) || app_len == APP_V5_SIZE || app_len == APP_V4_SIZE) {
         config_defaults_app(g_app);  // fields missing from an older, shorter record keep their defaults
         app_ok = p.getBytes("app", &g_app, app_len) == app_len && g_app.magic == APP_MAGIC;
         if (app_ok && app_len != sizeof(AppConfig))
@@ -136,6 +140,9 @@ void config_load() {
         g_app.num_zones = 1;
     if (g_app.radio_type >= NUM_RADIO_TYPES)  // e.g. the removed plain-OOK option
         g_app.radio_type = RADIO_CC1101;
+    g_app.update_repo[sizeof(g_app.update_repo) - 1] = 0;
+    if (!updater::valid_repo(g_app.update_repo))  // also an older record, whose padding lands here
+        strlcpy(g_app.update_repo, updater::DEFAULT_REPO, sizeof(g_app.update_repo));
 }
 
 void config_save_app(const AppConfig &c) {
@@ -297,6 +304,8 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     radio["lbt_threshold_dbm"] = c.lbt_threshold;
     radio["power"] = !c.radio_off;
 
+    o["update"]["repo"] = c.update_repo;
+
     JsonArray zones = o["zones"].to<JsonArray>();
     for (uint8_t i = 0; i < c.num_zones; i++) {
         const ZoneConfig &z = c.zones[i];
@@ -384,6 +393,17 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
             c.lbt_enabled = radio["lbt_enabled"].as<bool>();
         if (radio["power"].is<bool>())
             c.radio_off = !radio["power"].as<bool>();
+    }
+
+    if (in["update"]["repo"].is<const char *>()) {
+        const char *repo = in["update"]["repo"];
+        if (!*repo)
+            repo = updater::DEFAULT_REPO;  // empty = back to the default
+        if (strlen(repo) >= sizeof(c.update_repo) || !updater::valid_repo(repo)) {
+            err = "update source must be a GitHub repository as owner/name";
+            return false;
+        }
+        strlcpy(c.update_repo, repo, sizeof(c.update_repo));
     }
 
     JsonArrayConst zones = in["zones"];

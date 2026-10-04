@@ -299,6 +299,13 @@ progress{width:100%;height:10px}
         <div class="small cnaOnly hide">File picker does nothing? You're in the Wi-Fi sign-in window: open http://192.168.4.1/ in Safari or Chrome.</div>
         <div class="actions"><button class="primary" id="s_upload" disabled>Upload</button></div>
         <progress id="s_prog" class="hide" max="100" value="0"></progress><div class="small dim" id="s_upMsg"></div>
+        <h3 style="margin:16px 0 4px">From GitHub releases</h3>
+        <p class="dim small" style="margin-top:0">Your browser asks GitHub for the latest release; the controller then downloads and installs it itself, so it needs internet access.</p>
+        <div class="actions"><button id="s_ghCheck">Check for updates</button><button class="hide" id="s_ghInstall"></button></div>
+        <div class="small" id="s_ghMsg" style="margin-top:6px"></div>
+        <progress id="s_ghProg" class="hide" max="100" value="0"></progress>
+        <div class="grid" style="margin-top:10px"><label>Release source (GitHub owner/name)<input id="s_ghRepo" class="mono" maxlength="63" placeholder="mikeneiderhauser/net2rf-led"></label></div>
+        <div class="actions"><button id="s_ghSave">Save source</button></div>
       </div>
     </div>
     <div class="card"><h2>Display (OLED)</h2>
@@ -685,7 +692,7 @@ $('o_scan').onclick=async()=>{const r=await api('i2c/scan');const out=$('o_scanO
     `\nSCL (IO17) idle: ${r.scl_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+
     `\nScanned with ${r.orientation}`+
     (r.devices.length&&!r.devices.some(a=>a==='0x3C'||a==='0x3D')?'\nA device answered, but not at 0x3C/0x3D: is it a display?':'')};
-function sysInfo(){authUi();displayUi();const d=S.device;
+function sysInfo(){authUi();displayUi();ghFill();ghJob();const d=S.device;
   const upd=d.update_pending?'<span class="badge warn">new update, confirming…</span>':d.update_rolled_back?'<span class="badge bad">last update failed and was rolled back</span>':'<span class="badge good">confirmed</span>';
   kv($('s_info'),[['Version',d.firmware],['Update state',upd],['Built',d.built],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',`${fmtBytes(d.free_heap)} (min ${fmtBytes(d.min_free_heap)})`],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`${d.display_info.type.toUpperCase()} at ${d.display_info.address}`:'none']])}
 $('s_file').onchange=()=>{$('s_upload').disabled=!$('s_file').files.length};
@@ -695,6 +702,32 @@ $('s_upload').onclick=async()=>{const f=$('s_file').files[0];if(!f)return;if(!aw
   x.upload.onprogress=ev=>{if(ev.lengthComputable){pr.value=ev.loaded/ev.total*100;$('s_upMsg').textContent=Math.round(pr.value)+'%'}};
   x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}if(x.status===401)j.error='admin password required';if(x.status===200&&j.ok){$('s_upMsg').textContent='Update complete. Rebooting…';setTimeout(()=>location.reload(),9000)}else{$('s_upMsg').textContent='Update failed: '+(j.error||x.status);$('s_upload').disabled=false}};
   x.onerror=()=>{$('s_upMsg').textContent='Upload failed';$('s_upload').disabled=false};x.open('POST','/update');x.send(fd)};
+// tools: firmware from GitHub releases. The browser finds the release; the controller downloads it.
+let GH=null,ghWatch=false;
+const verNum=v=>String(v).replace(/^v/,'').split('-')[0].split('.').map(n=>+n||0);
+const verCmp=(a,b)=>{a=verNum(a);b=verNum(b);for(let i=0;i<3;i++){const d=(a[i]||0)-(b[i]||0);if(d)return d}return 0};
+function ghFill(){if(C&&document.activeElement!==$('s_ghRepo'))$('s_ghRepo').value=C.app.update?C.app.update.repo:''}
+$('s_ghSave').onclick=async()=>{await api('config',{update:{repo:$('s_ghRepo').value.trim()}});await loadConfig();ghFill();GH=null;$('s_ghInstall').classList.add('hide');$('s_ghMsg').textContent='';toast('Release source saved')};
+$('s_ghCheck').onclick=async()=>{const repo=C&&C.app.update?C.app.update.repo:'',msg=$('s_ghMsg'),btn=$('s_ghInstall');GH=null;btn.classList.add('hide');
+  if(!repo)return;msg.textContent='Checking '+repo+'…';
+  let r;try{r=await fetch(`https://api.github.com/repos/${repo}/releases/latest`,{headers:{Accept:'application/vnd.github+json'}})}
+  catch(e){msg.textContent='Could not reach GitHub from this browser.';return}
+  if(!r.ok){msg.textContent=r.status===404?`No releases found for ${repo}.`:r.status===403?'GitHub is rate-limiting this network; try again later.':'GitHub answered '+r.status+'.';return}
+  const rel=await r.json(),asset=(rel.assets||[]).find(a=>/\.bin$/.test(a.name)&&!/factory/.test(a.name)),cur=S.device.firmware,c=verCmp(rel.tag_name,cur);
+  const links=` <a href="${esc(rel.html_url)}" target="_blank" rel="noopener">release notes</a>`+(asset?` · <a href="${esc(asset.browser_download_url)}" rel="noopener">download .bin</a>`:'');
+  if(!asset){msg.innerHTML=`${esc(rel.tag_name)} has no firmware .bin attached.`+links;return}
+  msg.innerHTML=(c>0?`<span class="badge warn">${esc(rel.tag_name)} available</span> running ${esc(cur)}.`:
+    c<0?`<span class="badge">newer than the latest release</span> running ${esc(cur)}; latest release is ${esc(rel.tag_name)}.`:
+    cur.includes('-')?`<span class="badge">development build</span> running ${esc(cur)}; latest release is ${esc(rel.tag_name)}.`:
+    `<span class="badge good">up to date</span> running ${esc(cur)}; latest release is ${esc(rel.tag_name)}.`)+links;
+  GH={tag:rel.tag_name,asset:asset.name,url:asset.browser_download_url};btn.textContent=(c>0?'Install ':c<0?'Downgrade to ':'Reinstall ')+rel.tag_name;btn.className=c>0?'primary':'';};
+$('s_ghInstall').onclick=async()=>{if(!GH||!await ask(`Download and install ${GH.tag} from GitHub? RF output pauses and the controller reboots.`))return;
+  await api('update/github',{tag:GH.tag,asset:GH.asset});ghWatch=true;$('s_ghInstall').classList.add('hide');$('s_ghProg').classList.remove('hide');poll()};
+function ghJob(){const j=S.device.update_job;if(!j||j.state==='idle'||!ghWatch&&j.state!=='downloading')return;const msg=$('s_ghMsg'),pr=$('s_ghProg');
+  if(j.state==='downloading'){ghWatch=true;pr.classList.remove('hide');pr.value=j.progress;msg.textContent=`Downloading ${j.tag}… ${j.progress}%`}
+  else if(j.state==='done'){ghWatch=false;pr.value=100;msg.textContent=`${j.tag} installed. Rebooting…`;setTimeout(()=>location.reload(),12000)}
+  else if(j.state==='failed'){ghWatch=false;pr.classList.add('hide');
+    msg.innerHTML=`<span class="badge bad">update failed</span> ${esc(j.error||'')}.`+(GH?` If the controller has no internet access, <a href="${esc(GH.url)}" rel="noopener">download the .bin</a> and upload it above.`:'')}}
 $('s_import').onchange=()=>{$('s_importBtn').disabled=!$('s_import').files.length};
 $('s_importBtn').onclick=async()=>{let cfg;try{cfg=JSON.parse(await $('s_import').files[0].text())}catch(e){return toast('Not a valid JSON file',3000)}
   cfg.include_network=$('s_impNet').checked;if(!await ask('Import these settings and reboot?'))return;const j=await api('import',cfg);afterSave(j,'Settings')};

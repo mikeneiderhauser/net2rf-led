@@ -54,6 +54,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/import` | Body = an export file; add `"include_network": true` to also import network settings. Reboots. |
 | POST 🔒 | `/api/reboot` | Reboot |
 | POST 🔒 | `/api/factory-reset` | Erase all settings and reboot |
+| POST 🔒 | `/api/update/github` | `{"tag": "v1.2.3", "asset": "net2rf-led-1.2.3.bin"}`: the controller downloads that file from the release of the configured repository (`update.repo`) over HTTPS and flashes it, then reboots. Returns at once; progress is `device.update_job` in `/api/status` (`state`: `idle` / `downloading` / `done` / `failed`, `progress` in %, `error`). 409 while an update is running. Needs internet access. |
 | POST 🔒 | `/update` | `multipart/form-data` firmware upload (`firmware.bin`). Origin and credentials are checked before anything is written to flash. Reboots when done; see *Update rollback*. |
 
 ## Settings (`/api/config` → `app`)
@@ -91,6 +92,8 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 - `radio.type`: `cc1101` or `sx1278`. `tx_power` is clamped to the module's range. `refresh_ms` defaults to 0
   (send on change only): the bracelets latch, and extra airtime only adds interference.
 - `radio.power`: `false` = radio chip shut down (same as `POST /api/radio`).
+- `update.repo`: GitHub repository (`owner/name`) whose releases the firmware update checks and installs.
+  Default `mikeneiderhauser/net2rf-led`; `""` restores the default.
 - `radio.lbt_enabled` (listen before transmit, off by default): before each update the radio listens for 2.5 ms
   and only transmits if the strongest signal stayed below `lbt_threshold_dbm` (-120..-30, default -75).
   Otherwise it backs off a random 3-15 ms and listens again, for at most 250 ms, then sends anyway. Set the
@@ -169,7 +172,8 @@ Broadcasts and mDNS stay on the local subnet; controllers on different VLANs don
 A newly uploaded firmware boots as *pending*. It is confirmed once the controller has been reachable (web UI up,
 with a network connection or the setup AP) for 30 s. If it crashes or reboots before that, the bootloader
 returns to the previous firmware on the next boot; if it never becomes reachable within 3 minutes, it rolls
-itself back. `/api/status` reports `device.update_pending` and `device.update_rolled_back`.
+itself back. `/api/status` reports `device.update_pending` and `device.update_rolled_back`. This applies to
+uploads and to installs from GitHub alike.
 
 ## Network (`/api/network`)
 

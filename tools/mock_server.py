@@ -16,6 +16,20 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 T0 = time.time()
 LOG = []
 
+GH_JOB = {"tag": "", "started": 0.0}
+
+
+def gh_job():
+    """Fake a 6 s download, then report done for a while."""
+    if not GH_JOB["started"]:
+        return {"state": "idle"}
+    t = time.time() - GH_JOB["started"]
+    if t > 20:
+        GH_JOB["started"] = 0.0
+        return {"state": "idle"}
+    return {"state": "downloading" if t < 6 else "done", "tag": GH_JOB["tag"], "progress": min(100, int(t / 6 * 100))}
+
+
 APP = {
     "name": "Front Yard",
     "output_enabled": True,
@@ -23,6 +37,7 @@ APP = {
     "radio": {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
               "lbt_enabled": True, "lbt_threshold_dbm": -75, "power": True},
+    "update": {"repo": "mikeneiderhauser/net2rf-led"},
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
               "e131_multicast": True, "start_channel": 1, "timeout_s": 300},
     "zones": [
@@ -61,7 +76,7 @@ def status():
         "device": {"firmware": "0.1.0", "built": "Sep 28 2026 09:00:00", "uptime_s": int(up) + 3600,
                    "free_heap": 182344, "min_free_heap": 160112, "chip": "ESP32-D0WD-V3", "chip_rev": 3,
                    "reset_reason": "power on", "display": True, "suffix": "3F2A", "name": APP["name"],
-                   "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False,
+                   "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False, "update_job": gh_job(),
                    "display_info": {"present": False, "type": "ssd1306", "sda_pin": 5, "scl_pin": 17}},
         "network": {"interface": "ethernet", "ip": "192.168.250.60", "hostname": NET["hostname"], "dhcp": NET["dhcp"],
                     "ethernet": {"enabled": True, "link": True, "mac": "A8:03:2A:11:3F:2A", "speed": 100,
@@ -147,6 +162,9 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(raw or b"{}")
         LOG.append([path, body])
         reboot = False
+        if path == "/api/update/github":
+            GH_JOB.update(tag=body.get("tag", ""), started=time.time())
+            return self.send(200, {"ok": True, "reboot": False})
         if path == "/api/auth":
             AUTH["enabled"] = bool(body.get("password"))
             return self.send(200, {"ok": True, "auth": AUTH["enabled"]})
@@ -165,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/config":
             if "name" in body:
                 APP["name"] = body["name"]
-            for key in ("bracelets", "radio", "input"):
+            for key in ("bracelets", "radio", "input", "update"):
                 if key in body:
                     if key == "radio" and body[key].get("type") != APP["radio"]["type"]:
                         reboot = True

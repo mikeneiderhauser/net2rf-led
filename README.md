@@ -49,7 +49,7 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
   effect channel (DMX mode), or the vendor transmitter's 5-channel layout (vendor mode).
 - **DDP and E1.31 input**, unicast or multicast; Ethernet or Wi-Fi, with a setup hotspot for first-time config.
 - **Web UI for everything:** live input rate and counters, last colour per zone, test mode, zone walk, address
-  probe ("which group is this bracelet in?"), xLights setup helper, network settings, firmware update with
+  probe ("which group is this bracelet in?"), xLights setup helper, network settings, firmware update (from GitHub releases or a file) with
   automatic rollback, settings export/import, optional admin password.
 - **Show-safe:** an RF output switch and an *All off* button; bracelets blank themselves when the show stops
   sending (5 minutes by default).
