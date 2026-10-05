@@ -571,6 +571,7 @@ function xlights(){if(!C||!S)return;const a=C.app,w={dmx:4,vendor:5}[a.bracelets
   const pal=a.bracelets.protocol==0?'\nProtocol 0 bracelets have 10 colours; other colours snap to the nearest.':'';
   let models;
   if(w===3){models=`Option A: one model for the whole controller
+  Ready-made: import Net2RF_All_plus_4.xmodel or Net2RF_All_plus_15.xmodel (tools/xlights in the repo), or build:
   Single Line, 1 string x ${n} node${n>1?'s':''}, String Type "${a.bracelets.color_order} Nodes", start channel ${first}
   (node 1 = ${esc(a.zones[0].name)}${n>1?', node 2 = '+esc(a.zones[1].name):''}${n>2?', ...':''})
 
@@ -598,7 +599,7 @@ FX channel: 0-19 follow RGB, 20-39 off, 40-59 / 60-79 / 80-99 built-in effects A
 ${ctl.join('\n or\n')||'  (no input protocol enabled!)'}
   Vendor: Net2RF   Model: Net2RF LED   (after copying net2rf.xcontroller into xLights, see tools/xlights in the repo)
     or: WLED / WLED / Generic ESP32  (works as shipped; it shows 8 ports, use port 1 only)
-  Upload Output / Upload Input set the zone count, colour order and input here. Ready-made models: tools/xlights
+  Upload Output / Upload Input set the zone count and the input here.
 
 Models (Layout tab), all assigned to this controller (port 1)
 ${models}${pal}

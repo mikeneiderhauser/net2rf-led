@@ -54,6 +54,8 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 
 The pill row at the top of every page shows the radio, input and network state at a glance.
 
+![Dashboard](images/dashboard.png)
+
 ### Controlling output
 
 - **Test mode** overrides the show input for every enabled zone until it's switched off. Use it to check range
@@ -129,6 +131,8 @@ controller reboots.
   for the manual way.
 - **Upload a file:** choose `net2rf-led-<version>.bin` from the [latest release](https://github.com/mikeneiderhauser/net2rf-led/releases/latest) (or
   `firmware.bin` if you built it), not the `.factory.bin` used for the first flash.
+
+![System page: firmware version, free memory and flash, and the update card](images/system.png)
 
 **Release source** on the same card sets which GitHub repository is checked (`owner/name`, default
 `mikeneiderhauser/net2rf-led`). Change it only if you run firmware from a fork.

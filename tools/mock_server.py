@@ -16,6 +16,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 T0 = time.time()
 LOG = []
 
+# MOCK_UPDATE=1 pretends a newer release exists (dashboard notice, Install button).
+FW = "0.0.4"
+LATEST = "v0.0.5" if os.environ.get("MOCK_UPDATE") else "v" + FW
 GH_JOB = {"tag": "", "started": 0.0}
 
 
@@ -33,16 +36,19 @@ def gh_job():
 APP = {
     "name": "Front Yard",
     "output_enabled": True,
-    "bracelets": {"protocol": 1, "mode": "pixel", "color_order": "RGB", "base_layer": False},
+    "bracelets": {"protocol": 0, "mode": "pixel", "color_order": "RGB", "base_layer": True},
     "radio": {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
               "lbt_enabled": True, "lbt_threshold_dbm": -75, "power": True},
     "update": {"repo": "mikeneiderhauser/net2rf-led", "auto_check": True, "check_hours": 12},
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
               "e131_multicast": True, "start_channel": 1, "timeout_s": 300},
-    "zones": [
-        {"enabled": True, "name": "Left side", "addr": "00FF", "start": 1},
-        {"enabled": True, "name": "Right side", "addr": "01FF", "start": 4},
+    "zones": [  # the firmware's defaults: every group, then groups 1-4
+        {"enabled": True, "name": "All Zones", "addr": "00FFFF0F", "start": 1},
+        {"enabled": True, "name": "Zone 1", "addr": "0002000F", "start": 4},
+        {"enabled": True, "name": "Zone 2", "addr": "0004000F", "start": 7},
+        {"enabled": True, "name": "Zone 3", "addr": "0008000F", "start": 10},
+        {"enabled": True, "name": "Zone 4", "addr": "0010000F", "start": 13},
     ],
 }
 NET = {"hostname": "net2rf-3f2a", "eth_enabled": True, "wifi_ssid": "", "wifi_pass_set": False, "dhcp": True,
@@ -59,26 +65,54 @@ def p1_packet(addr, rgb):
     return "".join(f"{x:02X}" for x in b)
 
 
+P0_CODES = {"FF0000": "0100", "00FF00": "0101", "0000FF": "0102", "FFFFFF": "0104", "000000": "00AA"}
+
+
+def p0_packet(addr, rgb):
+    """Protocol 0 packet: address, command for one of the palette colours (or off), checksum."""
+    b = bytes.fromhex(addr + P0_CODES.get(rgb, "0104"))
+    return (b + bytes([sum(b) & 0xFF])).hex().upper()
+
+
+def p0_scene():
+    """A base-layer scene: All Zones red, Zone 2 blue and Zone 3 green on top, the others following."""
+    own = ["FF0000", "000000", "0000FF", "00FF00", "000000"]
+    zs = APP["zones"]
+    rgbs = [own[i] if i < len(own) else "000000" for i in range(len(zs))]
+    if not APP["bracelets"].get("base_layer") or not zs or zs[0]["addr"][2:6] != "FFFF":
+        return [(rgb, p0_packet(z["addr"], rgb)) for z, rgb in zip(zs, rgbs)]
+    mask = 0xFFFF
+    out = []
+    for z, rgb in list(zip(zs, rgbs))[1:]:
+        if rgb not in ("000000", rgbs[0]):
+            mask &= ~int(z["addr"][2:6], 16)
+            out.append((rgb, p0_packet(z["addr"], rgb)))
+        else:
+            out.append((rgb, p0_packet(z["addr"], rgbs[0])))  # follows the base
+    return [(rgbs[0], p0_packet(f"00{mask:04X}0F", rgbs[0]))] + out
+
+
 def status():
     up = time.time() - T0
     STATS["packets"] += 40
     STATS["frames"] += 40
     colors = ["FF0000", "00FF00", "0000FF", "FFFFFF"]
+    scene = p0_scene() if APP["bracelets"]["protocol"] == 0 else None
     zones = []
     for i, _ in enumerate(APP["zones"]):
-        rgb = colors[(int(up / 2) + i) % 4]
-        z = {"rgb": rgb, "fx": 0, "packet": p1_packet(APP["zones"][i]["addr"], rgb) if APP["bracelets"]["protocol"] else "00FFFF0F01000E",
+        rgb = scene[i][0] if scene else colors[(int(up / 2) + i) % 4]
+        z = {"rgb": rgb, "fx": 0, "packet": scene[i][1] if scene else p1_packet(APP["zones"][i]["addr"], rgb),
              "tx": 120 + i, "tx_age_ms": random.randint(50, 900)}
         if APP["bracelets"]["mode"] == "vendor":
             z.update(gated=(i == 1), group=i)
         zones.append(z)
     return {
-        "device": {"firmware": "0.1.0", "built": "Sep 28 2026 09:00:00", "uptime_s": int(up) + 3600,
+        "device": {"firmware": FW, "built": "Sep 28 2026 09:00:00", "uptime_s": int(up) + 3600,
                    "free_heap": 182344, "min_free_heap": 160112, "heap_bytes": 327680, "firmware_bytes": 1471297, "firmware_slot_bytes": 1966080, "chip": "ESP32-D0WD-V3", "chip_rev": 3,
                    "reset_reason": "power on", "display": True, "suffix": "3F2A", "name": APP["name"],
                    "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False, "update_job": gh_job(),
                    "update_check": {"auto_check": APP["update"]["auto_check"], "check_hours": APP["update"]["check_hours"],
-                                    "checking": False, "latest": "v0.2.0", "available": True, "checked_ago_s": 840},
+                                    "checking": False, "latest": LATEST, "available": LATEST != "v" + FW, "checked_ago_s": 840},
                    "display_info": {"present": False, "type": "ssd1306", "sda_pin": 5, "scl_pin": 17}},
         "network": {"interface": "ethernet", "ip": "192.168.250.60", "hostname": NET["hostname"], "dhcp": NET["dhcp"],
                     "ethernet": {"enabled": True, "link": True, "mac": "A8:03:2A:11:3F:2A", "speed": 100,
@@ -136,18 +170,18 @@ class Handler(BaseHTTPRequestHandler):
                 return {"radio": radio, "input": inp, "output_enabled": out, "test": test, "zones": zones,
                         "uptime_s": up}
             return self.send(200, {"running": False, "alias": "net2rf.local", "alias_claimed": True, "controllers": [
-                {"name": APP["name"], "hostname": NET["hostname"], "ip": "192.168.250.60", "firmware": "0.1.0",
+                {"name": APP["name"], "hostname": NET["hostname"], "ip": "192.168.250.60", "firmware": FW,
                  "id": "3F2A", "self": True, "online": True, "last_seen_ms": 0, "via": ["self"], "state": st()},
-                {"name": "Back Yard", "hostname": "net2rf-81c4", "ip": "192.168.250.61", "firmware": "0.1.0",
+                {"name": "Back Yard", "hostname": "net2rf-81c4", "ip": "192.168.250.61", "firmware": FW,
                  "id": "81C4", "self": False, "online": True, "last_seen_ms": 1800, "via": ["udp", "mdns"],
                  "state": st(inp="idle", out=False)},
-                {"name": "Porch", "hostname": "net2rf-90aa", "ip": "192.168.250.62", "firmware": "0.1.0",
+                {"name": "Porch", "hostname": "net2rf-90aa", "ip": "192.168.250.62", "firmware": FW,
                  "id": "90AA", "self": False, "online": True, "last_seen_ms": 4200, "via": ["udp"],
                  "state": st(radio="not_detected", inp="none", test=True, zones=1)},
-                {"name": "Garage", "hostname": "net2rf-a1b2", "ip": "192.168.250.63", "firmware": "0.1.0",
+                {"name": "Garage", "hostname": "net2rf-a1b2", "ip": "192.168.250.63", "firmware": FW,
                  "id": "A1B2", "self": False, "online": False, "last_seen_ms": 185000, "via": ["udp", "mdns"],
                  "state": st(inp="timed_out")},
-                {"name": "Old Firmware", "hostname": "net2rf-c3d4", "ip": "192.168.250.64", "firmware": "0.0.9",
+                {"name": "Old Firmware", "hostname": "net2rf-c3d4", "ip": "192.168.250.64", "firmware": "0.0.2",
                  "id": "C3D4", "self": False, "online": False, "last_seen_ms": 30000, "via": ["mdns"]}]})
         if path == "/api/flash":
             return self.send(200, {"flash_bytes": 4194304, "partitions": [

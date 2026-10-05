@@ -85,6 +85,8 @@ What to know:
 - **Protocol 0 only.** Protocol 1 addresses one group or all of them and can't leave groups out.
 - Zones other than All Zones shouldn't overlap each other (two zones containing the same group).
 
+![Zones page: All Zones and Zone 1 to 4, with the base layer option ticked](images/zones.png)
+
 ### Protocol 1 (LedGiftSupplier)
 
 Every bracelet belongs to a **group**, and group **0** reaches all of them. Find each bracelet's group with **Tools →
