@@ -33,11 +33,11 @@ def gh_job():
 APP = {
     "name": "Front Yard",
     "output_enabled": True,
-    "bracelets": {"protocol": 1, "mode": "pixel", "color_order": "RGB"},
+    "bracelets": {"protocol": 1, "mode": "pixel", "color_order": "RGB", "base_layer": False},
     "radio": {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
               "lbt_enabled": True, "lbt_threshold_dbm": -75, "power": True},
-    "update": {"repo": "mikeneiderhauser/net2rf-led"},
+    "update": {"repo": "mikeneiderhauser/net2rf-led", "auto_check": True, "check_hours": 12},
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
               "e131_multicast": True, "start_channel": 1, "timeout_s": 300},
     "zones": [
@@ -74,9 +74,11 @@ def status():
         zones.append(z)
     return {
         "device": {"firmware": "0.1.0", "built": "Sep 28 2026 09:00:00", "uptime_s": int(up) + 3600,
-                   "free_heap": 182344, "min_free_heap": 160112, "chip": "ESP32-D0WD-V3", "chip_rev": 3,
+                   "free_heap": 182344, "min_free_heap": 160112, "heap_bytes": 327680, "firmware_bytes": 1471297, "firmware_slot_bytes": 1966080, "chip": "ESP32-D0WD-V3", "chip_rev": 3,
                    "reset_reason": "power on", "display": True, "suffix": "3F2A", "name": APP["name"],
                    "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False, "update_job": gh_job(),
+                   "update_check": {"auto_check": APP["update"]["auto_check"], "check_hours": APP["update"]["check_hours"],
+                                    "checking": False, "latest": "v0.2.0", "available": True, "checked_ago_s": 840},
                    "display_info": {"present": False, "type": "ssd1306", "sda_pin": 5, "scl_pin": 17}},
         "network": {"interface": "ethernet", "ip": "192.168.250.60", "hostname": NET["hostname"], "dhcp": NET["dhcp"],
                     "ethernet": {"enabled": True, "link": True, "mac": "A8:03:2A:11:3F:2A", "speed": 100,
@@ -147,6 +149,14 @@ class Handler(BaseHTTPRequestHandler):
                  "state": st(inp="timed_out")},
                 {"name": "Old Firmware", "hostname": "net2rf-c3d4", "ip": "192.168.250.64", "firmware": "0.0.9",
                  "id": "C3D4", "self": False, "online": False, "last_seen_ms": 30000, "via": ["mdns"]}]})
+        if path == "/api/flash":
+            return self.send(200, {"flash_bytes": 4194304, "partitions": [
+                {"label": "nvs", "offset": 0x9000, "bytes": 0x5000, "kind": "settings", "used_bytes": 5120},
+                {"label": "otadata", "offset": 0xE000, "bytes": 0x2000, "kind": "boot_select"},
+                {"label": "app0", "offset": 0x10000, "bytes": 0x1E0000, "kind": "firmware_running", "used_bytes": 1471297},
+                {"label": "app1", "offset": 0x1F0000, "bytes": 0x1E0000, "kind": "firmware_next"},
+                {"label": "spiffs", "offset": 0x3D0000, "bytes": 0x20000, "kind": "files"},
+                {"label": "coredump", "offset": 0x3F0000, "bytes": 0x10000, "kind": "crash_dump"}]})
         if path == "/api/i2c/scan":
             return self.send(200, {"bus_ok": True, "devices": [], "sda_high": True, "scl_high": True, "orientation": "normal (SDA=IO5, SCL=IO17)"})
         if path == "/mock/log":
@@ -162,6 +172,8 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(raw or b"{}")
         LOG.append([path, body])
         reboot = False
+        if path == "/api/update/check":
+            return self.send(200, {"ok": True, "reboot": False})
         if path == "/api/update/github":
             GH_JOB.update(tag=body.get("tag", ""), started=time.time())
             return self.send(200, {"ok": True, "reboot": False})

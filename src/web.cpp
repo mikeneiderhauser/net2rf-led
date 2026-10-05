@@ -3,7 +3,10 @@
 #include <ArduinoJson.h>
 #include <Update.h>
 #include <WebServer.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include <esp_system.h>
+#include <nvs.h>
 #include <mbedtls/base64.h>
 
 #include "config.h"
@@ -13,6 +16,8 @@
 #include "panel.h"
 #include "updater.h"
 #include "web_ui.h"
+
+#include <wled_compat.h>
 
 namespace web {
 
@@ -259,6 +264,11 @@ static void handle_status() {
     dev["uptime_s"] = millis() / 1000;
     dev["free_heap"] = ESP.getFreeHeap();
     dev["min_free_heap"] = ESP.getMinFreeHeap();
+    dev["heap_bytes"] = ESP.getHeapSize();
+    // Firmware slot: how big this firmware is and how much room an update has. Fixed until the next flash.
+    static const uint32_t fw_bytes = ESP.getSketchSize(), slot_bytes = ESP.getFreeSketchSpace();
+    dev["firmware_bytes"] = fw_bytes;
+    dev["firmware_slot_bytes"] = slot_bytes;
     dev["chip"] = ESP.getChipModel();
     dev["chip_rev"] = ESP.getChipRevision();
     dev["reset_reason"] = reset_reason();
@@ -268,6 +278,7 @@ static void handle_status() {
     dev["update_pending"] = ota_guard::pending();
     dev["update_rolled_back"] = ota_guard::rolled_back();
     updater::status_json(dev["update_job"].to<JsonObject>());
+    updater::check_json(dev["update_check"].to<JsonObject>());
     {
         StateLock lock;
         dev["auth"] = (bool) g_net.auth_enabled;
@@ -307,6 +318,12 @@ static void handle_post_config() {
         g_engine.config_changed();
     }
     config_save_app(next);
+    if (!doc["update"]["repo"].isNull()) {  // a new release source: the old result no longer applies
+        if (next.update_check_off)
+            updater::forget();
+        else
+            updater::check_now();
+    }
     if (reboot)
         schedule_reboot();
     send_ok(reboot);
@@ -384,6 +401,8 @@ static void handle_stats() {
     JsonDocument doc;
     doc["uptime_s"] = millis() / 1000;
     doc["free_heap"] = ESP.getFreeHeap();
+    doc["firmware"] = FW_VERSION;
+    updater::check_json(doc["update"].to<JsonObject>());
     {
         StateLock lock;
         doc["name"] = g_app.name;
@@ -630,6 +649,113 @@ static void handle_update_upload() {
     }
 }
 
+// Flash layout: every partition with its size, plus how full the ones we can measure are (the running
+// firmware slot and the settings store). Fixed until the next flash, apart from the settings usage.
+static void handle_flash() {
+    JsonDocument doc;
+    doc["flash_bytes"] = ESP.getFlashChipSize();
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    const esp_partition_t *next = esp_ota_get_next_update_partition(nullptr);
+    JsonArray parts = doc["partitions"].to<JsonArray>();
+    esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, nullptr);
+    for (; it; it = esp_partition_next(it)) {
+        const esp_partition_t *p = esp_partition_get(it);
+        JsonObject o = parts.add<JsonObject>();
+        o["label"] = p->label;
+        o["offset"] = p->address;
+        o["bytes"] = p->size;
+        const char *kind = "other";
+        if (p->type == ESP_PARTITION_TYPE_APP) {
+            kind = p == running ? "firmware_running" : p == next ? "firmware_next" : "firmware";
+            if (p == running)
+                o["used_bytes"] = ESP.getSketchSize();
+        } else if (p->subtype == ESP_PARTITION_SUBTYPE_DATA_NVS) {
+            kind = "settings";
+            nvs_stats_t st;
+            if (nvs_get_stats(p->label, &st) == ESP_OK && st.total_entries)
+                o["used_bytes"] = (uint32_t) ((uint64_t) p->size * st.used_entries / st.total_entries);
+        } else if (p->subtype == ESP_PARTITION_SUBTYPE_DATA_OTA) {
+            kind = "boot_select";
+        } else if (p->subtype == ESP_PARTITION_SUBTYPE_DATA_COREDUMP) {
+            kind = "crash_dump";
+        } else if (p->subtype == ESP_PARTITION_SUBTYPE_DATA_SPIFFS || p->subtype == ESP_PARTITION_SUBTYPE_DATA_FAT ||
+                   p->subtype == ESP_PARTITION_SUBTYPE_DATA_LITTLEFS) {
+            kind = "files";
+        }
+        o["kind"] = kind;
+    }
+    esp_partition_iterator_release(it);
+    send_json(200, doc);
+}
+
+// ---- xLights upload: the part of WLED's JSON API its WLED driver uses (see lib/net2rf_wled) ----
+
+static net2rf::WledConfig wled_view(const AppConfig &c) {
+    net2rf::WledConfig w;
+    w.pixels = c.num_zones;
+    w.ddp = c.ddp_enabled;
+    w.e131 = c.e131_enabled;
+    w.multicast = c.e131_multicast;
+    w.universe = c.e131_universe;
+    return w;
+}
+
+static void handle_wled_info() {
+    JsonDocument doc;
+    StateLock lock;
+    net2rf::wled_info_json(doc.to<JsonObject>(), g_app.name, FW_VERSION, g_app.num_zones);
+    send_json(200, doc);
+}
+
+static void handle_wled_get_cfg() {
+    JsonDocument doc;
+    {
+        StateLock lock;
+        net2rf::wled_cfg_json(doc.to<JsonObject>(), wled_view(g_app));
+    }
+    send_json(200, doc);
+}
+
+// xLights "Upload Output" / "Upload Input": the zone count follows the pixels on port 1, plus the input
+// protocol. Colour order, bracelet protocol and zone addresses are not xLights' to set and stay as they are.
+static void handle_wled_post_cfg() {
+    JsonDocument doc;
+    if (!parse_body(doc))
+        return;
+    AppConfig next;
+    {
+        StateLock lock;
+        next = g_app;
+        net2rf::WledConfig w = wled_view(next);
+        const char *err = net2rf::wled_cfg_apply(doc.as<JsonObjectConst>(), w, MAX_ZONES);
+        if (err) {
+            send_error(400, err);
+            return;
+        }
+        if (next.mode == MODE_PIXEL && w.pixels != next.num_zones) {
+            // A zone that was never set up still has the address for every group: give it its own group.
+            uint8_t every_group[4];
+            default_address(next.protocol, every_group);
+            for (uint8_t i = max<uint8_t>(next.num_zones, 1); i < w.pixels; i++)
+                if (memcmp(next.zones[i].addr, every_group, address_len(next.protocol)) == 0)
+                    config_reset_zone(next, i);
+            next.num_zones = w.pixels;
+        }
+        next.ddp_enabled = w.ddp;
+        next.e131_enabled = w.e131;
+        next.e131_multicast = w.multicast;
+        next.e131_universe = w.universe;
+        next.start_channel = 1;  // xLights numbers this controller's channels from 1
+        g_app = next;
+        g_engine.config_changed();
+    }
+    config_save_app(next);
+    log_i("xLights upload: %u zones", next.num_zones);
+    JsonDocument out;
+    out["success"] = true;
+    send_json(200, out);
+}
+
 // Install a release from GitHub: {"tag": "v1.2.3", "asset": "net2rf-led-1.2.3.bin"}. The repository is the
 // configured update source. Progress is reported in /api/status (device.update_job).
 static void handle_update_github() {
@@ -669,6 +795,10 @@ void begin() {
     s_server.on("/", HTTP_GET, handle_index);
     s_server.on("/api/status", HTTP_GET, handle_status);
     s_server.on("/api/stats", HTTP_GET, handle_stats);
+    s_server.on("/api/flash", HTTP_GET, handle_flash);
+    s_server.on("/json/info", HTTP_GET, handle_wled_info);
+    s_server.on("/json/cfg", HTTP_GET, handle_wled_get_cfg);
+    s_server.on("/json/cfg", HTTP_POST, protect(handle_wled_post_cfg));
     s_server.on("/api/i2c/scan", HTTP_GET, []() {  // diagnostics: what answers on the OLED bus
         JsonDocument doc;
         panel::i2c_scan_json(doc.to<JsonObject>());
@@ -733,6 +863,10 @@ void begin() {
     // Upload handler checks credentials itself before writing flash.
     s_server.on("/update", HTTP_POST, handle_update_done, handle_update_upload);
     s_server.on("/api/update/github", HTTP_POST, protect(handle_update_github));
+    s_server.on("/api/update/check", HTTP_POST, protect([]() {
+                    updater::check_now();
+                    send_ok();
+                }));
     s_server.onNotFound(handle_not_found);
     s_server.begin();
 }

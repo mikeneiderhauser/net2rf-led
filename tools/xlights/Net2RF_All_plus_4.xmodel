@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<custommodel 
+name="Net2RF All + 4" parm1="4" parm2="2" Depth="1" StringType="RGB Nodes" Transparency="0" PixelSize="6" ModelBrightness="" Antialias="1" StrandNames="" NodeNames="All Zones,Zone 1,Zone 2,Zone 3,Zone 4" CustomModel="1,,,;2,3,4,5" SourceVersion="2026.17" >
+<ControllerConnection Port="1" Protocol="ws2811" colorOrder="RGB"/>
+<subModel name="All Zones" layout="horizontal" type="ranges" bufferstyle="Default" line0="1">
+  <ControllerConnection/>
+</subModel>
+<subModel name="Zone 1" layout="horizontal" type="ranges" bufferstyle="Default" line0="2">
+  <ControllerConnection/>
+</subModel>
+<subModel name="Zone 2" layout="horizontal" type="ranges" bufferstyle="Default" line0="3">
+  <ControllerConnection/>
+</subModel>
+<subModel name="Zone 3" layout="horizontal" type="ranges" bufferstyle="Default" line0="4">
+  <ControllerConnection/>
+</subModel>
+<subModel name="Zone 4" layout="horizontal" type="ranges" bufferstyle="Default" line0="5">
+  <ControllerConnection/>
+</subModel>
+<subModel name="Zones 1-4" layout="horizontal" type="ranges" bufferstyle="Default" line0="2-5">
+  <ControllerConnection/>
+</subModel>
+</custommodel>

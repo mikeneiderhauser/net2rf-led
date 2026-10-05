@@ -173,6 +173,32 @@ void Engine::update_wants_(uint32_t now) {
         zs.have_want = true;
     }
 
+    // Base layer: zones showing their own colour are cut out of the All Zones address, black zones follow it.
+    this->base_zone_ = -1;
+    this->follows_ = 0;
+    if (g_app.protocol == 0 && g_app.base_layer) {
+        uint8_t wants[MAX_ZONES][PACKET_LEN];
+        uint8_t addrs[MAX_ZONES][4];
+        bool active[MAX_ZONES];
+        for (uint8_t i = 0; i < g_app.num_zones; i++) {
+            active[i] = g_app.zones[i].enabled && this->zones_[i].have_want;
+            memcpy(wants[i], this->zones_[i].want, PACKET_LEN);
+            memcpy(addrs[i], g_app.zones[i].addr, 4);
+        }
+        uint16_t mask;
+        this->base_zone_ = p0_apply_base_layer(wants, addrs, active, g_app.num_zones, &this->follows_, &mask);
+        if (this->base_zone_ >= 0) {
+            for (uint8_t i = 0; i < g_app.num_zones; i++)
+                if (active[i])
+                    memcpy(this->zones_[i].want, wants[i], PACKET_LEN);
+            if (mask == 0) {  // every group has a zone with its own colour: nobody left for the base to address
+                ZoneState &base = this->zones_[this->base_zone_];
+                memcpy(base.sent, base.want, PACKET_LEN);
+                base.have_sent = true;
+            }
+        }
+    }
+
     // Test mode on protocol 1: one broadcast packet per colour change instead of one per zone.
     if (this->test_mode_ != TestMode::OFF && this->can_broadcast_()) {
         const uint8_t *rgb = this->test_mode_ == TestMode::SOLID ? this->test_rgb_ : cycle;
@@ -212,7 +238,15 @@ void Engine::mark_zones_sent_(uint32_t now) {
 
 bool Engine::zone_changed_(uint8_t i) const {
     const ZoneState &zs = this->zones_[i];
-    return g_app.zones[i].enabled && zs.have_want && (!zs.have_sent || memcmp(zs.want, zs.sent, PACKET_LEN) != 0);
+    if (!g_app.zones[i].enabled || !zs.have_want)
+        return false;
+    if (!zs.have_sent)
+        return true;
+    // The base zone's address shrinks and grows as other zones take and release their groups; only a new
+    // colour (command bytes) is a reason to transmit it again.
+    if (i == this->base_zone_)
+        return zs.want[0] != zs.sent[0] || memcmp(zs.want + 4, zs.sent + 4, 2) != 0;
+    return memcmp(zs.want, zs.sent, PACKET_LEN) != 0;
 }
 
 // When zones that reach the same bracelets change together, the broader address (All Zones) must go out first
@@ -258,6 +292,31 @@ bool Engine::pick_job_(uint32_t now, Job &job) {
             zs.last_tx_ms = now;
             zs.tx_count++;
             this->rr_ = (i + 1) % n;
+            if (pass == 0 && g_app.protocol == 0 && g_app.base_layer && i != this->base_zone_) {
+                // One packet per colour, not per zone: every other zone waiting to send this same command
+                // joins this transmission through the group mask.
+                for (uint8_t j = 0; j < n; j++) {
+                    ZoneState &other = this->zones_[j];
+                    if (j == i || j == this->base_zone_ || !this->zone_changed_(j) || this->held_back_(j) ||
+                        !p0_can_merge(job.packet, other.want))
+                        continue;
+                    p0_merge(job.packet, other.want);
+                    memcpy(other.sent, other.want, PACKET_LEN);
+                    other.have_sent = true;
+                    other.last_tx_ms = now;
+                    other.tx_count++;
+                }
+            }
+            if (i == this->base_zone_) {
+                // The broadcast also reached every zone that follows the base: they now show its colour.
+                for (uint8_t j = 0; j < n; j++) {
+                    if (!(this->follows_ >> j & 1))
+                        continue;
+                    memcpy(this->zones_[j].sent, this->zones_[j].want, PACKET_LEN);
+                    this->zones_[j].have_sent = true;
+                    this->zones_[j].last_tx_ms = now;
+                }
+            }
             return true;
         }
     }

@@ -64,6 +64,8 @@ button:disabled{opacity:.5;cursor:default}
 .note{border-left:3px solid var(--warn);padding:6px 10px;background:color-mix(in srgb,var(--warn) 8%,transparent);border-radius:0 6px 6px 0;margin:8px 0;font-size:13px}
 pre{background:var(--field);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;overflow-x:auto;margin:0;font-size:12.5px}
 progress{width:100%;height:10px}
+details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[open]>summary{color:var(--ink)}
+.util{height:10px;border-radius:5px;overflow:hidden;background:var(--rule);margin:3px 0}.util>i{display:block;height:100%;background:var(--accent)}.util.warn>i{background:var(--warn)}.util.bad>i{background:var(--bad)}
 .hide{display:none!important}
 .nw{white-space:nowrap}
 #toast{position:fixed;right:16px;bottom:16px;background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80vw}
@@ -100,6 +102,7 @@ progress{width:100%;height:10px}
 
   <!-- DASHBOARD -->
   <section data-page="dashboard">
+    <div class="note hide" id="d_fwNote"></div>
     <div class="grid">
       <div class="card"><h2>Input (DDP)</h2>
         <div class="big" id="d_fps">–<span class="unit">fps</span></div>
@@ -132,7 +135,7 @@ progress{width:100%;height:10px}
         <div id="d_iface" class="small"></div>
         <dl class="kv">
           <dt>Uptime</dt><dd id="d_upt">–</dd><dt>Firmware</dt><dd id="d_fw">–</dd>
-          <dt>Free memory</dt><dd id="d_heap">–</dd><dt>Last reset</dt><dd id="d_rst">–</dd>
+          <dt>Free memory</dt><dd id="d_heap">–</dd><dt>Free flash</dt><dd id="d_flash">–</dd><dt>Last reset</dt><dd id="d_rst">–</dd>
         </dl></div>
     </div>
     <div class="card"><h2>Zones &mdash; last received</h2>
@@ -156,6 +159,8 @@ progress{width:100%;height:10px}
       <p class="dim small" style="margin-top:0">Each zone is one set of bracelets that share an address. Zones take consecutive DDP channels from the start channel (<span id="z_widthNote"></span>). Disabling a zone keeps the channel layout.</p>
       <div class="scroll"><table class="tbl"><thead><tr><th>#</th><th>On</th><th>Name</th><th>Group / address</th><th>Channels</th><th>Test</th></tr></thead><tbody id="z_rows"></tbody></table></div>
       <div class="note hide" id="z_mixNote"></div>
+      <label class="inline" style="margin-top:10px"><input type="checkbox" id="z_layer"> <b>All Zones is a base layer</b></label>
+      <div class="small dim" id="z_layerHint" style="margin:2px 0 8px 24px"></div>
       <div class="actions"><button id="z_add">+ Add zone</button><button id="z_del">&minus; Remove last</button><span style="flex:1"></span><button class="primary" id="z_save">Save zones</button></div>
     </div>
     <div class="card"><h2>Zone walk</h2>
@@ -304,8 +309,11 @@ progress{width:100%;height:10px}
         <div class="actions"><button id="s_ghCheck">Check for updates</button><button class="hide" id="s_ghInstall"></button></div>
         <div class="small" id="s_ghMsg" style="margin-top:6px"></div>
         <progress id="s_ghProg" class="hide" max="100" value="0"></progress>
-        <div class="grid" style="margin-top:10px"><label>Release source (GitHub owner/name)<input id="s_ghRepo" class="mono" maxlength="63" placeholder="mikeneiderhauser/net2rf-led"></label></div>
-        <div class="actions"><button id="s_ghSave">Save source</button></div>
+        <div class="small dim" id="s_ghAuto" style="margin-top:6px"></div>
+        <div class="grid" style="margin-top:10px"><label>Release source (GitHub owner/name)<input id="s_ghRepo" class="mono" maxlength="63" placeholder="mikeneiderhauser/net2rf-led"></label>
+          <label>Check every (hours)<input id="s_ghHours" type="number" min="1" max="168"></label>
+          <label class="inline"><input type="checkbox" id="s_ghAutoOn"> Check for new releases automatically (after boot, then on this schedule)</label></div>
+        <div class="actions"><button id="s_ghSave">Save</button></div>
       </div>
     </div>
     <div class="card"><h2>Display (OLED)</h2>
@@ -337,6 +345,11 @@ progress{width:100%;height:10px}
     <div class="card"><h2>Maintenance</h2>
       <div class="actions" style="margin-top:0"><button id="s_reboot">Reboot</button><button class="danger" id="s_factory">Factory reset</button></div>
     </div>
+    <details class="card adv" id="s_adv"><summary>Advanced: flash storage</summary>
+      <div class="small dim" id="s_flashSum" style="margin-top:10px"></div>
+      <div id="s_flashMap" style="display:flex;height:14px;border-radius:4px;overflow:hidden;margin:8px 0;background:var(--rule)"></div>
+      <table class="tbl" style="width:100%"><thead><tr><th>Partition</th><th>Used for</th><th>Size</th><th style="width:34%">In use</th></tr></thead><tbody id="s_flashRows"></tbody></table>
+    </details>
   </section>
 </main>
 </div>
@@ -373,6 +386,28 @@ const bytes=h=>(String(h).replace(/[^0-9a-f]/gi,'').match(/../g)||[]).map(x=>par
 const fmtN=n=>Number(n).toLocaleString();
 function fmtBytes(b){b=Number(b);return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB'}
 function fmtAge(ms){if(ms<0)return'never';const s=ms/1000;return s<1?'just now':s<60?Math.round(s)+'s ago':s<3600?Math.round(s/60)+'m ago':Math.round(s/3600)+'h ago'}
+// room left in the firmware slot: what a future, larger firmware can still grow into
+// utilization bar: how full something is (amber from 80%, red from 92%)
+const util=pct=>`<div class="util${pct>=92?' bad':pct>=80?' warn':''}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" title="${pct}% used"><i style="width:${Math.min(100,pct)}%"></i></div>`;
+function heapFree(d,long){if(!d.heap_bytes)return fmtBytes(d.free_heap);const used=Math.round((d.heap_bytes-d.free_heap)/d.heap_bytes*100);
+  return util(used)+'<span class="small">'+(long?`${fmtBytes(d.free_heap)} free of ${fmtBytes(d.heap_bytes)} (${used}% used; lowest since boot ${fmtBytes(d.min_free_heap)} free)`:`${fmtBytes(d.free_heap)} free (${used}% used)`)+'</span>'}
+function flashFree(d,long){if(!d.firmware_slot_bytes)return'–';const free=d.firmware_slot_bytes-d.firmware_bytes,used=Math.round(d.firmware_bytes/d.firmware_slot_bytes*100);
+  return util(used)+'<span class="small">'+(long?`${fmtBytes(free)} free of ${fmtBytes(d.firmware_slot_bytes)} (firmware uses ${fmtBytes(d.firmware_bytes)}, ${used}%)`:`${fmtBytes(free)} free (${used}% used)`)+'</span>'}
+// System page: the whole flash chip, partition by partition
+const FLASH_KIND={firmware_running:['Firmware (running)','#2dd4bf'],firmware_next:['Firmware slot for the next update','#0f766e'],firmware:['Firmware slot','#0f766e'],
+  settings:['Settings','#f59e0b'],boot_select:['Which firmware slot boots','#a78bfa'],crash_dump:['Crash dump','#f87171'],files:['File storage (not used)','#64748b'],other:['Other','#64748b'],
+  boot:['Bootloader and partition table','#94a3b8'],free:['Not allocated','transparent']};
+let flashLoaded=false;
+$('s_adv').addEventListener('toggle',()=>{if($('s_adv').open)flashInfo()});  // only fetched when opened
+async function flashInfo(){if(flashLoaded)return;let f;try{f=await api('flash')}catch(e){return}flashLoaded=true;
+  const ps=f.partitions.slice().sort((a,b)=>a.offset-b.offset),rows=[];let at=0;
+  for(const p of ps){if(p.offset>at)rows.push({label:at?'(gap)':'(start)',kind:at?'free':'boot',bytes:p.offset-at});rows.push(p);at=p.offset+p.bytes}
+  if(f.flash_bytes>at)rows.push({label:'(end)',kind:'free',bytes:f.flash_bytes-at});
+  $('s_flashSum').textContent=`${fmtBytes(f.flash_bytes)} flash chip, ${ps.length} partitions. The bar shows each partition's share of the chip.`;
+  $('s_flashMap').innerHTML=rows.map(r=>`<div title="${esc(r.label)}: ${fmtBytes(r.bytes)}" style="width:${r.bytes/f.flash_bytes*100}%;background:${FLASH_KIND[r.kind][1]}"></div>`).join('');
+  $('s_flashRows').innerHTML=rows.map(r=>{const k=FLASH_KIND[r.kind],u=r.used_bytes,pct=u===undefined?null:Math.round(u/r.bytes*100);
+    return `<tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:${k[1]};border:1px solid var(--rule)"></span><span class="mono">${esc(r.label)}</span></td><td>${k[0]}</td><td style="white-space:nowrap">${fmtBytes(r.bytes)} <span class="dim small">${(r.bytes/f.flash_bytes*100).toFixed(1)}%</span></td>`+
+      `<td>${pct===null?'<span class="dim small">–</span>':util(pct)+`<span class="small">${fmtBytes(u)} (${pct}%), ${fmtBytes(r.bytes-u)} free</span>`}</td></tr>`}).join('')}
 function fmtUp(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+'d ':'')+(h?h+'h ':'')+m+'m'}
 const mhz=hz=>(hz/1e6).toFixed(3)+' MHz';
 const pill=(cls,txt)=>`<span class="pill"><span class="led ${cls}"></span>${txt}</span>`;
@@ -416,7 +451,7 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
   if(C){const a=C.app.radio;$('d_pw').textContent=Math.max(r.min_power,Math.min(r.max_power,a.tx_power))+' dBm';
     $('d_f0').textContent=mhz(a.freq_p0);$('d_f1').textContent=mhz(a.freq_p1)}
   $('d_ip').textContent=n.ip;$('d_iface').innerHTML=`<span class="dim">${n.interface}${n.ethernet.link&&n.interface==='ethernet'?' · '+n.ethernet.speed+' Mbps':''}${n.wifi.connected&&n.interface==='wifi'?' · '+n.wifi.rssi+' dBm':''} · ${n.hostname}.local</span>`;
-  $('d_upt').textContent=fmtUp(d.uptime_s);$('d_fw').textContent=d.firmware;$('d_heap').textContent=fmtBytes(d.free_heap);$('d_rst').textContent=d.reset_reason;
+  $('d_upt').textContent=fmtUp(d.uptime_s);$('d_fw').textContent=d.firmware;$('d_heap').innerHTML=heapFree(d);$('d_flash').innerHTML=flashFree(d);$('d_rst').textContent=d.reset_reason;
   $('d_timeoutNote').textContent=i.timeout_s?`Bracelets blank after ${i.timeout_s>=60?Math.round(i.timeout_s/60)+' min':i.timeout_s+' s'} without input.`:'Bracelets hold the last colour when input stops.';
   // live zones
   const w=C?({dmx:4,vendor:5}[C.app.bracelets.mode]||3):3;
@@ -447,8 +482,10 @@ function zoneRow(z,k){const w=zoneWidth(),start=C.app.input.start_channel+k*w;
   <td>${addrCell(z,start)}</td>
   <td class="dim">${start}-${start+w-1}</td>
   <td style="white-space:nowrap"><input type="color" class="tc" value="#ff0000"> <button class="ts">Send</button> <button class="to">Off</button>
-   <select class="tfx ${C.app.bracelets.protocol==0?'':'hide'}"><option value="">FX…</option><option value="fxa">A</option><option value="fxb">B</option><option value="fxc">C</option></select></td>`}
-function renderZones(){const tb=$('z_rows');tb.innerHTML='';C.app.zones.forEach((z,k)=>{const tr=tb.insertRow();tr.innerHTML=zoneRow(z,k);bindZone(tr,k)});
+   <select class="tfx ${C.app.bracelets.protocol==0?'':'hide'}"><option value="">FX…</option><option value="fxa">Fade in</option><option value="fxb">Fade out</option><option value="fxc">Effect C (untested)</option></select></td>`}
+function renderZones(){const p0=C.app.bracelets.protocol==0;$('z_layer').checked=p0&&!!C.app.bracelets.base_layer;$('z_layer').disabled=!p0;
+  $('z_layerHint').textContent=p0?'A zone showing its own colour is left alone when the all-groups zone changes or goes black. A black zone follows the all-groups zone, so you cannot hold one zone dark while it is lit. Off: every zone is sent independently, and the all-groups zone overrides the others.':'Protocol 0 only: protocol 1 addresses one group or all of them, so it cannot leave groups out.';
+  const tb=$('z_rows');tb.innerHTML='';C.app.zones.forEach((z,k)=>{const tr=tb.insertRow();tr.innerHTML=zoneRow(z,k);bindZone(tr,k)});
   mixCheck();
   $('z_widthNote').textContent={3:'3 channels each: R, G, B',4:'4 channels each: R, G, B, FX',5:'5 channels each: boot code (85 = transmit), group, R, G, B'}[zoneWidth()]}
 function readZone(tr){const f=n=>tr.querySelector(`[data-f=${n}]`);
@@ -469,9 +506,10 @@ function collectZones(){return[...$('z_rows').rows].map(readZone)}
 $('z_add').onclick=()=>{const zs=collectZones();if(zs.length>=16)return toast('16 zones maximum');
   zs.push({enabled:true,name:zs.length?'Zone '+zs.length:'All Zones',addr:defAddr(zs.length)});C.app.zones=zs;zonesDirty=true;renderZones()};
 $('z_del').onclick=()=>{const zs=collectZones();if(zs.length<=1)return;zs.pop();C.app.zones=zs;zonesDirty=true;renderZones()};
+$('z_layer').onchange=()=>{zonesDirty=true};
 $('z_save').onclick=async()=>{const zs=collectZones(),need=addrLen();
   for(const [k,z] of zs.entries())if(z.addr.length!==need)return toast(`Zone ${k+1}: address must be ${need/2} bytes (${need} hex digits)`,4000);
-  const j=await api('config',{zones:zs});zonesDirty=false;afterSave(j,'Zones');await loadConfig()};
+  const j=await api('config',{zones:zs,bracelets:{base_layer:$('z_layer').checked}});zonesDirty=false;afterSave(j,'Zones');await loadConfig()};
 
 // bracelets & radio
 function fillOutput(){const a=C.app;$('b_name').value=a.name;$('b_proto').value=a.bracelets.protocol;$('b_mode').value=a.bracelets.mode;$('b_order').value=a.bracelets.color_order;$('i_start').value=a.input.start_channel;modeUi();
@@ -558,7 +596,9 @@ FX channel: 0-19 follow RGB, 20-39 off, 40-59 / 60-79 / 80-99 built-in effects A
   if(a.input.e131_enabled)ctl.push(`  Protocol: E1.31   IP: ${a.input.e131_multicast?'multicast (or '+S.network.ip+')':S.network.ip}\n  Universe: ${a.input.e131_universe}, 512 channels (zones use ${first}-${last})`);
   $('t_xl').textContent=`Controller (Controllers tab > Add E1.31/Artnet/DDP), ${ctl.length>1?'either':'using'}:
 ${ctl.join('\n or\n')||'  (no input protocol enabled!)'}
-  Vendor: WLED   Model: WLED   Variant: Generic ESP32  (keeps the visualiser; it shows 8 ports, use port 1 only)
+  Vendor: Net2RF   Model: Net2RF LED   (after copying net2rf.xcontroller into xLights, see tools/xlights in the repo)
+    or: WLED / WLED / Generic ESP32  (works as shipped; it shows 8 ports, use port 1 only)
+  Upload Output / Upload Input set the zone count, colour order and input here. Ready-made models: tools/xlights
 
 Models (Layout tab), all assigned to this controller (port 1)
 ${models}${pal}
@@ -566,7 +606,7 @@ ${models}${pal}
 Expect roughly 5-10 colour changes per second across all zones.`}
 
 // tools: raw packet
-const PRESETS=[['P0 red','0','00FFFF0F0100'],['P0 green','0','00FFFF0F0101'],['P0 blue','0','00FFFF0F0102'],['P0 off','0','00FFFF0F00AA'],['P0 built-in A','0','00FFFF0F05AA'],['P0 built-in B','0','00FFFF0F06AA'],['P0 built-in C','0','D0FFFFFF5500'],['P1 red','1','55000FFFFF00FF'],['P1 green','1','5500FF0FFF00FF'],['P1 blue','1','5500FFFF0F00FF'],['P1 off','1','5500FFFFFF00FF']];
+const PRESETS=[['P0 red','0','00FFFF0F0100'],['P0 green','0','00FFFF0F0101'],['P0 blue','0','00FFFF0F0102'],['P0 off','0','00FFFF0F00AA'],['P0 fade in','0','00FFFF0F05AA'],['P0 fade out','0','00FFFF0F06AA'],['P0 effect C','0','D0FFFFFF5500'],['P1 red','1','55000FFFFF00FF'],['P1 green','1','5500FF0FFF00FF'],['P1 blue','1','5500FFFF0F00FF'],['P1 off','1','5500FFFFFF00FF']];
 $('t_pre').innerHTML+=PRESETS.map((p,k)=>`<option value="${k}">${p[0]}</option>`).join('');
 function fixSum(p,b){if(p==0)b[6]=b.slice(0,6).reduce((a,c)=>a+c,0)&255;else b[5]=b[2]^b[3]^b[4]^0x5A;return b}
 function rawPrev(){const p=+$('t_p').value,b=bytes($('t_hex').value);if(b.length!==7){$('t_prev').textContent='needs 7 bytes';return null}
@@ -692,9 +732,9 @@ $('o_scan').onclick=async()=>{const r=await api('i2c/scan');const out=$('o_scanO
     `\nSCL (IO17) idle: ${r.scl_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+
     `\nScanned with ${r.orientation}`+
     (r.devices.length&&!r.devices.some(a=>a==='0x3C'||a==='0x3D')?'\nA device answered, but not at 0x3C/0x3D: is it a display?':'')};
-function sysInfo(){authUi();displayUi();ghFill();ghJob();const d=S.device;
+function sysInfo(){authUi();displayUi();ghFill();ghJob();fwNotice();const d=S.device;
   const upd=d.update_pending?'<span class="badge warn">new update, confirming…</span>':d.update_rolled_back?'<span class="badge bad">last update failed and was rolled back</span>':'<span class="badge good">confirmed</span>';
-  kv($('s_info'),[['Version',d.firmware],['Update state',upd],['Built',d.built],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',`${fmtBytes(d.free_heap)} (min ${fmtBytes(d.min_free_heap)})`],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`${d.display_info.type.toUpperCase()} at ${d.display_info.address}`:'none']])}
+  kv($('s_info'),[['Version',d.firmware],['Update state',upd],['Built',d.built],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',heapFree(d,true)],['Free flash',flashFree(d,true)],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`${d.display_info.type.toUpperCase()} at ${d.display_info.address}`:'none']])}
 $('s_file').onchange=()=>{$('s_upload').disabled=!$('s_file').files.length};
 $('s_upload').onclick=async()=>{const f=$('s_file').files[0];if(!f)return;if(!await ask(`Flash ${f.name} (${fmtBytes(f.size)})?`))return;
   try{await api('config')}catch(e){return}  // log in first so the upload isn't sent twice
@@ -706,10 +746,18 @@ $('s_upload').onclick=async()=>{const f=$('s_file').files[0];if(!f)return;if(!aw
 let GH=null,ghWatch=false;
 const verNum=v=>String(v).replace(/^v/,'').split('-')[0].split('.').map(n=>+n||0);
 const verCmp=(a,b)=>{a=verNum(a);b=verNum(b);for(let i=0;i<3;i++){const d=(a[i]||0)-(b[i]||0);if(d)return d}return 0};
-function ghFill(){if(C&&document.activeElement!==$('s_ghRepo'))$('s_ghRepo').value=C.app.update?C.app.update.repo:''}
-$('s_ghSave').onclick=async()=>{await api('config',{update:{repo:$('s_ghRepo').value.trim()}});await loadConfig();ghFill();GH=null;$('s_ghInstall').classList.add('hide');$('s_ghMsg').textContent='';toast('Release source saved')};
+let ghFilled=false;
+function ghFill(){if(!C||!C.app.update||ghFilled)return;ghFilled=true;const u=C.app.update;$('s_ghRepo').value=u.repo;$('s_ghHours').value=u.check_hours;$('s_ghAutoOn').checked=u.auto_check}
+// what the controller's own release check found: dashboard notice + a status line on the System page
+function fwNotice(){const u=S.device.update_check,n=$('d_fwNote');if(!u)return;
+  n.classList.toggle('hide',!u.available);if(u.available)n.innerHTML=`Firmware <b>${esc(u.latest)}</b> is available (running ${esc(S.device.firmware)}). <a href="#system">Update on the System page</a>`;
+  const ago=u.checked_ago_s===undefined?'':` Checked ${u.checked_ago_s<90?'just now':fmtUp(u.checked_ago_s)+' ago'}.`;
+  $('s_ghAuto').textContent=u.checking?'Controller is checking GitHub…':u.error?`Controller's check: ${u.error}.`+ago:u.latest?`Controller's check: latest release is ${u.latest}${u.available?' (newer than this firmware)':''}.`+ago:
+    u.auto_check?'Controller checks about 30 s after boot, then every '+u.check_hours+' h.':'Automatic check is off.'}
+$('s_ghSave').onclick=async()=>{await api('config',{update:{repo:$('s_ghRepo').value.trim(),auto_check:$('s_ghAutoOn').checked,check_hours:+$('s_ghHours').value||12}});
+  await loadConfig();ghFilled=false;ghFill();GH=null;$('s_ghInstall').classList.add('hide');$('s_ghMsg').textContent='';toast('Update settings saved')};
 $('s_ghCheck').onclick=async()=>{const repo=C&&C.app.update?C.app.update.repo:'',msg=$('s_ghMsg'),btn=$('s_ghInstall');GH=null;btn.classList.add('hide');
-  if(!repo)return;msg.textContent='Checking '+repo+'…';
+  if(!repo)return;msg.textContent='Checking '+repo+'…';api('update/check',{}).catch(()=>{});  // refresh the controller's own check too
   let r;try{r=await fetch(`https://api.github.com/repos/${repo}/releases/latest`,{headers:{Accept:'application/vnd.github+json'}})}
   catch(e){msg.textContent='Could not reach GitHub from this browser.';return}
   if(!r.ok){msg.textContent=r.status===404?`No releases found for ${repo}.`:r.status===403?'GitHub is rate-limiting this network; try again later.':'GitHub answered '+r.status+'.';return}

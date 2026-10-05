@@ -28,16 +28,15 @@ a bracelet following an xLights sequence, and the web UI.
 
 | | |
 |---|---|
-| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · controller list and `net2rf.local` election (against simulated controllers) |
+| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · bracelet fade in / fade out · controller list and `net2rf.local` election (against simulated controllers) |
 | 🧪 **Built, not yet tested on hardware** | **LedGiftSupplier** bracelets (protocol 1, RGB + group codes) · **vendor DMX** input mode · E1.31 multicast · **Ra-02 / SX1278** radio · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
-| ❌ **Not working yet** | Protocol 0 built-in effects: the tested bracelet ignores them |
 | 🛠 **Coming soon** | A carrier board and enclosure |
 
 Full list of what's been tried: [docs/DEVICES.md](docs/DEVICES.md). What we know about the bracelets
 themselves (one model tested so far, a giveaway bracelet from a Banana Ball game):
 - **Waking up:** they need a press of their button before they listen to the radio.
 - **Idle behaviour:** they turn red by themselves after ~20 minutes without a command, but keep listening.
-- **Effects:** colours and off work; the built-in effect commands don't (yet).
+- **Effects:** besides colours and off, they have a built-in fade out to black and fade in to the last colour.
 - **Zones:** protocol 0 uses a 16-bit group mask. The tested bracelets are on groups 2 and 3; others may differ. See
   [PROTOCOL.md](docs/PROTOCOL.md).
 
@@ -45,6 +44,8 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
 
 - **Two bracelet families:** Shenzen New Dody (10-colour palette) and LedGiftSupplier.com (RGB, group codes).
   Bracelets and light sticks both work the same way.
+- **Layered zones:** an All Zones layer under per-group zones, so a group keeps its own colour while everyone
+  else follows the crowd-wide effect (protocol 0).
 - **Zones:** up to 16 groups per controller, each one RGB pixel in xLights (pixel mode), a DMX fixture with an
   effect channel (DMX mode), or the vendor transmitter's 5-channel layout (vendor mode).
 - **DDP and E1.31 input**, unicast or multicast; Ethernet or Wi-Fi, with a setup hotspot for first-time config.
@@ -53,6 +54,7 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
   automatic rollback, settings export/import, optional admin password.
 - **Show-safe:** an RF output switch and an *All off* button; bracelets blank themselves when the show stops
   sending (5 minutes by default).
+- **Discoverable:** answers Falcon Player's discovery ping, so FPP and xLights can find it on the network.
 - **Several controllers:** each one lists the others with their live state, and one always answers at
   `net2rf.local`. Optional listen-before-transmit keeps neighbouring controllers from talking over each other.
 - **Optional OLED and USER button:** IP and status at a glance; holding the button resets the network settings or

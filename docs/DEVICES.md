@@ -22,7 +22,7 @@ that isn't listed, please [report it](#reporting-a-device): every report widens 
 | Controls | push button |
 | Protocol | **0, Shenzen New Dody** (lights red in *Tools → Which bracelet do I have?*) |
 | Colours | The protocol's 10 fixed colours |
-| Effects | Built-in effects A / B / C sent, no reaction (the effect codes are unconfirmed) |
+| Effects | **Fade in** (`05 AA`, back to the last colour) and **fade out** (`06 AA`, to black) work. The app's third effect packet does nothing. |
 | Address | Two bracelets tested: one on **group 3** (`0008000F`), one on **group 2** (`0004000F`). Both answer the all-groups address `00FFFF0F`. Other bracelets may be on different groups. |
 | Tested with | WT32-ETH01 + CC1101, xLights over DDP in pixel mode: follows the sequence |
 
@@ -63,9 +63,13 @@ one of these two protocols or something else. Try *Tools → Which bracelet do I
 | | Status |
 |---|---|
 | xLights → DDP, pixel mode | ✅ (controller profile WLED / WLED / Generic ESP32, Keep Channel Numbers off) |
-| DDP, DMX mode | ✅ colour (with a DDP test sender); built-in effects unconfirmed |
+| DDP, DMX mode | ✅ colour (with a DDP test sender); 🧪 the fade channel values (the fades themselves work when sent directly) |
 | DDP, vendor mode | 🧪 |
 | E1.31 (sACN) | ✅ unicast (other universes ignored); 🧪 multicast |
+| xLights *Upload Output* (zone count) with the All + 15 model | ✅ from xLights 2026.17, WLED / Generic ESP32 profile |
+| xLights *Upload Input*, and the Net2RF controller definition | 🧪 |
+| Base layer and same-colour merging (protocol 0) | ✅ packets checked on the controller; bracelets on groups 2 and 3 |
+| FPP discovery ping (found by FPP / xLights) | ✅ xLights 2026.17 *Discover* adds it by hostname; 🧪 FPP's MultiSync page |
 | Falcon Player (FPP) as the show player | 🧪 (should work over DDP / E1.31 like xLights) |
 | Web UI, setup hotspot, Wi-Fi join, firmware update with rollback | ✅ |
 | Test mode, zone walk, address probe | ✅ |

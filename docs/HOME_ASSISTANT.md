@@ -37,6 +37,8 @@ rest:
         value_template: "{{ value_json.radio }}"          # ready / initializing / not_detected
       - name: "Bracelets zone 1 colour"
         value_template: "#{{ value_json.zones[0].rgb }}"
+      - name: "Bracelets firmware"
+        value_template: "{{ value_json.firmware }}"
       - name: "Bracelets uptime"
         value_template: "{{ value_json.uptime_s }}"
         unit_of_measurement: "s"
@@ -46,6 +48,9 @@ rest:
         value_template: "{{ value_json.input.seen and not value_json.input.timed_out and value_json.input.age_ms < 5000 }}"
       - name: "Bracelets RF output"
         value_template: "{{ value_json.output_enabled }}"
+      - name: "Bracelets firmware update available"
+        value_template: "{{ value_json.update.available }}"
+        device_class: update
 ```
 
 ## Controls

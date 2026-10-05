@@ -4,6 +4,8 @@
 #include <freertos/semphr.h>
 #include <vector>
 
+#include <fpp_ping.h>
+
 #include "config.h"
 #include "engine.h"
 #include "heartbeat.h"
@@ -127,6 +129,67 @@ static void send_beat() {
     s_last_state = state_key(h);
 }
 
+// ---- FPP discovery ------------------------------------------------------------------------------
+// Falcon Player and xLights look for controllers with FPP's "discover" ping (UDP 32320). Answering it makes
+// this controller show up in FPP's MultiSync list and in xLights' controller discovery. We only speak when
+// asked, plus once when the network comes up; nothing here takes part in MultiSync playback.
+
+static AsyncUDP s_fpp;
+static bool s_fpp_listening = false;
+static volatile bool s_fpp_send = false;       // a ping is owed
+static volatile uint32_t s_fpp_reply_to = 0;   // ... also directly to this address (discover from another subnet)
+static uint32_t s_fpp_last_ms = 0;
+
+static void send_fpp_ping() {
+    char hostname[sizeof(g_net.hostname)];
+    uint16_t channels;
+    {
+        StateLock lock;
+        strlcpy(hostname, g_net.hostname, sizeof(hostname));
+        channels = (uint16_t) g_app.num_zones * zone_width(g_app);
+    }
+    IPAddress me = net::ip();
+    const uint8_t ip[4] = {me[0], me[1], me[2], me[3]};
+    uint8_t buf[net2rf::FPP_PING_LEN];
+    size_t n = net2rf::fpp_build_ping(buf, ip, hostname, FW_VERSION, channels);
+    IPAddress group(net2rf::FPP_MULTICAST[0], net2rf::FPP_MULTICAST[1], net2rf::FPP_MULTICAST[2], net2rf::FPP_MULTICAST[3]);
+    if (net::eth_up())
+        s_fpp.writeTo(buf, n, group, net2rf::FPP_PORT, TCPIP_ADAPTER_IF_ETH);
+    if (net::wifi_up())
+        s_fpp.writeTo(buf, n, group, net2rf::FPP_PORT, TCPIP_ADAPTER_IF_STA);
+    uint32_t reply = s_fpp_reply_to;
+    if (reply) {
+        s_fpp_reply_to = 0;
+        s_fpp.writeTo(buf, n, IPAddress(reply), net2rf::FPP_PORT);
+    }
+}
+
+static void fpp_loop(uint32_t now) {
+    if (!net::connected())
+        return;  // not on the setup AP: there is no player there to find us
+    if (!s_fpp_listening) {
+        IPAddress group(net2rf::FPP_MULTICAST[0], net2rf::FPP_MULTICAST[1], net2rf::FPP_MULTICAST[2], net2rf::FPP_MULTICAST[3]);
+        if (s_fpp.listenMulticast(group, net2rf::FPP_PORT)) {
+            s_fpp.onPacket([](AsyncUDPPacket &packet) {
+                if (!net2rf::fpp_is_discover(packet.data(), packet.length()))
+                    return;
+                s_fpp_reply_to = (uint32_t) packet.remoteIP();
+                s_fpp_send = true;
+            });
+            s_fpp_listening = true;
+            s_fpp_send = true;  // announce ourselves once
+            log_i("FPP discovery on UDP %u", net2rf::FPP_PORT);
+        }
+        return;
+    }
+    // At most one answer a second, however many discover packets arrive (xLights sends several at once).
+    if (s_fpp_send && (s_fpp_last_ms == 0 || now - s_fpp_last_ms >= 1000)) {
+        s_fpp_send = false;
+        s_fpp_last_ms = now | 1;
+        send_fpp_ping();
+    }
+}
+
 // ---- receiving ----------------------------------------------------------------------------------
 
 static void on_packet(AsyncUDPPacket &packet) {
@@ -187,6 +250,7 @@ void announce() { s_beat_now = true; }
 
 void loop() {
     uint32_t now = millis();
+    fpp_loop(now);
     bool have_net = net::connected() || net::ap_active();
     if (have_net && !s_listening) {
         if (s_udp.listen(net2rf::HEARTBEAT_PORT)) {

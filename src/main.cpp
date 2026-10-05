@@ -9,6 +9,7 @@
 #include "ota_guard.h"
 #include "panel.h"
 #include "peers.h"
+#include "updater.h"
 #include "web.h"
 
 static AsyncUDP s_ddp;
@@ -93,6 +94,7 @@ void loop() {
     web::loop();
     panel::loop();
     peers::loop();
+    updater::loop();
     ota_guard::loop(net::connected() || net::ap_active());  // web UI is up from setup()
     static uint32_t last_bind_check = 0;
     if (millis() - last_bind_check > 1000) {

@@ -66,6 +66,11 @@ static void zone_defaults(ZoneConfig &z, uint8_t index, uint8_t protocol) {
         snprintf(z.name, sizeof(z.name), "Zone %u", index);
 }
 
+void config_reset_zone(AppConfig &c, uint8_t index) {
+    if (index < MAX_ZONES)
+        zone_defaults(c.zones[index], index, c.protocol);
+}
+
 void config_defaults_app(AppConfig &c) {
     memset(&c, 0, sizeof(c));
     c.magic = APP_MAGIC;
@@ -73,7 +78,7 @@ void config_defaults_app(AppConfig &c) {
     c.protocol = 0;  // the protocol tested on real bracelets
     c.mode = MODE_PIXEL;
     c.color_order = bracelet::ORDER_RGB;
-    c.num_zones = 4;  // All Zones + Zone 1-3
+    c.num_zones = 5;  // All Zones + Zone 1-4 (the smaller xLights model, tools/xlights)
     c.start_channel = 1;
     c.ddp_port = 4048;
     c.input_timeout_s = 300;
@@ -96,12 +101,17 @@ void config_defaults_app(AppConfig &c) {
     c.lbt_threshold = LBT_DEFAULT_THRESHOLD;
     c.radio_off = 0;
     strlcpy(c.update_repo, updater::DEFAULT_REPO, sizeof(c.update_repo));
+    c.update_check_off = 0;
+    c.update_check_hours = UPDATE_CHECK_DEFAULT_HOURS;
+    c.base_layer = 1;  // new controllers only: saved settings keep the old behaviour until switched on
 }
 
 // AppConfig as saved by firmware before the listen-before-talk fields were appended.
 static const size_t APP_V4_SIZE = (offsetof(AppConfig, lbt_enabled) + 3) & ~(size_t) 3;
 // ... and before the update source was appended.
 static const size_t APP_V5_SIZE = (offsetof(AppConfig, update_repo) + 3) & ~(size_t) 3;
+// ... and before the automatic update check was appended.
+static const size_t APP_V6_SIZE = (offsetof(AppConfig, update_check_off) + 3) & ~(size_t) 3;
 
 void config_defaults_net(NetConfig &c) {
     memset(&c, 0, sizeof(c));
@@ -119,11 +129,13 @@ void config_load() {
     p.begin(NVS_NS, true);
     size_t app_len = p.getBytesLength("app");
     bool app_ok = false;
-    if (app_len == sizeof(AppConfig) || app_len == APP_V5_SIZE || app_len == APP_V4_SIZE) {
+    if (app_len == sizeof(AppConfig) || app_len == APP_V6_SIZE || app_len == APP_V5_SIZE || app_len == APP_V4_SIZE) {
         config_defaults_app(g_app);  // fields missing from an older, shorter record keep their defaults
         app_ok = p.getBytes("app", &g_app, app_len) == app_len && g_app.magic == APP_MAGIC;
-        if (app_ok && app_len != sizeof(AppConfig))
+        if (app_ok && app_len != sizeof(AppConfig)) {
             log_i("Upgraded saved settings to the current layout");
+            g_app.base_layer = 0;  // an existing setup keeps sending exactly as before until this is switched on
+        }
     }
     bool net_ok = p.getBytesLength("net") == sizeof(NetConfig) && p.getBytes("net", &g_net, sizeof(g_net)) &&
                   g_net.magic == NET_MAGIC;
@@ -143,6 +155,8 @@ void config_load() {
     g_app.update_repo[sizeof(g_app.update_repo) - 1] = 0;
     if (!updater::valid_repo(g_app.update_repo))  // also an older record, whose padding lands here
         strlcpy(g_app.update_repo, updater::DEFAULT_REPO, sizeof(g_app.update_repo));
+    if (g_app.update_check_hours < 1 || g_app.update_check_hours > 168)
+        g_app.update_check_hours = UPDATE_CHECK_DEFAULT_HOURS;
 }
 
 void config_save_app(const AppConfig &c) {
@@ -281,6 +295,7 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     br["protocol"] = c.protocol;
     br["mode"] = c.mode == MODE_VENDOR ? "vendor" : c.mode == MODE_DMX ? "dmx" : "pixel";
     br["color_order"] = bracelet::COLOR_ORDER_NAMES[c.color_order % bracelet::NUM_ORDERS];
+    br["base_layer"] = (bool) c.base_layer;
 
     JsonObject input = o["input"].to<JsonObject>();
     input["ddp_enabled"] = (bool) c.ddp_enabled;
@@ -304,7 +319,10 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     radio["lbt_threshold_dbm"] = c.lbt_threshold;
     radio["power"] = !c.radio_off;
 
-    o["update"]["repo"] = c.update_repo;
+    JsonObject update = o["update"].to<JsonObject>();
+    update["repo"] = c.update_repo;
+    update["auto_check"] = !c.update_check_off;
+    update["check_hours"] = c.update_check_hours;
 
     JsonArray zones = o["zones"].to<JsonArray>();
     for (uint8_t i = 0; i < c.num_zones; i++) {
@@ -333,6 +351,8 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
             String m = br["mode"].as<const char *>();
             c.mode = m == "vendor" ? MODE_VENDOR : m == "dmx" ? MODE_DMX : MODE_PIXEL;
         }
+        if (br["base_layer"].is<bool>())
+            c.base_layer = br["base_layer"].as<bool>();
         if (br["color_order"].is<const char *>()) {
             String order = br["color_order"].as<const char *>();
             bool found = false;
@@ -404,6 +424,13 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
             return false;
         }
         strlcpy(c.update_repo, repo, sizeof(c.update_repo));
+    }
+    JsonObjectConst update = in["update"];
+    if (!update.isNull()) {
+        if (update["auto_check"].is<bool>())
+            c.update_check_off = !update["auto_check"].as<bool>();
+        if (!read_int(update, "check_hours", 1, 168, c.update_check_hours, err))
+            return false;
     }
 
     JsonArrayConst zones = in["zones"];

@@ -8,6 +8,8 @@
 - The CC1101 goes up to +10 dBm; the Ra-02 (SX1278) up to +17 dBm for bigger areas.
 - Each update takes about 140 ms on air (a ~47 ms frame, sent 3 times by default). The controller manages roughly
   5-10 colour changes per second across all its zones, so favour bold, slow effects.
+- On protocol 0 with the base layer on, zones that change to the same colour share one transmission (the address
+  is a group mask), so airtime grows with the number of colours on screen, not the number of zones.
 - The bracelets **hold** their last colour, so the controller only transmits when a colour changes (*Refresh
   unchanged* = 0). Re-sending unchanged colours only adds airtime and interference.
 

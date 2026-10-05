@@ -34,7 +34,10 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/` | Web UI |
-| GET | `/api/status` | Device, network and engine status (polled by the UI every second). Always open. |
+| GET | `/api/status` | Device, network and engine status (polled by the UI every second). Always open. `device.free_heap` / `min_free_heap` / `heap_bytes` are RAM in bytes (free now, lowest since boot, total); `device.firmware_bytes` and `device.firmware_slot_bytes` give the firmware's size and the flash slot it must fit in (free flash = the difference). |
+| GET | `/json/info`, `/json/cfg` | The part of WLED's JSON API that xLights' WLED upload driver reads: device info, and port 1's pixel count (= zones) and input. `brand` is `Net2RF`, so xLights' WLED discovery ignores the controller. Always open. |
+| POST 🔒 | `/json/cfg` | What xLights posts on *Upload*: `hw.led.ins[0].len` sets the number of zones (pixel mode; 1-16), `if.live.port` 4048 enables DDP and 5568 enables E1.31 with `if.live.dmx.uni`. Start channel becomes 1. A zone added this way gets its own group unless it was configured before. WLED's per-port colour order is ignored (it describes LED wiring; the controller's colour order must match the model's String Type). Art-Net, more than one port or more than 16 pixels return 400. |
+| GET | `/api/flash` | Flash chip size and the partition table: `label`, `offset`, `bytes`, `kind`, and `used_bytes` for the running firmware slot and the settings store. Shown under *System → Advanced: flash storage*. Always open. |
 | GET 🔒 | `/api/config` | Current settings (`app` + `network`, without passwords) |
 | POST 🔒 | `/api/config` | Update app settings. Any subset of the fields below. Changing `radio.type` reboots. |
 | POST 🔒 | `/api/network` | Update network settings, then reboot |
@@ -45,7 +48,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/output` | `{"enabled": true\|false}`: global RF switch (persisted). Disabled = DDP is consumed and counted, nothing is transmitted. |
 | POST 🔒 | `/api/radio` | `{"power": true\|false}`: radio chip power (persisted). `false` puts the chip to sleep: `radio.state` reads `off`, show data is still counted, and sends return 409 (`radio is shut down`). `true` re-initialises it and re-sends the current colours. |
 | POST 🔒 | `/api/test` | `{"mode": "off"\|"solid"\|"cycle", "rgb": "FF0000"}`: override DDP input |
-| POST 🔒 | `/api/send` | `{"zone": 0, "action": "color"\|"off"\|"fxa"\|"fxb"\|"fxc", "rgb": "FF0000"}`; `"zone": "all"` (or -1) = every bracelet: one broadcast packet on protocol 1, one per enabled zone on protocol 0. `"all"` + `"off"` behaves like `/api/all-off`. 400 for a zone that isn't saved; 409 when output is disabled. |
+| POST 🔒 | `/api/send` | `{"zone": 0, "action": "color"\|"off"\|"fxa"\|"fxb"\|"fxc", "rgb": "FF0000"}` (protocol 0: `fxa` = fade in to the last colour, `fxb` = fade out, `fxc` = a third effect packet with no known result); `"zone": "all"` (or -1) = every bracelet: one broadcast packet on protocol 1, one per enabled zone on protocol 0. `"all"` + `"off"` behaves like `/api/all-off`. 400 for a zone that isn't saved; 409 when output is disabled. |
 | POST 🔒 | `/api/all-off` | Leave test mode and switch every bracelet off. Bracelets then stay off until the input changes a colour. 409 when output is disabled. |
 | POST 🔒 | `/api/raw` | `{"protocol": 1, "hex": "55000FFFFF55FF", "repeats": 3, "fix": true}`. 409 when output is disabled. |
 | POST 🔒 | `/api/stats/reset` | Zero the packet counters |
@@ -54,6 +57,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/import` | Body = an export file; add `"include_network": true` to also import network settings. Reboots. |
 | POST 🔒 | `/api/reboot` | Reboot |
 | POST 🔒 | `/api/factory-reset` | Erase all settings and reboot |
+| POST 🔒 | `/api/update/check` | Ask GitHub for the latest release now (also works with the automatic check off). The result appears in `device.update_check` a few seconds later. |
 | POST 🔒 | `/api/update/github` | `{"tag": "v1.2.3", "asset": "net2rf-led-1.2.3.bin"}`: the controller downloads that file from the release of the configured repository (`update.repo`) over HTTPS and flashes it, then reboots. Returns at once; progress is `device.update_job` in `/api/status` (`state`: `idle` / `downloading` / `done` / `failed`, `progress` in %, `error`). 409 while an update is running. Needs internet access. |
 | POST 🔒 | `/update` | `multipart/form-data` firmware upload (`firmware.bin`). Origin and credentials are checked before anything is written to flash. Reboots when done; see *Update rollback*. |
 
@@ -78,12 +82,18 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 
 - `bracelets.protocol`: 0 = Shenzen New Dody (433.889 MHz, 10-colour palette), 1 = LedGiftSupplier.com
   (433.920 MHz, RGB, group codes). Changing it without sending `zones` resets every zone address to the default.
+- `bracelets.base_layer` (protocol 0): the zone addressed to every group (mask `FFFF`) is a base layer. A zone
+  whose colour is not black is cut out of that zone's address ("everyone except"), so base changes don't
+  reach it; a black zone follows the base and gets no packet of its own while the base's broadcast covers
+  it. Zones that change to the same command at the same moment are sent as one packet with their masks
+  combined. Default `true` for new settings, `false` for settings saved by older firmware. In `/api/status` the
+  base zone's `packet` shows the address actually used (e.g. `00FBFF0F` with group 2 cut out).
 - `bracelets.mode`: `pixel` (3 channels per zone: R G B in `color_order`), `dmx` (4: R, G, B, FX) or `vendor`
   (5: boot code, group, R, G, B, the LedGiftSupplier DMX transmitter's layout; protocol 1 only). In `vendor` mode a
   zone only transmits while its first channel is 85, and the group comes from its second channel.
 - `zones[].addr`: protocol 0 = 4 bytes (packet bytes 0-3; `00FFFF0F` = all groups, `0002000F` = group 1,
   `0004000F` = group 2, ...); protocol 1 = group code byte + byte 6 (`00FF` = group 0, all groups; `01FF` =
-  group 1). Factory default: protocol 0 with four zones, *All Zones* and *Zone 1* to *3* (groups 1-3). Zone
+  group 1). Factory default: protocol 0 with five zones, *All Zones* and *Zone 1* to *4* (groups 1-4). Zone
   *k* defaults to group *k*, and zone 0 to all groups. `zones[].start` is read-only: zone *k* starts at
   `start_channel + k × (3, 4 or 5)`.
 - Transmit order: zones are sent when their colour changes, taking turns. When zones that reach the same
@@ -94,6 +104,10 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 - `radio.power`: `false` = radio chip shut down (same as `POST /api/radio`).
 - `update.repo`: GitHub repository (`owner/name`) whose releases the firmware update checks and installs.
   Default `mikeneiderhauser/net2rf-led`; `""` restores the default.
+- `update.auto_check` (default `true`) and `update.check_hours` (1-168, default 12): the controller looks up the
+  latest release about 30 s after boot and then on this period. It reads which tag
+  `github.com/<repo>/releases/latest` redirects to: one small HTTPS request, no GitHub API. If GitHub can't be
+  reached it retries after 1 minute, doubling up to 15. Nothing is installed automatically.
 - `radio.lbt_enabled` (listen before transmit, off by default): before each update the radio listens for 2.5 ms
   and only transmits if the strongest signal stayed below `lbt_threshold_dbm` (-120..-30, default -75).
   Otherwise it backs off a random 3-15 ms and listens again, for at most 250 ms, then sends anyway. Set the
@@ -126,6 +140,19 @@ listened first, `lbt_waits` those that found the channel busy, `lbt_forced` thos
 `lbt_wait_ms` the total delay. A steadily rising `lbt_forced` means the channel is saturated: lower the load
 (fewer updates, fewer repeats) or the number of transmitters. `POST /api/stats/reset` zeroes the counters.
 
+`firmware` is the running version, and `update` the controller's release check, also in `/api/status` as
+`device.update_check`:
+
+```json
+"firmware": "0.0.3",
+"update": {"auto_check": true, "check_hours": 12, "checking": false, "latest": "v0.0.4", "available": true,
+           "checked_ago_s": 840}
+```
+
+`available` is true when `latest` is newer than the running firmware. `latest` and `checked_ago_s` are missing
+until a check has run; `error` is set when the last one failed (`could not reach GitHub (...)`, `no releases
+found`, `repository not found`).
+
 ## Controller discovery
 
 Controllers find each other two ways:
@@ -145,6 +172,17 @@ Controllers find each other two ways:
   firmware or Wi-Fi with client isolation. They're listed without live state.
 
 Broadcasts and mDNS stay on the local subnet; controllers on different VLANs don't see each other.
+
+**Falcon Player and xLights** find the controller a third way: it answers FPP's *discover* ping on **UDP 32320**
+(multicast 239.70.80.80, broadcast or unicast) with a version 3 ping packet: system type `0xC0` (other system), mode *bridge*, its IP, hostname, firmware
+version, model `Net2RF-LED` and its channel range (for example `0-47`). It sends one such ping when the
+network comes up and otherwise only when asked, at most once a second, and replies both to the multicast
+group and directly to the asker. It takes no part in MultiSync playback.
+
+FPP has not assigned this controller a type code, and it does not borrow another product's. Players
+therefore list it by hostname and model without knowing what it is, and xLights creates it as an E1.31
+controller with no vendor: set DDP, *Keep Channel Numbers* off and the vendor yourself. The model string is
+the ID of the xLights controller definition in [`tools/xlights`](../tools/xlights/).
 
 `GET /api/discover`:
 

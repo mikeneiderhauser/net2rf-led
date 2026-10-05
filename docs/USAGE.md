@@ -46,11 +46,11 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 | Page | What's there |
 |---|---|
 | **Dashboard** | Input rate and packet counters, RF airtime and counters, radio status, device info; the last colour sent to each zone; other controllers on the network with their live state; **Test mode** (off, solid colour, or cycle R/G/B/W); **RF output on/off** and **All off** |
-| **Zones** | Add, name, enable and address zones; send a colour, off or an effect to one zone; **Zone walk** lights one zone at a time so you can see which bracelets belong where |
+| **Zones** | Add, name, enable and address zones; choose whether All Zones is a base layer under the others; send a colour, off, a fade in or a fade out to one zone; **Zone walk** lights one zone at a time so you can see which bracelets belong where |
 | **Bracelets & Radio** | Controller name, bracelet protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
 | **Network** | Current connection and the settings above |
 | **Tools** | **xLights setup** (exact controller and model settings for the current zones); **Which bracelet do I have?**; **Send raw packet**; **Address probe** (find which group a bracelet is in) |
-| **System** | Firmware info and **Update firmware** (from GitHub releases or a file); OLED display type and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
+| **System** | Firmware info (version, free memory, free flash) and **Update firmware** (from GitHub releases or a file); an **Advanced** section with the flash partition breakdown; OLED display type and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
 
 The pill row at the top of every page shows the radio, input and network state at a glance.
 
@@ -100,7 +100,7 @@ name and page number.
 
 | Page | Shows |
 |---|---|
-| Status | IP and interface (ETH / WiFi / AP / offline), hostname (or hotspot name), radio state, firmware version |
+| Status | IP and interface (ETH / WiFi / AP / offline), hostname (or hotspot name), radio state, firmware version (and a newer release, if one was found) |
 | Input | DDP / E1.31 state (live, nothing yet, timed out, TEST MODE, OUTPUT OFF), frame rate, packet count, time since the last packet, enabled inputs |
 | Zones | Zone number, name and current colour (hex), 4 per page |
 
@@ -118,10 +118,15 @@ password.
 Two ways, both under **System → Update firmware**. RF output pauses while the firmware is written, then the
 controller reboots.
 
+- **Automatic check:** about 30 s after boot, and then every 12 hours, the controller asks GitHub which
+  release is the latest. When it's newer than the running firmware, the **Dashboard** shows *Firmware vX is
+  available*, the OLED's status page shows it next to the version, and `/api/stats` reports it. Nothing is
+  installed automatically. The check can be switched off, and its period changed (1 to 168 hours), on the same
+  card. Without internet access it simply finds nothing and tries again later.
 - **From GitHub:** press **Check for updates**. Your browser asks GitHub for the latest release and shows
   whether it's newer than what's running. **Install** then has the controller download and flash it itself,
   so the controller needs internet access. If it can't reach GitHub, the page says so and gives a download link
-  for the manual way. The check only runs when you press the button.
+  for the manual way.
 - **Upload a file:** choose `net2rf-led-<version>.bin` from the [latest release](https://github.com/mikeneiderhauser/net2rf-led/releases/latest) (or
   `firmware.bin` if you built it), not the `.factory.bin` used for the first flash.
 
@@ -137,6 +142,15 @@ and the System page says so.
 **System → Configuration → Export settings** downloads the settings as a JSON file (the Wi-Fi password is never included).
 **Import** restores one, optionally with its network settings, then reboots. This is handy for setting up a
 second controller the same way.
+
+## Finding the controller from FPP or xLights
+
+The controller answers Falcon Player's discovery, so it appears in FPP's *MultiSync* list and in xLights'
+controller *Discover*, by hostname, with its IP, firmware version and channel count. Discovery uses multicast
+and broadcast, so it only works within one subnet (xLights also asks controllers it already knows by IP).
+xLights doesn't know this type of device yet, so it adds it as an **E1.31** controller with no vendor: change
+the protocol to **DDP**, untick *Keep Channel Numbers* and pick the vendor and model
+([SETUP.md](SETUP.md#5-add-it-to-xlights)).
 
 ## Several controllers
 

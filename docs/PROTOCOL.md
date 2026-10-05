@@ -45,8 +45,9 @@ share one channel ([RF.md](RF.md#multiple-controllers)).
 |---|---|
 | `01 nn` | colour nn: 00 red, 01 green, 02 blue, 03 pink, 04 white, 05 yellow, 08 violet, 09 orange, 0A indigo, 0B cyan (06/07 unused by the app) |
 | `00 AA` | off |
-| `05 AA` / `06 AA` | built-in effects (unconfirmed: no reaction from the tested Banana Ball bracelet) |
-| full packet `D0 FF FF FF 55 00 22` | built-in effect (unconfirmed, as above) |
+| `05 AA` | **fade in** to the colour the bracelet last showed (no visible change if it is already lit) |
+| `06 AA` | **fade out** to black. Only with `AA`: `06 10` and `06 FF` did nothing, so the second byte is not a speed. |
+| full packet `D0 FF FF FF 55 00 22` | sent by the Flipper app as a third effect; no reaction from the tested bracelets, lit or dark |
 
 ## Protocol 1: RGB with group codes
 
@@ -68,17 +69,21 @@ Byte 6 (`A1`) has always been `FF`. The controller's *Vendor DMX transmitter* in
 
 - **Protocol 1:** addressing is the group code in byte 1 (0 = broadcast to all groups). A zone's address is its
   group number.
-- **Protocol 0:** a **16-bit group mask** in bytes 1-2, as far as two bracelets show. The app always sends
+- **Protocol 0:** a **16-bit group mask** in bytes 1-2, confirmed with two bracelets. The app always sends
   `00 FF FF 0F` (every bit set, reaching every bracelet). Walking single bits with the web UI's **Address probe**,
   one bracelet answers to `00 08 00 0F` (bit 3 of byte 1, **group 3**) and a second to `00 04 00 0F`
   (**group 2**). Groups 0-7 are the bits of byte 1 and groups 8-15 those of byte 2; the probe shows the group
-  next to each address. Other bracelets may be on other groups. If the mask reading holds:
-  - a zone address is `00` + mask + `0F`;
-  - a bracelet answers when its group's bit is set;
-  - masks combine (`00 09 00 0F` = groups 0 and 3).
+  next to each address. Other bracelets may be on other groups.
+  - A zone address is `00` + mask + `0F`.
+  - A bracelet answers when its group's bit is set.
+  - Masks combine: `00 0C 00 0F` (groups 2 and 3) lit both bracelets.
+  - An empty mask reaches nobody: `00 00 00 0F` lit neither.
+  - "Everyone except" works: `00 FB FF 0F` (all but group 2) changed only the group 3 bracelet, and
+    `00 F7 FF 0F` (all but group 3) only the group 2 one. The controller's *base layer* option uses this
+    ([SETUP.md](SETUP.md#all-zones-as-a-base-layer-protocol-0)).
 
-  Bytes 0 and 3 (`00`, `0F`) haven't been explored. The next step is testing more bracelets, ideally from
-  different batches. Reports welcome.
+  Bytes 0 and 3 (`00`, `0F`) haven't been explored, and only groups 2 and 3 have been seen on real
+  bracelets. Reports from other batches are welcome.
 
 ## Interference
 

@@ -1,0 +1,26 @@
+<Vendor Name="Net2RF">
+    <Controller Name="Net2RF LED">
+        <Variant Name="" ID="Net2RF-LED">
+            <OpenSourceFirmware/>
+            <SupportsUpload/>
+            <ConfigDriver>WLED</ConfigDriver>
+            <SupportsAutoLayout/>
+            <DDPStartsAtOne/>
+            <MaxPixelPort>1</MaxPixelPort>
+            <MaxSerialPort>0</MaxSerialPort>
+            <MaxPixelPortChannels>48</MaxPixelPortChannels>
+            <MaxSerialPortChannels>0</MaxSerialPortChannels>
+            <MaxInputUniverses>1</MaxInputUniverses>
+            <PixelProtocols>
+                <Protocol>ws2811</Protocol>
+            </PixelProtocols>
+            <SerialProtocols/>
+            <InputProtocols>
+                <Protocol>ddp</Protocol>
+                <Protocol>e131</Protocol>
+            </InputProtocols>
+            <PreferredInputProtocol>DDP</PreferredInputProtocol>
+            <Port1>33</Port1>
+        </Variant>
+    </Controller>
+</Vendor>

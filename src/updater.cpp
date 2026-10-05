@@ -4,11 +4,18 @@
 #include <esp_crt_bundle.h>
 #include <esp_http_client.h>
 
+#include <version.h>
+
+#include "config.h"
 #include "engine.h"
+#include "net.h"
 
 extern Engine g_engine;
 
 namespace updater {
+
+using net2rf::compare_versions;
+using net2rf::tag_from_release_url;
 
 namespace {
 enum class State : uint8_t { IDLE, DOWNLOADING, DONE, FAILED };
@@ -127,6 +134,77 @@ void task(void *) {
     download();
     vTaskDelete(nullptr);
 }
+// ---- looking for a newer release -----------------------------------------------------------------
+
+const uint32_t FIRST_CHECK_MS = 30000;        // after boot, once the network is up
+const uint32_t RETRY_CHECK_MS = 60000;        // after a check that could not reach GitHub; doubles each time ...
+const uint32_t RETRY_CHECK_MAX_MS = 15 * 60000;  // ... up to this
+
+volatile bool s_checking = false;
+volatile bool s_check_now = false;
+volatile bool s_check_failed = false;
+bool s_checked = false;
+uint32_t s_checked_ms = 0;
+uint32_t s_next_check_ms = FIRST_CHECK_MS;
+char s_check_repo[sizeof(AppConfig::update_repo)];
+char s_latest[41] = "";       // tag of the latest release, once known
+char s_check_error[64] = "";
+
+struct Redirect {
+    char location[256];
+};
+
+esp_err_t on_check_event(esp_http_client_event_t *e) {
+    if (e->event_id == HTTP_EVENT_ON_HEADER && strcasecmp(e->header_key, "Location") == 0)
+        strlcpy(((Redirect *) e->user_data)->location, e->header_value, sizeof(Redirect::location));
+    return ESP_OK;
+}
+
+// github.com/<repo>/releases/latest answers with a redirect to the newest release's tag page: read the tag
+// from that redirect. No API call, no JSON, no rate limit.
+void check_task(void *) {
+    static Redirect redirect;
+    redirect.location[0] = 0;
+    char url[160];
+    snprintf(url, sizeof(url), "https://github.com/%s/releases/latest", s_check_repo);
+    esp_http_client_config_t cfg = {};
+    cfg.url = url;
+    cfg.method = HTTP_METHOD_HEAD;
+    cfg.disable_auto_redirect = true;
+    cfg.event_handler = on_check_event;
+    cfg.user_data = &redirect;
+    cfg.crt_bundle_attach = esp_crt_bundle_attach;
+    cfg.timeout_ms = 10000;
+    cfg.buffer_size = 8192;
+    cfg.user_agent = "net2rf-led/" FW_VERSION;
+    cfg.keep_alive_enable = false;
+    esp_http_client_handle_t http = esp_http_client_init(&cfg);
+    esp_err_t e = http ? esp_http_client_perform(http) : ESP_ERR_NO_MEM;
+    int code = http ? esp_http_client_get_status_code(http) : 0;
+    if (http)
+        esp_http_client_cleanup(http);
+
+    char tag[sizeof(s_latest)];
+    bool failed = false;
+    if (e != ESP_OK && !redirect.location[0]) {
+        snprintf(s_check_error, sizeof(s_check_error), "could not reach GitHub (%s)", esp_err_to_name(e));
+        failed = true;
+    } else if (tag_from_release_url(redirect.location, tag, sizeof(tag))) {
+        strlcpy(s_latest, tag, sizeof(s_latest));
+        s_check_error[0] = 0;
+        log_i("Latest release of %s: %s (running %s)", s_check_repo, s_latest, FW_VERSION);
+    } else {
+        snprintf(s_check_error, sizeof(s_check_error), code == 404 ? "repository not found" : "no releases found");
+        s_latest[0] = 0;
+    }
+    if (failed)
+        log_w("Update check: %s", s_check_error);
+    s_check_failed = failed;
+    s_checked_ms = millis();
+    s_checked = true;
+    s_checking = false;
+    vTaskDelete(nullptr);
+}
 }  // namespace
 
 bool valid_repo(const char *repo) {
@@ -168,6 +246,81 @@ bool start(const String &repo, const String &tag, const String &asset, String &e
         return false;
     }
     return true;
+}
+
+void check_now() { s_check_now = true; }
+
+void forget() {
+    if (s_checking)
+        return;
+    s_latest[0] = 0;
+    s_check_error[0] = 0;
+    s_checked = false;
+}
+
+void loop() {
+    static uint32_t last_ms = 0;
+    uint32_t now = millis();
+    if (now - last_ms < 1000)
+        return;
+    last_ms = now;
+    if (s_checking || s_state == State::DOWNLOADING || s_state == State::DONE || !net::connected())
+        return;
+    bool enabled;
+    uint16_t hours;
+    char repo[sizeof(s_check_repo)];
+    {
+        StateLock lock;
+        enabled = !g_app.update_check_off;
+        hours = g_app.update_check_hours;
+        strlcpy(repo, g_app.update_repo, sizeof(repo));
+    }
+    static uint8_t failures = 0;
+    if (s_check_failed) {  // GitHub was unreachable: try again sooner than the full period
+        s_check_failed = false;
+        uint32_t wait = RETRY_CHECK_MS << (failures < 4 ? failures : 4);
+        s_next_check_ms = now + (wait < RETRY_CHECK_MAX_MS ? wait : RETRY_CHECK_MAX_MS);
+        if (failures < 255)
+            failures++;
+    } else if (s_checked && !s_check_error[0]) {
+        failures = 0;
+    }
+    if (!s_check_now && !(enabled && (int32_t) (now - s_next_check_ms) >= 0))
+        return;
+    s_check_now = false;
+    s_next_check_ms = now + (uint32_t) hours * 3600000UL;
+    if (strcmp(repo, s_check_repo) != 0)
+        s_latest[0] = 0;  // a different source: forget what the old one offered
+    strlcpy(s_check_repo, repo, sizeof(s_check_repo));
+    s_checking = true;
+    if (xTaskCreate(check_task, "gh_check", 8192, nullptr, 1, nullptr) != pdPASS)
+        s_checking = false;
+}
+
+void check_json(JsonObject out) {
+    {
+        StateLock lock;
+        out["auto_check"] = !g_app.update_check_off;
+        out["check_hours"] = g_app.update_check_hours;
+    }
+    out["checking"] = (bool) s_checking;
+    if (s_checking)
+        return;  // the task is writing the fields below
+    if (s_latest[0]) {
+        out["latest"] = s_latest;
+        out["available"] = compare_versions(s_latest, FW_VERSION) > 0;
+    } else {
+        out["available"] = false;
+    }
+    if (s_checked) {
+        out["checked_ago_s"] = (millis() - s_checked_ms) / 1000;
+        if (s_check_error[0])
+            out["error"] = s_check_error;
+    }
+}
+
+const char *available_version() {
+    return !s_checking && s_latest[0] && compare_versions(s_latest, FW_VERSION) > 0 ? s_latest : nullptr;
 }
 
 bool busy() { return s_state == State::DOWNLOADING; }

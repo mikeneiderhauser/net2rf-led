@@ -147,6 +147,9 @@ class Engine {
     ZoneState zones_[MAX_ZONES];
     std::deque<Job> manual_;
     uint8_t rr_{0};
+    // Base layer (protocol 0, AppConfig::base_layer): see p0_apply_base_layer(). Set by update_wants_().
+    int8_t base_zone_{-1};     // the all-groups zone, or -1 when layering is not in effect
+    uint16_t follows_{0};      // zones currently following the base (bit per zone)
     bool config_dirty_{true};
     bool output_was_enabled_{true};
     bool input_dirty_{false};

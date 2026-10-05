@@ -1,4 +1,5 @@
 #include "panel.h"
+#include "updater.h"
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -329,7 +330,8 @@ static void draw_page(uint32_t now) {
                  : s.radio_state == RadioState::OFF          ? "OFF"
                                                               : "starting";
         s_oled->drawString(0, 38, radio);
-        s_oled->drawString(0, 50, "v" FW_VERSION);
+        const char *newer = updater::available_version();
+        s_oled->drawString(0, 50, newer ? fit(String("v" FW_VERSION " > ") + newer + " avail", 128) : String("v" FW_VERSION));
     } else if (page.kind == PAGE_INPUT) {
         const char *proto = s.last_source == InputSource::E131 ? "E1.31"
                             : s.last_source == InputSource::DDP ? "DDP"

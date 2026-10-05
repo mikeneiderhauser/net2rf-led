@@ -47,10 +47,43 @@ need:
 - **Sections:** one zone per group of bracelets, for example left and right of the yard, or kids' and adults'
   bracelets. It only works if your bracelets come in different groups. Find out with the steps below.
 
-A new controller starts on protocol 0 with four zones: **All Zones** (every bracelet), then **Zone 1**,
-**Zone 2** and **Zone 3** (groups 1 to 3). Remove the ones you don't need on the **Zones** page; *Add zone*
-continues with the next group. A colour sent to All Zones overrides the single-group zones, and the other way
-round, so sequence one or the other at any moment (see the xLights example in step 5).
+A new controller starts on protocol 0 with five zones: **All Zones** (every bracelet), then **Zone 1** to
+**Zone 4** (groups 1 to 4). Remove the ones you don't need on the **Zones** page; *Add zone*
+continues with the next group.
+
+#### All Zones as a base layer (protocol 0)
+
+With **All Zones is a base layer** ticked on the Zones page, the zone addressed to every group (All Zones) and
+the single-group zones work as layers, like a model group under its models in xLights:
+
+- **A zone with its own colour sits on top.** While Zone 2 shows blue, changes on All Zones don't reach its
+  bracelets: the controller addresses "every group except Zone 2's" in one packet. Nothing flashes, and it
+  costs no extra airtime.
+- **A black zone follows All Zones.** A zone with no effect shows whatever All Zones shows. When a zone's own
+  effect ends, its bracelets go to the current All Zones colour, or off if All Zones is black.
+- **All Zones going black** switches off only the bracelets that were following it.
+- **One packet per colour, not per zone.** Zones that change to the same colour at the same moment share a
+  single transmission, and a zone that wants the colour All Zones already shows needs none. Fifteen zones
+  turning red together cost one RF update (about 140 ms), not fifteen.
+
+| In the sequence | Bracelets show |
+|---|---|
+| All Zones red, zones empty | everyone red |
+| All Zones red, Zone 2 blue | Zone 2 blue, everyone else red |
+| All Zones changes to green while Zone 2 is blue | Zone 2 stays blue, everyone else green |
+| All Zones effect ends while Zone 2 is blue | Zone 2 stays blue, everyone else off |
+| Zone 2's effect ends while All Zones is green | Zone 2 turns green |
+
+What to know:
+
+- **You can't hold one zone dark while All Zones is lit:** black on a zone means "follow All Zones".
+- **Default:** on for a new or factory-reset controller. A controller that already had saved settings keeps the
+  old behaviour until you tick the box.
+- **Off:** every zone is sent independently. A colour on All Zones then overrides the single-group zones, and
+  an All Zones effect that ends darkens a zone holding a steady colour, so sequence one or the other at any
+  moment.
+- **Protocol 0 only.** Protocol 1 addresses one group or all of them and can't leave groups out.
+- Zones other than All Zones shouldn't overlap each other (two zones containing the same group).
 
 ### Protocol 1 (LedGiftSupplier)
 
@@ -63,7 +96,7 @@ all of them (the Zones page warns you).
 
 ### Protocol 0 (Shenzen New Dody)
 
-The default address `00FFFF0F` reaches every bracelet. Bytes 2-3 (`FFFF`) look like a 16-bit **group mask**,
+The default address `00FFFF0F` reaches every bracelet. Bytes 2-3 (`FFFF`) are a 16-bit **group mask**,
 one bit per group. The two bracelets tested so far are on groups 2 (`0004000F`) and 3 (`0008000F`); yours may be
 on others.
 
@@ -72,7 +105,7 @@ on others.
    press **★ Bracelet reacted** when it lights. The mark records the address and group on screen, so a slow
    press can land on the next step; repeat to be sure.
 2. Add a zone with that address (`00` + mask + `0F`), save, and check it with the **Zone walk** on the Zones
-   page. Combining bits (`0009000F` = groups 0 and 3) should address several groups at once.
+   page. Combining bits (`000C000F` = groups 2 and 3) addresses several groups at once.
 
 Please report what your bracelets answer to: it's how this gets confirmed.
 
@@ -93,11 +126,19 @@ exact settings for its current zones.
 1. **Controllers → Add E1.31/Artnet/DDP:** protocol **DDP**, the controller's IP, channels as listed. Leave **Keep Channel
    Numbers** unticked: with it on, xLights sends absolute show channel numbers and the controller ignores them
    (the dashboard then shows *Wrong channels*). For **E1.31**, use the universe set under *Bracelets & Radio*.
-   - **Vendor / model:** **WLED**, model **WLED**, variant **Generic ESP32** (tested). It keeps xLights'
-     controller visualiser, which a vendor-less controller loses. This profile shows **8 ports**: put all bracelet
-     models on **port 1** and leave the others empty, since the controller only reads one channel range. Don't use
-     xLights' *upload* actions on it: the controller doesn't speak WLED's configuration API, so they just fail
-     (show data is unaffected). A dedicated Net2RF LED controller definition for xLights is planned.
+   - **Vendor / model:** one of these.
+     - **Net2RF / Net2RF LED:** a one-port definition made for this controller. xLights doesn't ship it yet:
+       copy [`tools/xlights/net2rf.xcontroller`](../tools/xlights/) into xLights' `controllers` folder and
+       restart xLights ([how](../tools/xlights/README.md)).
+     - **WLED / WLED / Generic ESP32** (tested): works with xLights as shipped. It shows **8 ports**: put the
+       bracelet model(s) on **port 1** and leave the others empty.
+
+     Either one keeps the controller visualiser, which a vendor-less controller loses.
+   - **Upload:** with either definition, xLights' *Upload Output* and *Upload Input* work. They set the
+     controller's **number of zones** (one per pixel on port 1) and **input** (DDP, or E1.31 with its
+     universe). The colour order, the bracelet protocol and each zone's group stay as set on the controller; a zone
+     added by an upload gets the next group. If the controller has an admin password, upload is refused:
+     xLights has nowhere to enter it.
    - **Channels per packet:** leave the default (e.g. 1440). It's an upper limit, and the controller only uses a
      handful of channels (3 per zone), so each frame fits in one packet anyway.
 
@@ -109,11 +150,19 @@ exact settings for its current zones.
 
    ![xLights controller visualiser: the Bracelets model on Pixel Port 1, ports 2-8 empty](images/xlights_layout_visualiser.png)
 2. **Layout:** add the bracelet model(s) and assign them to this controller.
+   - **Ready-made model (recommended for pixel mode):** import one of the custom models in
+     [`tools/xlights/`](../tools/xlights/) (*Layout → Import → Custom model*, or the download-and-import
+     button): **Net2RF All + 4** matches a new controller's five zones (15 channels), **Net2RF All + 15** uses
+     all sixteen (48 channels). Put it on **port 1** as the only model. Node 1 is All Zones and node N+1 is
+     Zone N, so the channels line up by themselves. Sequence its submodels: **All Zones**, **Zone 1**...
+     and **Zones 1-N** (every single zone at once). Then *Upload Output* sets the controller's zone count to
+     match. Use solid colours on the whole model: an effect that spreads across it gives each zone a
+     different colour.
    - **Pixel mode (3 channels per zone, recommended):** one *Single Line* model with 1 node per zone, or a 1-node
      *Single Line* per zone at start channels 1, 4, 7..., string type *RGB Nodes* (matching the colour order
      setting). Place each one where that part of the audience stands.
 
-     Example for the default four zones (tested): four 1-node *Single Line* models, *RGB Nodes*, all on
+     Example by hand (tested with four zones): four 1-node *Single Line* models, *RGB Nodes*, all on
      **Pixel Port 1**, each chained after the one before so xLights assigns the channels. With *Auto Size* on, the
      controller ends up with 12 channels.
 
@@ -124,14 +173,12 @@ exact settings for its current zones.
      | `RF-Zone2` | `RF-Zone1` | 7-9 | Zone 2 |
      | `RF-Zone3` | `RF-Zone2` | 10-12 | Zone 3 |
 
-     Sequence either `RF-All` or the single zones at any moment, not both: a colour on `RF-All` overrides the
-     zones, and going black on it switches every bracelet off. Handing over on the same frame is fine (an
-     `RF-All` effect ends exactly where a zone effect starts): the controller sends the All Zones change first
-     and the zone's colour after it. What doesn't work is ending an `RF-All` effect while a zone is holding a
-     steady colour: that zone goes dark until its colour next changes.
-   - **DMX mode (4 per zone; colours tested, effects unconfirmed):** a *DmxFloodlight* per zone (start 1, 5, 9...) with Red 1, Green 2,
-     Blue 3. Channel 4 is an effect channel: 0-19 follow RGB, 20-39 off, 40-59 / 60-79 / 80-99 the bracelets'
-     built-in effects A / B / C (protocol 0; the tested bracelet ignores them, see [DEVICES.md](DEVICES.md)).
+     With *All Zones is a base layer* on ([step 3](#all-zones-as-a-base-layer-protocol-0)), `RF-All` and the
+     zone models can be sequenced together: a zone model with an effect shows its own colour, and an empty one
+     follows `RF-All`. With it off, sequence either `RF-All` or the single zones at any moment, not both.
+   - **DMX mode (4 per zone; colours tested):** a *DmxFloodlight* per zone (start 1, 5, 9...) with Red 1, Green 2,
+     Blue 3. Channel 4 is an effect channel (protocol 0): 0-19 follow RGB, 20-39 off, 40-59 **fade in** to the
+     last colour, 60-79 **fade out** to black, 80-99 a third effect that the tested bracelets ignore.
    - **Vendor mode (5 per zone, LedGiftSupplier, untested):** the vendor DMX transmitter's own layout. Per
      zone, a 2-channel DMX model at the zone's start channel with channel 1 = 85 (transmit) and channel 2 =
      group, plus a 1-node *Single Line* at start + 2 for the colour. An existing DMX setup for the vendor's

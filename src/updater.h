@@ -16,8 +16,16 @@ bool valid_repo(const char *repo);  // "owner/name", GitHub's character set
 // False (with `err`) if the names are invalid or an update is already running.
 bool start(const String &repo, const String &tag, const String &asset, String &err);
 
+// Looking for a newer release: automatic (shortly after boot, then every AppConfig::update_check_hours, unless
+// switched off) or on request. The controller asks GitHub which tag ".../releases/latest" points to.
+void loop();       // call regularly from the main loop
+void check_now();  // run a check as soon as possible, even with the automatic check off
+void forget();     // drop the last result (the release source changed and no new check will run)
+const char *available_version();  // tag of a release newer than this firmware, or nullptr
+
 bool busy();          // a download is running
 bool reboot_due();    // the new firmware is written: reboot to run it
-void status_json(JsonObject out);
+void status_json(JsonObject out);  // the download job
+void check_json(JsonObject out);   // the release check
 
 }  // namespace updater

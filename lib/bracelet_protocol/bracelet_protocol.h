@@ -30,9 +30,9 @@ static const uint32_t FRAME_US_P1 = 200 + 1600 + 56 * 800;                // 466
 enum Action : uint8_t {
     ACTION_COLOR = 0,  // follow RGB
     ACTION_OFF,
-    ACTION_FX_A,       // protocol 0 built-in effect (CMD 05)
-    ACTION_FX_B,       // protocol 0 built-in effect (CMD 06)
-    ACTION_FX_C,       // protocol 0 built-in effect (D0 FF FF FF 55 00 packet)
+    ACTION_FX_A,       // protocol 0: fade in to the last colour (CMD 05 AA)
+    ACTION_FX_B,       // protocol 0: fade out to black (CMD 06 AA)
+    ACTION_FX_C,       // protocol 0: from the Flipper app (D0 FF FF FF 55 00 packet); no reaction on tested bracelets
 };
 
 struct PaletteEntry {
@@ -84,6 +84,69 @@ inline bool addresses_overlap(uint8_t protocol, const uint8_t *a, const uint8_t 
     if (protocol != 0)
         return a[1] == 0 || b[1] == 0 || a[1] == b[1];
     return ((a[1] & b[1]) | (a[2] & b[2])) != 0;
+}
+
+// Protocol 0 "base layer": the zone addressed to every group (mask FFFF) is the base, and the other zones sit on
+// top of it. A zone showing its own colour is cut out of the base zone's address, so base changes never reach
+// its bracelets; a zone that is off (black), or wants the very colour the base shows, follows the base
+// instead and needs no packet of its own while the base's broadcast covers it. This works because the address is a group mask: "everyone except groups 2 and 5"
+// is one packet.
+//
+// wants[i] holds zone i's packet built from its own colour; addrs[i] its configured address; active[i] whether
+// the zone is in use. Rewrites wants in place. Returns the base zone's index (-1 if there is none: nothing is
+// changed), sets `follows` (bit per zone following the base) and `base_mask` (the groups the base still
+// addresses; 0 = every group is covered by a zone with its own colour).
+inline int p0_apply_base_layer(uint8_t wants[][PACKET_LEN], const uint8_t (*addrs)[4], const bool *active, uint8_t n,
+                               uint16_t *follows, uint16_t *base_mask) {
+    *follows = 0;
+    *base_mask = 0xFFFF;
+    int base = -1;
+    for (uint8_t i = 0; i < n && base < 0; i++)
+        if (active[i] && addrs[i][1] == 0xFF && addrs[i][2] == 0xFF)
+            base = i;
+    if (base < 0)
+        return -1;
+    const bool base_whole_packet = wants[base][0] == 0xD0;  // the fixed built-in effect packet: its address is not ours
+    uint16_t mask = 0xFFFF;
+    for (uint8_t i = 0; i < n; i++) {
+        if (i == base || !active[i])
+            continue;
+        const bool same_as_base = !base_whole_packet && wants[i][0] != 0xD0 && wants[i][4] == wants[base][4] &&
+                                  wants[i][5] == wants[base][5];
+        if (wants[i][4] != 0x00 && !same_as_base) {  // not off, not the base's colour: the zone shows its own
+            if (wants[i][0] != 0xD0)
+                mask &= (uint16_t) ~(addrs[i][1] << 8 | addrs[i][2]);
+            continue;
+        }
+        *follows |= (uint16_t) (1u << i);
+        if (base_whole_packet) {
+            memcpy(wants[i], wants[base], PACKET_LEN);
+        } else {
+            wants[i][4] = wants[base][4];
+            wants[i][5] = wants[base][5];
+            fix_checksum(0, wants[i]);
+        }
+    }
+    if (!base_whole_packet) {
+        wants[base][1] = mask >> 8;
+        wants[base][2] = mask & 0xFF;
+        fix_checksum(0, wants[base]);
+    }
+    *base_mask = mask;
+    return base;
+}
+
+// Protocol 0: two packets can share one transmission when they carry the same command and differ only in
+// the group mask, because masks combine ("red to groups 1, 2 and 5" is one packet).
+inline bool p0_can_merge(const uint8_t *a, const uint8_t *b) {
+    return a[0] != 0xD0 && b[0] != 0xD0 && a[0] == b[0] && a[3] == b[3] && a[4] == b[4] && a[5] == b[5];
+}
+
+// Adds `other`'s groups to `pkt` (both protocol 0, p0_can_merge) and fixes the checksum.
+inline void p0_merge(uint8_t *pkt, const uint8_t *other) {
+    pkt[1] |= other[1];
+    pkt[2] |= other[2];
+    fix_checksum(0, pkt);
 }
 
 // 8-bit channel value -> protocol 1 byte: inverted 4-bit level in the high nibble, low nibble 0xF.

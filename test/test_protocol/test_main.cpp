@@ -97,6 +97,96 @@ void test_fx_channel(void) {
     TEST_ASSERT_EQUAL(ACTION_COLOR, fx_action(200));
 }
 
+// All Zones (index 0) + zones for groups 1, 2, 3, as in the default layout.
+static void layer_setup(uint8_t wants[4][7], uint8_t addrs[4][4], const uint8_t colours[4][3]) {
+    const uint8_t a[4][4] = {{0, 0xFF, 0xFF, 0x0F}, {0, 0x02, 0, 0x0F}, {0, 0x04, 0, 0x0F}, {0, 0x08, 0, 0x0F}};
+    memcpy(addrs, a, sizeof(a));
+    for (int i = 0; i < 4; i++)
+        build_packet(0, addrs[i], ACTION_COLOR, colours[i][0], colours[i][1], colours[i][2], 16, wants[i]);
+}
+
+void test_p0_base_layer() {
+    uint8_t wants[4][7], addrs[4][4], expect[7];
+    const bool active[4] = {true, true, true, true};
+    uint16_t follows, mask;
+
+    // All Zones red, zones black: one broadcast to everyone, and every zone follows it
+    const uint8_t c1[4][3] = {{255, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+    layer_setup(wants, addrs, c1);
+    TEST_ASSERT_EQUAL_INT(0, p0_apply_base_layer(wants, addrs, active, 4, &follows, &mask));
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, mask);
+    TEST_ASSERT_EQUAL_HEX16(0x000E, follows);
+    build_packet(0, addrs[0], ACTION_COLOR, 255, 0, 0, 16, expect);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, wants[0], 7);
+    build_packet(0, addrs[2], ACTION_COLOR, 255, 0, 0, 16, expect);  // zone 2 "shows" red at its own address
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, wants[2], 7);
+
+    // Zone 2 (group 2) blue over All Zones green: the broadcast skips group 2 (00 FB FF 0F), zone 2 keeps blue
+    const uint8_t c2[4][3] = {{0, 255, 0}, {0, 0, 0}, {0, 0, 255}, {0, 0, 0}};
+    layer_setup(wants, addrs, c2);
+    p0_apply_base_layer(wants, addrs, active, 4, &follows, &mask);
+    TEST_ASSERT_EQUAL_HEX16(0xFBFF, mask);
+    TEST_ASSERT_EQUAL_HEX16(0x000A, follows);
+    const uint8_t all_but_2[4] = {0, 0xFB, 0xFF, 0x0F};
+    build_packet(0, all_but_2, ACTION_COLOR, 0, 255, 0, 16, expect);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, wants[0], 7);
+    build_packet(0, addrs[2], ACTION_COLOR, 0, 0, 255, 16, expect);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, wants[2], 7);
+
+    // All Zones black while zone 2 holds blue: "off" goes to everyone except group 2
+    const uint8_t c3[4][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 255}, {0, 0, 0}};
+    layer_setup(wants, addrs, c3);
+    p0_apply_base_layer(wants, addrs, active, 4, &follows, &mask);
+    build_packet(0, all_but_2, ACTION_OFF, 0, 0, 0, 16, expect);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, wants[0], 7);
+    build_packet(0, addrs[1], ACTION_OFF, 0, 0, 0, 16, expect);  // zone 1 follows: off
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, wants[1], 7);
+
+    // a zone that wants the base's own colour follows it: no cut-out, no packet of its own
+    const uint8_t c4[4][3] = {{255, 0, 0}, {255, 0, 0}, {0, 0, 255}, {255, 0, 0}};
+    layer_setup(wants, addrs, c4);
+    p0_apply_base_layer(wants, addrs, active, 4, &follows, &mask);
+    TEST_ASSERT_EQUAL_HEX16(0xFBFF, mask);    // only zone 2 (blue) is cut out
+    TEST_ASSERT_EQUAL_HEX16(0x000A, follows);  // zones 1 and 3 ride on the broadcast
+
+    // a disabled zone neither follows nor is cut out; without an all-groups zone nothing changes
+    const bool no_z2[4] = {true, true, false, true};
+    layer_setup(wants, addrs, c2);
+    p0_apply_base_layer(wants, addrs, no_z2, 4, &follows, &mask);
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, mask);
+    TEST_ASSERT_EQUAL_HEX16(0x000A, follows);
+    const bool no_base[4] = {false, true, true, true};
+    layer_setup(wants, addrs, c2);
+    uint8_t before[4][7];
+    memcpy(before, wants, sizeof(before));
+    TEST_ASSERT_EQUAL_INT(-1, p0_apply_base_layer(wants, addrs, no_base, 4, &follows, &mask));
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(before, wants, sizeof(before));
+}
+
+void test_p0_merge() {
+    const uint8_t g1[4] = {0, 0x02, 0, 0x0F}, g2[4] = {0, 0x04, 0, 0x0F}, g9[4] = {0, 0, 0x02, 0x0F};
+    uint8_t a[7], b[7], c[7], blue[7], off[7], expect[7];
+    build_packet(0, g1, ACTION_COLOR, 255, 0, 0, 16, a);
+    build_packet(0, g2, ACTION_COLOR, 255, 0, 0, 16, b);
+    build_packet(0, g9, ACTION_COLOR, 255, 0, 0, 16, c);
+    build_packet(0, g2, ACTION_COLOR, 0, 0, 255, 16, blue);
+    build_packet(0, g2, ACTION_OFF, 0, 0, 0, 16, off);
+    TEST_ASSERT_TRUE(p0_can_merge(a, b));
+    TEST_ASSERT_TRUE(p0_can_merge(a, c));
+    TEST_ASSERT_FALSE(p0_can_merge(a, blue));
+    TEST_ASSERT_FALSE(p0_can_merge(a, off));
+    p0_merge(a, b);
+    p0_merge(a, c);
+    const uint8_t groups_1_2_9[4] = {0, 0x06, 0x02, 0x0F};
+    build_packet(0, groups_1_2_9, ACTION_COLOR, 255, 0, 0, 16, expect);  // same as building it for the combined mask
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, a, 7);
+
+    uint8_t fx_c[7], fx_c2[7];
+    build_packet(0, g1, ACTION_FX_C, 0, 0, 0, 16, fx_c);
+    build_packet(0, g2, ACTION_FX_C, 0, 0, 0, 16, fx_c2);
+    TEST_ASSERT_FALSE(p0_can_merge(fx_c, fx_c2));  // the fixed effect packet carries no group mask
+}
+
 void test_address_breadth() {
     const uint8_t all0[7] = {0x00, 0xFF, 0xFF, 0x0F, 1, 0, 0}, g3[7] = {0x00, 0x08, 0x00, 0x0F, 1, 0, 0};
     const uint8_t g23[7] = {0x00, 0x0C, 0x00, 0x0F, 1, 0, 0}, g12[7] = {0x00, 0x00, 0x10, 0x0F, 1, 0, 0};
@@ -144,5 +234,7 @@ int main(int, char **) {
     RUN_TEST(test_fx_channel);
     RUN_TEST(test_fix_checksum);
     RUN_TEST(test_address_breadth);
+    RUN_TEST(test_p0_base_layer);
+    RUN_TEST(test_p0_merge);
     return UNITY_END();
 }

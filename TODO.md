@@ -8,7 +8,7 @@ Observed on the first test bracelet:
 - About 20-21 minutes after the last radio command, it turns red on its own (no transmission from the
   controller). It is still listening: a colour sent afterwards is applied immediately.
 
-To sort out:
+Parked for now (2026-10-04): not a priority. To sort out when it is:
 
 - [ ] Find out how it goes to sleep (long press? after a longer idle time?) and whether anything over the
       radio can wake it or put it to sleep.
@@ -23,24 +23,26 @@ To sort out:
 
 ## Protocol 0 addressing
 
-- [ ] Confirm the 16-bit group-mask theory (bytes 1-2). A second bracelet sits on group 2 (`0004000F`,
-      2026-10-04), next to the first on group 3. Still to check: `0000000F` lights neither, and a combined mask
-      (`000C000F`) lights both.
-- [ ] Address probe: log the address shown about 0.5 s before "Bracelet reacted" is clicked (allowing
-      for reaction time), and default the step time to 3 s.
-- [ ] Update docs/PROTOCOL.md "Addressing" once confirmed.
-- [ ] Built-in effects: `05 AA`, `06 AA` and the `D0 FF FF FF 55 00 22` packet got no reaction from the Banana Ball
-      bracelet (2026-10-02; green sent just before worked). Capture a real effect command (vendor remote /
-      transmitter, Flipper), or drop effects for protocol 0 if they don't exist on these bracelets.
+- [x] 16-bit group mask (bytes 1-2) confirmed with two bracelets on groups 2 and 3 (2026-10-04): a combined
+      mask (`000C000F`) lights both, an empty one (`0000000F`) neither, and "all except one group"
+      (`00FBFF0F`, `00F7FF0F`) skips just that group.
+- [x] Used for All Zones as a base layer: it addresses "every group except the zones showing their own
+      colour", so an All Zones change or "off" no longer overrides a zone that holds a colour.
+- [x] docs/PROTOCOL.md "Addressing" updated with the confirmed mask behaviour.
+- [x] Built-in effects (2026-10-04, two bracelets): `05 AA` fades in to the last colour, `06 AA` fades out to
+      black (`06 10` / `06 FF` do nothing). The `D0 FF FF FF 55 00 22` packet gets no reaction.
 
 ## xLights integration
 
-- [ ] Add a Net2RF LED controller definition to xLights (vendor "Net2RF", 1 port, DDP / E1.31, pixel and DMX
-      models) and submit a PR to xLights, so users don't have to borrow the WLED / Generic ESP32 profile (8 ports,
-      only port 1 used) to keep the controller visualiser. Check how xLights defines controllers (its controller
-      definition XML files) and what a PR needs.
-- [ ] Optionally answer the few WLED-style endpoints xLights calls, so the upload actions fail cleanly (or work)
-      until that definition ships.
+- [x] Controller definition (`tools/xlights/net2rf.xcontroller`: one port, DDP / E1.31, upload through xLights'
+      WLED driver) and custom models (All + 4, All + 15). The controller answers the WLED config requests
+      xLights sends (`/json/info`, `/json/cfg`).
+- [x] *Upload Output* from xLights 2026.17 with the All + 15 model on the WLED profile: 16 zones created.
+- [ ] Still to run from xLights: *Upload Input*, the All + 4 model, and the Net2RF definition itself (an App
+      Store install of xLights can't have the file added).
+- [ ] Offer the definition to xLights (enhancement issue first, then a PR adding
+      `resources/controllers/net2rf.xcontroller`).
+- [ ] DMX mode in xLights: decide how DMX fixtures attach (the definition has no serial port).
 
 ## Controller discovery / multiple controllers
 
@@ -51,8 +53,16 @@ To sort out:
       read -84 to -87, so -85 waited on noise every time), check `lbt_waits` / `lbt_forced` while both run busy sequences, verify the SX1278 RX path
       (packet mode, DIO2 = TimeOut) doesn't disturb its TX data line. Then decide whether to turn it on by
       default.
-- [ ] FPP discovery: answer FPP's ping protocol (multicast 239.70.80.80, UDP 32320) so controllers show up in
-      FPP's MultiSync page and xLights' controller discovery. Confirm the packet format against FPP's source.
+- [x] FPP discovery: answers FPP's discover ping (UDP 32320, format from FPP's docs/ControlProtocol.txt).
+- [x] xLights' *Discover* finds it and adds it by hostname (2026-10-04).
+- [ ] Get a proper identity instead of "other system" (0xC0), without borrowing another product's:
+      1. ask the FPP project to assign a MultiSync system type code for Net2RF LED (their `MultiSyncSystemType`
+         list and docs/ControlProtocol.txt), then report that code in the ping;
+      2. ask xLights to handle that code in discovery like its other DDP bridges (protocol DDP, Keep Channel
+         Numbers off, vendor / model looked up from the model string `Net2RF-LED`), together with the
+         controller definition PR.
+      Until then a discovered controller is created as E1.31 with no vendor and has to be corrected by hand.
+- [ ] Check how FPP's MultiSync page shows it.
 
 ## Hardware
 
