@@ -45,7 +45,7 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 
 | Page | What's there |
 |---|---|
-| **Dashboard** | Input rate and packet counters, RF airtime and counters, radio status, device info with free memory and flash; a notice when newer firmware is available; the last colour sent to each zone; other controllers on the network with their live state; **Test mode** (off, solid colour, or cycle R/G/B/W); **RF output on/off**, **Shut down radio** and **All off** |
+| **Dashboard** | Input rate and packet counters, RF airtime and counters, radio status, device info with free memory and flash; a notice when newer firmware is available; the last colour sent to each zone; other controllers on the network with their live state; **Test mode** (off, solid colour, or cycle R/G/B/W); the **RF output** and **Radio power** switches, and **All off** |
 | **Zones** | Add, name, enable and address zones; choose whether All Zones is a base layer under the others; send a colour, off, a fade in or a fade out to one zone; **Zone walk** lights one zone at a time so you can see which bracelets belong where |
 | **Bracelets & Radio** | Controller name, bracelet protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
 | **Network** | Current connection and the settings above |
@@ -63,9 +63,9 @@ The pill row at the top of every page shows the radio, input and network state a
 - **RF output off** stops all transmission while still receiving and counting the show data. Turning it back on
   re-sends the current colours. The radio already sits idle between updates, so this changes nothing on air
   beyond stopping the updates.
-- **Shut down radio** also puts the radio chip to sleep, to save a little power when the controller isn't in
-  use. Nothing is sent until you press **Power radio on**, which restarts the radio and re-sends the current
-  colours. The setting survives a reboot.
+- **Radio power off** also puts the radio chip to sleep, to save a little power when the controller isn't in
+  use. Nothing is sent until you switch it back on, which restarts the radio and re-sends the current colours.
+  The setting survives a reboot.
 - **All off** blanks every bracelet once. They stay dark until the show input changes a colour.
 - **Input timeout:** if no show data arrives for 5 minutes (configurable, or 0 for never), the bracelets are
   switched off.

@@ -64,6 +64,11 @@ button:disabled{opacity:.5;cursor:default}
 .note{border-left:3px solid var(--warn);padding:6px 10px;background:color-mix(in srgb,var(--warn) 8%,transparent);border-radius:0 6px 6px 0;margin:8px 0;font-size:13px}
 pre{background:var(--field);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;overflow-x:auto;margin:0;font-size:12.5px}
 progress{width:100%;height:10px}
+.tog{display:flex;align-items:center;gap:10px;cursor:pointer;margin:6px 0}.tog input{position:absolute;opacity:0;width:0;height:0}
+.tog i{flex:none;position:relative;width:40px;height:22px;border-radius:11px;background:var(--rule);border:1px solid var(--rule);transition:background .15s}
+.tog i::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--dim);transition:transform .15s,background .15s}
+.tog input:checked+i{background:var(--accent);border-color:var(--accent)}.tog input:checked+i::after{transform:translateX(18px);background:var(--panel)}
+.tog input:focus-visible+i{outline:2px solid var(--accent);outline-offset:2px}.tog b{font-weight:600}.tog .dim{font-weight:400}
 details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[open]>summary{color:var(--ink)}
 .util{height:10px;border-radius:5px;overflow:hidden;background:var(--rule);margin:3px 0}.util>i{display:block;height:100%;background:var(--accent)}.util.warn>i{background:var(--warn)}.util.bad>i{background:var(--bad)}
 .hide{display:none!important}
@@ -116,8 +121,9 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="card"><h2>Output (RF)</h2>
         <div class="big" id="d_air">–<span class="unit">% airtime</span></div>
         <div class="small dim">share of the last 10 s spent transmitting</div>
-        <div class="actions" style="margin-top:8px"><span id="d_outState"></span><button id="d_outToggle"></button><button id="d_radioToggle" title="Put the radio chip to sleep to save power, or wake it"></button>
-          <button class="danger" id="d_allOff" title="Send off to every bracelet in range">All off</button></div>
+        <label class="tog" style="margin-top:10px" title="Off: show data is still received and counted, but nothing is transmitted"><input type="checkbox" id="d_outSw" role="switch"><i></i><span><b>RF output</b> <span class="dim small" id="d_outState"></span></span></label>
+        <label class="tog" title="Off: the radio chip is put to sleep to save power"><input type="checkbox" id="d_radioSw" role="switch"><i></i><span><b>Radio power</b> <span class="dim small" id="d_radioSwState"></span></span></label>
+        <div class="actions"><button class="danger" id="d_allOff" title="Send off to every bracelet in range">All off</button></div>
         <dl class="kv">
           <dt>Updates sent</dt><dd id="d_up">–</dd><dt>Frames sent</dt><dd id="d_tf">–</dd>
           <dt>Manual / test</dt><dd id="d_man">–</dd><dt>Errors</dt><dd id="d_err">–</dd>
@@ -442,10 +448,9 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
     `In xLights, open this controller and <b>untick "Keep Channel Numbers"</b> (DDP), or check the E1.31 universe / start channel.`;$('d_bytes').textContent=fmtBytes(i.bytes);$('d_src').textContent=i.source||'–';
   $('d_air').innerHTML=o.airtime_pct+'<span class="unit">% airtime</span>';
   $('d_up').textContent=fmtN(o.updates);$('d_tf').textContent=fmtN(o.frames);$('d_man').textContent=fmtN(o.manual);$('d_err').textContent=fmtN(o.errors);$('d_q').textContent=r.queue;$('d_sup').textContent=fmtN(o.suppressed);
-  $('d_outState').innerHTML=o.enabled?'<span class="badge good">RF output on</span>':'<span class="badge bad">RF output off</span> <span class="dim small">DDP is consumed, nothing is sent</span>';
-  $('d_outToggle').textContent=o.enabled?'Disable output':'Enable output';$('d_outToggle').className=o.enabled?'danger':'primary';
-  if(r.power===false)$('d_outState').innerHTML='<span class="badge bad">Radio shut down</span> <span class="dim small">nothing is sent until it is powered on</span>';
-  $('d_radioToggle').textContent=r.power===false?'Power radio on':'Shut down radio';$('d_radioToggle').className=r.power===false?'primary':'';
+  const pw=r.power!==false;if(!swBusy){$('d_outSw').checked=o.enabled;$('d_radioSw').checked=pw}
+  $('d_outState').textContent=o.enabled?(pw?'on':'on, but the radio is shut down'):'off: show data is received, nothing is sent';
+  $('d_radioSwState').textContent=pw?'on':'shut down: nothing is sent until it is switched on';
   $('d_radio').textContent=r.name;$('d_radioState').innerHTML=`<span class="badge ${rc}">${rt}</span>`;
   $('d_rdet').textContent=r.detail||'–';
   if(C){const a=C.app.radio;$('d_pw').textContent=Math.max(r.min_power,Math.min(r.max_power,a.tx_power))+' dBm';
@@ -704,12 +709,13 @@ setInterval(()=>{if(location.hash===''||location.hash==='#dashboard')pollPeers()
 $('d_allOff').onclick=async()=>{
   await api('all-off',{});poll();
   toast(C&&C.app.bracelets.protocol==1?'All off sent to every group. Bracelets stay off until xLights changes a colour.':'Off sent to every zone. Bracelets stay off until xLights changes a colour.',4500)};
-$('d_outToggle').onclick=async()=>{const on=!S.engine.output.enabled;
-  if(!on&&!await ask('Stop all RF transmission? DDP will be received but ignored until output is re-enabled.'))return;
-  await api('output',{enabled:on});toast(on?'RF output enabled':'RF output disabled');poll()};
-$('d_radioToggle').onclick=async()=>{const on=S.engine.radio.power===false;
-  if(!on&&!await ask('Shut down the radio chip? Nothing is transmitted until you power it on again. This setting survives a reboot.'))return;
-  await api('radio',{power:on});toast(on?'Radio powered on':'Radio shut down');poll()};
+// The switches follow the controller's state; while one is being changed (confirmation open, request in
+// flight) the 1 s poll must not flip it back.
+let swBusy=false;
+async function swChange(el,off,path,body,done){swBusy=true;const on=el.checked;
+  try{if(!on&&!await ask(off)){el.checked=true;return}await api(path,body(on));toast(done(on))}catch(e){el.checked=!on}finally{swBusy=false;poll()}}
+$('d_outSw').onchange=e=>swChange(e.target,'Stop all RF transmission? Show data will be received but ignored until output is switched back on.','output',on=>({enabled:on}),on=>on?'RF output on':'RF output off');
+$('d_radioSw').onchange=e=>swChange(e.target,'Shut down the radio chip? Nothing is transmitted until you switch it on again. This setting survives a reboot.','radio',on=>({power:on}),on=>on?'Radio powered on':'Radio shut down');
 $('resetStats').onclick=()=>api('stats/reset',{}).then(()=>toast('Counters reset'));
 document.querySelectorAll('#testSeg button').forEach(b=>b.onclick=()=>api('test',{mode:b.dataset.m,rgb:$('testColor').value.slice(1)}).then(poll));
 $('testColor').oninput=()=>{if(S&&S.engine.test.mode==='solid')api('test',{mode:'solid',rgb:$('testColor').value.slice(1)})};
