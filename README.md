@@ -8,10 +8,12 @@ LED show products (the bracelets, light sticks, pucks and wands handed out at co
 xLights / FPP ──DDP / E1.31──▶ WT32-ETH01 (ESP32 + Ethernet) ──▶ CC1101 or Ra-02 ──433 MHz──▶ bracelets, sticks, pucks
 ```
 
-In xLights, a group of bracelets is just a **single pixel**: add a 1-node Single Line model to an existing model
-group (your floods, say) and the crowd's bracelets follow along. No DMX fixtures to set up. Already have the
-bracelets set up as DMX (for example for the vendor's DMX transmitter)? That configuration should keep working,
-using the DMX or vendor input mode (not yet tested on hardware).
+In xLights, a group of bracelets is just a **single pixel**. Import the ready-made model
+([`tools/xlights`](tools/xlights/)), put it on the controller, and sequence *All Zones* or each zone by name;
+add it to an existing model group (your floods, say) and the crowd's bracelets follow along. No DMX fixtures
+to set up. Already have the bracelets set up as DMX (for example for the vendor's DMX transmitter)? That
+configuration should keep working, using the DMX input mode (colours tested) or the vendor mode (not yet
+tested on hardware).
 
 **▶ See it working:** [prototype demo on YouTube](https://youtube.com/shorts/mfn99Rj19TI): breadboard build,
 a bracelet following an xLights sequence, and the web UI.
@@ -22,13 +24,13 @@ a bracelet following an xLights sequence, and the web UI.
 
 ## Project status
 
-> **Early prototype: DIY only, tested on one setup.** It works end to end: an xLights sequence drives a
-> bracelet over DDP. But most features haven't seen real hardware yet. Expect rough edges, and please report
-> what you find.
+> **Early prototype: DIY only, tested on one setup.** It works end to end: an xLights sequence drives
+> bracelets over DDP, in zones. One bracelet family, one radio and one controller have seen real hardware so
+> far. Expect rough edges, and please report what you find.
 
 | | |
 |---|---|
-| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · bracelet fade in / fade out · controller list and `net2rf.local` election (against simulated controllers) |
+| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · group-mask addressing, the All Zones base layer and one packet per colour · bracelet fade in / fade out · xLights custom model, *Upload Output* and *Discover* · update check and install from GitHub releases · controller list and `net2rf.local` election (against simulated controllers) |
 | 🧪 **Built, not yet tested on hardware** | **LedGiftSupplier** bracelets (protocol 1, RGB + group codes) · **vendor DMX** input mode · E1.31 multicast · **Ra-02 / SX1278** radio · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
 | 🛠 **Coming soon** | A carrier board and enclosure |
 
@@ -98,6 +100,7 @@ Full parts list, with where to buy: [ASSEMBLY.md, Parts](docs/ASSEMBLY.md#parts)
 | [PROTOCOL.md](docs/PROTOCOL.md) | The bracelets' 433 MHz protocols, and what's known about each |
 | [API.md](docs/API.md) | HTTP API, settings, stats, controller discovery |
 | [HOME_ASSISTANT.md](docs/HOME_ASSISTANT.md) | Sensors, switches and automations |
+| [tools/xlights](tools/xlights/) | xLights custom models and controller definition |
 | [TODO.md](TODO.md) | Open items and things waiting for hardware tests |
 
 ## Roadmap
@@ -105,9 +108,10 @@ Full parts list, with where to buy: [ASSEMBLY.md, Parts](docs/ASSEMBLY.md#parts)
 - **Carrier board and enclosure:** in the works; details once it has been built and tested.
 - **Broader testing:** LedGiftSupplier bracelets, vendor mode, the Ra-02, range across a yard, two real
   controllers with listen before transmit.
-- **Bracelet behaviour:** confirm protocol 0 group addressing with more bracelets; find the real effect
-  commands; deal with idle and sleep (e.g. a keep-alive so bracelets don't drift to red between songs).
-- **FPP discovery,** so controllers show up in FPP's MultiSync page and xLights' controller discovery.
+- **Bracelet behaviour:** more bracelets and batches; idle and sleep (e.g. a keep-alive so bracelets don't
+  drift to red between songs).
+- **xLights and FPP:** get the Net2RF controller definition into xLights, and a device type of its own in
+  FPP's discovery, so a discovered controller is set up without manual steps.
 
 Have bracelets from another vendor or batch, or ideas? Open an issue. Captures and test reports are especially
 welcome; [DEVICES.md](docs/DEVICES.md#reporting-a-device) lists what helps.
@@ -116,7 +120,7 @@ welcome; [DEVICES.md](docs/DEVICES.md#reporting-a-device) lists what helps.
 
 ```bash
 pio run -e wt32-eth01                  # build firmware.bin and firmware.factory.bin
-pio test -e native                     # unit tests: packet encoder, DDP/E1.31 parsers, radio maths, heartbeat
+pio test -e native                     # unit tests: packets, zone layering, input parsers, radio maths, discovery
 python3 tools/mock_server.py           # develop the web UI against a fake API at http://127.0.0.1:8765/
 python3 tools/ddp_test.py <ip> cycle   # send DDP without xLights
 python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the network
@@ -124,11 +128,14 @@ python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the netwo
 
 | Path | What it is |
 |---|---|
-| `src/` | The firmware: engine (zones, scheduling, RF), network, web server, OLED/button, peers |
+| `src/` | The firmware: engine (zones, scheduling, RF), network, web server, OLED/button, peers, updater |
 | `web/index.html` | The web UI (gzipped into the firmware at build time) |
 | `lib/bracelet_protocol` | Bracelet packet encoder and DDP / E1.31 parsers (pure C++, unit tested) |
 | `lib/cc1101_ook`, `lib/sx1278_ook` | Minimal radio drivers for OOK transmit and listen-before-talk |
-| `lib/net2rf_heartbeat` | Controller heartbeat format (unit tested) |
+| `lib/net2rf_heartbeat`, `lib/net2rf_fpp` | Controller heartbeat and FPP discovery ping formats (unit tested) |
+| `lib/net2rf_wled` | The WLED config requests xLights' upload uses (unit tested) |
+| `lib/net2rf_version` | Release version comparison for the update check (unit tested) |
+| `tools/xlights` | xLights models and controller definition, and the script that generates the models |
 
 ## License and legal
 
