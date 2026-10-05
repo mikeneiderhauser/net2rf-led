@@ -3,6 +3,7 @@
 #include <unity.h>
 
 #include <vector>
+#include <cstring>
 
 #include "bracelet_protocol.h"
 

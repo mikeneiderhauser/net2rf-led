@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstring>
 
 namespace bracelet {
 
