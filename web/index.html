@@ -97,7 +97,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
     <a href="#tools">Tools</a>
     <a href="#system">System</a>
   </nav>
-  <div class="ver" id="verLabel"></div>
+  <div class="ver"><span id="verLabel"></span> &middot; <a href="https://github.com/mikeneiderhauser/net2rf-led" target="_blank" rel="noopener" title="Source, documentation and releases">GitHub</a></div>
 </aside>
 <main>
   <div id="cnaNote" class="card hide" style="border-left:4px solid var(--warn)"><b>You're in the Wi-Fi sign-in window.</b>
@@ -848,9 +848,10 @@ $('o_scan').onclick=async()=>{const r=await api('i2c/scan');const out=$('o_scanO
     `\nSCL (IO17) idle: ${r.scl_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+
     `\nScanned with ${r.orientation}`+
     (r.devices.length&&!r.devices.some(a=>a==='0x3C'||a==='0x3D')?'\nA device answered, but not at 0x3C/0x3D: is it a display?':'')};
+const GH_URL='https://github.com/mikeneiderhauser/net2rf-led';
 function sysInfo(){authUi();displayUi();ghFill();ghJob();fwNotice();const d=S.device;
   const upd=d.update_pending?'<span class="badge warn">new update, confirming…</span>':d.update_rolled_back?'<span class="badge bad">last update failed and was rolled back</span>':'<span class="badge good">confirmed</span>';
-  kv($('s_info'),[['Version',d.firmware],['Update state',upd],['Built',d.built],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',heapFree(d,true)],['Free flash',flashFree(d,true)],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`${d.display_info.type.toUpperCase()} at ${d.display_info.address}`:'none']])}
+  kv($('s_info'),[['Version',d.firmware],['Project',`<a href="${GH_URL}" target="_blank" rel="noopener">github.com/mikeneiderhauser/net2rf-led</a><br><span class="small"><a href="${GH_URL}#documentation" target="_blank" rel="noopener">docs</a> · <a href="${GH_URL}/releases" target="_blank" rel="noopener">releases</a> · <a href="${GH_URL}/issues" target="_blank" rel="noopener">report a problem</a> · GPL-3.0</span>`],['Update state',upd],['Built',d.built],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',heapFree(d,true)],['Free flash',flashFree(d,true)],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`${d.display_info.type.toUpperCase()} at ${d.display_info.address}`:'none']])}
 $('s_file').onchange=()=>{$('s_upload').disabled=!$('s_file').files.length};
 $('s_upload').onclick=async()=>{const f=$('s_file').files[0];if(!f)return;if(!await ask(`Flash ${f.name} (${fmtBytes(f.size)})?`))return;
   try{await api('config')}catch(e){return}  // log in first so the upload isn't sent twice
