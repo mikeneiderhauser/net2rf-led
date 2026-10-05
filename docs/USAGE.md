@@ -49,7 +49,7 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 | **Zones** | Add, name, enable and address zones; choose whether All Zones is a base layer under the others; send a colour, off, a fade in or a fade out to one zone; **Zone walk** lights one zone at a time so you can see which bracelets belong where |
 | **Bracelets & Radio** | Controller name, bracelet protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
 | **Network** | Current connection and the settings above |
-| **Tools** | **xLights setup** (exact controller and model settings for the current zones); **Which bracelet do I have?**; **Send raw packet**; **Address probe** (find which group a bracelet is in) |
+| **Tools** | **xLights setup** (exact controller and model settings for the current zones); **Which protocol is my device?**; **Send raw packet**; **Address probe** (find which group a bracelet is in) |
 | **System** | Firmware info (version, free memory, free flash) and **Update firmware** (from GitHub releases or a file); an **Advanced** section with the flash partition breakdown; OLED display type and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
 
 The pill row at the top of every page shows the radio, input and network state at a glance.

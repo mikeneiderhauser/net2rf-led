@@ -21,6 +21,7 @@ namespace {
 enum class State : uint8_t { IDLE, DOWNLOADING, DONE, FAILED };
 
 volatile State s_state = State::IDLE;
+volatile bool s_checking = false;  // the release check (below) has a connection open
 volatile uint8_t s_progress = 0;  // percent
 char s_url[256];
 char s_tag[41];
@@ -57,7 +58,10 @@ void fail(const String &msg) {
     s_state = State::FAILED;
 }
 
-void download() {
+// Returns an empty string on success, otherwise why it failed. `retry` is set when nothing was written yet and
+// trying again is worthwhile (the connection could not be made).
+String download(bool &retry) {
+    retry = false;
     esp_http_client_config_t cfg = {};
     cfg.url = s_url;
     cfg.crt_bundle_attach = esp_crt_bundle_attach;  // verify GitHub's certificate against the built-in CA bundle
@@ -68,7 +72,7 @@ void download() {
     cfg.keep_alive_enable = false;
     esp_http_client_handle_t http = esp_http_client_init(&cfg);
     if (!http)
-        return fail("out of memory");
+        return "out of memory";
 
     // GitHub answers with a redirect to its file servers: follow it (a few hops at most).
     int code = 0;
@@ -86,8 +90,10 @@ void download() {
         esp_http_client_close(http);
     }
     String err;
-    if (e != ESP_OK || len < 0)
+    if (e != ESP_OK || len < 0) {
         err = String("could not reach GitHub (") + esp_err_to_name(e != ESP_OK ? e : ESP_FAIL) + ")";
+        retry = true;
+    }
     else if (code == 404)
         err = "release file not found";
     else if (code != 200)
@@ -121,17 +127,34 @@ void download() {
     }
     esp_http_client_close(http);
     esp_http_client_cleanup(http);
-    if (!err.isEmpty())
-        return fail(err);
-    log_i("Update %s written (%u bytes)", s_tag, (unsigned) len);
-    s_progress = 100;
-    s_state = State::DONE;
+    if (err.isEmpty())
+        log_i("Update %s written (%u bytes)", s_tag, (unsigned) len);
+    return err;
 }
 
 void task(void *) {
     g_engine.set_suspended(true);  // no RF while flashing
+    // One secure connection at a time: there isn't the memory for two, and the web UI's "Check for updates"
+    // starts a release check right before "Install" can be pressed.
+    for (int i = 0; i < 200 && s_checking; i++)
+        delay(100);
     log_i("Updating from %s", s_url);
-    download();
+    String err;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        bool retry;
+        err = download(retry);
+        if (err.isEmpty() || !retry)
+            break;
+        log_w("Update attempt %d: %s", attempt, err.c_str());
+        if (attempt < 3)
+            delay(2000);
+    }
+    if (err.isEmpty()) {
+        s_progress = 100;
+        s_state = State::DONE;
+    } else {
+        fail(err);
+    }
     vTaskDelete(nullptr);
 }
 // ---- looking for a newer release -----------------------------------------------------------------
@@ -140,7 +163,6 @@ const uint32_t FIRST_CHECK_MS = 30000;        // after boot, once the network is
 const uint32_t RETRY_CHECK_MS = 60000;        // after a check that could not reach GitHub; doubles each time ...
 const uint32_t RETRY_CHECK_MAX_MS = 15 * 60000;  // ... up to this
 
-volatile bool s_checking = false;
 volatile bool s_check_now = false;
 volatile bool s_check_failed = false;
 bool s_checked = false;

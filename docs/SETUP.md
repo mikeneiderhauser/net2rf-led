@@ -29,7 +29,7 @@ other controllers, and optionally an **admin password** under **System**.
 
 1. Switch a bracelet on **and press its button**. Many bracelets ignore the radio until they're woken this
    way. Hold it a few metres from the antenna.
-2. **Tools → Which bracelet do I have? → Start test.** The controller alternates:
+2. **Tools → Which protocol is my device? → Start test.** The controller alternates:
    - **red** = protocol 0 (Shenzen New Dody)
    - **green** = protocol 1 (LedGiftSupplier.com)
 3. Click the matching **use protocol** button.

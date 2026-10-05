@@ -20,7 +20,7 @@ that isn't listed, please [report it](#reporting-a-device): every report widens 
 | PCB marking | `SD-B15ST1K1` |
 | Radio | 433 MHz receiver; 13.52127 MHz crystal (`X1`); loop antenna around the board edge; main chips unmarked |
 | Controls | push button |
-| Protocol | **0, Shenzen New Dody** (lights red in *Tools → Which bracelet do I have?*) |
+| Protocol | **0, Shenzen New Dody** (lights red in *Tools → Which protocol is my device?*) |
 | Colours | The protocol's 10 fixed colours |
 | Effects | **Fade in** (`05 AA`, back to the last colour) and **fade out** (`06 AA`, to black) work. The app's third effect packet does nothing. |
 | Address | Two bracelets tested: one on **group 3** (`0008000F`), one on **group 2** (`0004000F`). Both answer the all-groups address `00FFFF0F`. Other bracelets may be on different groups. |
@@ -44,7 +44,7 @@ vendor's "DMX to RF transmitter" kits use.
 ### ❔ Other products
 
 RF pucks, wands, hats and the like (for example Wally's Lights' "DMX to RF" range, organised in zones 1–4) may use
-one of these two protocols or something else. Try *Tools → Which bracelet do I have?* and report the result.
+one of these two protocols or something else. Try *Tools → Which protocol is my device?* and report the result.
 
 ## Controller hardware
 
@@ -83,7 +83,7 @@ Open an issue with:
 
 1. **Photos** of the device, outside and the PCB (markings, crystal, chips), like the one above.
 2. **Where it came from:** event, vendor, listing.
-3. **Protocol:** what *Tools → Which bracelet do I have?* shows (red = 0, green = 1, nothing).
+3. **Protocol:** what *Tools → Which protocol is my device?* shows (red = 0, green = 1, nothing).
 4. **Address:** what *Tools → Address probe* finds (see [SETUP.md](SETUP.md#3-decide-how-the-bracelets-fit-into-the-show)).
 5. **Behaviour:** does it need a button press to listen, what does it do when idle, and how long does it last on
    its batteries?
