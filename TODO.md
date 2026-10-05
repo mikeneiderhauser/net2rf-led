@@ -40,6 +40,10 @@ Parked for now (2026-10-04): not a priority. To sort out when it is:
 - [x] *Upload Output* from xLights 2026.17 with the All + 15 model on the WLED profile: 16 zones created.
 - [ ] Still to run from xLights: *Upload Input*, the All + 4 model, and the Net2RF definition itself (an App
       Store install of xLights can't have the file added).
+- [ ] Rework docs/SETUP.md section 5 ("Add it to xLights"), which carries an under-construction note: new
+      screenshots of the controller properties and the visualiser with the Net2RF All + 15 model on port 1
+      (replacing the single-zone ones), and a pass over the steps so they lead with the ready-made model,
+      *Upload Output* and *Discover*.
 - [ ] Offer the definition to xLights (enhancement issue first, then a PR adding
       `resources/controllers/net2rf.xcontroller`).
 - [ ] DMX mode in xLights: decide how DMX fixtures attach (the definition has no serial port).

@@ -122,6 +122,10 @@ Please report what your bracelets answer to: it's how this gets confirmed.
 
 ## 5. Add it to xLights
 
+> 🚧 **Under construction.** This section is still being improved and parts of it may be out of date. The two
+> xLights screenshots below show an older single-zone setup, not the ready-made model. Where the text and the
+> pictures disagree, follow the text and [`tools/xlights`](../tools/xlights/README.md).
+
 Treat it like any other Ethernet controller in your setup. **Tools → xLights setup** on the controller lists the
 exact settings for its current zones.
 
