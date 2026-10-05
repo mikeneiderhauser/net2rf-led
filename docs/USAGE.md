@@ -49,12 +49,28 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 | **Zones** | Add, name, enable and address zones; choose whether All Zones is a base layer under the others; send a colour, off, a fade in or a fade out to one zone; **Zone walk** lights one zone at a time so you can see which bracelets belong where |
 | **Bracelets & Radio** | Controller name, bracelet protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
 | **Network** | Current connection and the settings above |
-| **Tools** | **xLights setup** (exact controller and model settings for the current zones); **Which protocol is my device?**; **Send raw packet**; **Address probe** (find which group a bracelet is in) |
+| **Tools** | Testing and diagnostics, described [below](#tools) |
 | **System** | Firmware info (version, free memory, free flash) and **Update firmware** (from GitHub releases or a file); an **Advanced** section with the flash partition breakdown; OLED display type and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
 
 The pill row at the top of every page shows the radio, input and network state at a glance.
 
 ![Dashboard](images/dashboard.png)
+
+### Tools
+
+| Tool | What it's for |
+|---|---|
+| **Which protocol is my device?** | Alternates the two bracelet protocols: the device lights red for protocol 0, green for protocol 1 |
+| **Send raw packet** | Send any 7-byte packet, with presets |
+| **Address probe** | Steps through the groups one by one, to find which group a device is on |
+| **Group tester** | Tick any combination of the 16 groups and send a colour, off, fade in or fade out to exactly those. Shows the address it uses (`00FBFF0F` = all except group 2). |
+| **Range walk** | Cycles red, green, blue, white every 2 s on all zones while you walk the area with a device, with the TX power setting next to it |
+| **Input monitor** | The channel values arriving from xLights / FPP right now, per zone: shows a wrong start channel or colour order at a glance |
+| **Transmit log** | The last 24 RF packets: when, to which groups, what command. Shows the base layer at work (for example *all except groups 2, 3*: red). |
+| **Channel meter** | Live signal strength on the bracelet frequency, measured between transmissions: spot other transmitters and pick the listen-before-transmit threshold |
+| **Connection check** | Whether the controller itself can look up, reach and talk to GitHub, which the update check and install need |
+| **Identify** | Flickers the status LED and flashes *THIS ONE* on the OLED for 15 s, to tell controllers apart |
+| **xLights setup** | The exact controller and model settings for the current zones |
 
 ### Controlling output
 
@@ -94,6 +110,7 @@ The WT32-ETH01's onboard LED (IO2):
 | Short blink every 2 s | Running, radio ready |
 | Fast blink | Radio not detected or still starting |
 | Double blink | Setup hotspot active, no network connection |
+| Rapid flicker | *Identify* is running (Tools page) |
 
 ### OLED
 
@@ -105,6 +122,13 @@ name and page number.
 | Status | IP and interface (ETH / WiFi / AP / offline), hostname (or hotspot name), radio state, firmware version (and a newer release, if one was found) |
 | Input | DDP / E1.31 state (live, nothing yet, timed out, TEST MODE, OUTPUT OFF), frame rate, packet count, time since the last packet, enabled inputs |
 | Zones | Zone number, name and current colour (hex), 4 per page |
+
+- **Update marker:** a **U** in front of the page number (top right) means a newer firmware release is
+  available; the Status page's version line says which.
+- **Sleep:** the display switches off after 10 minutes without a USER press (*System → Display*: 1 to 240
+  minutes, 0 = never). It wakes on the next USER press (which only wakes it), from *Wake display* on the System
+  page, after a reboot, and by itself when the network address changes, the setup hotspot starts or stops, or
+  the radio fails. A controller without a USER button sleeps too, and relies on those.
 
 An OLED that isn't fitted, or stops answering, is simply ignored; the controller keeps looking for one every 5 s.
 

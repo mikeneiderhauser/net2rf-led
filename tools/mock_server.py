@@ -20,6 +20,7 @@ LOG = []
 FW = "0.0.4"
 LATEST = "v0.0.5" if os.environ.get("MOCK_UPDATE") else "v" + FW
 GH_JOB = {"tag": "", "started": 0.0}
+NETCHECK = {"started": 0.0}
 
 
 def gh_job():
@@ -113,7 +114,7 @@ def status():
                    "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False, "update_job": gh_job(),
                    "update_check": {"auto_check": APP["update"]["auto_check"], "check_hours": APP["update"]["check_hours"],
                                     "checking": False, "latest": LATEST, "available": LATEST != "v" + FW, "checked_ago_s": 840},
-                   "display_info": {"present": False, "type": "ssd1306", "sda_pin": 5, "scl_pin": 17}},
+                   "display_info": {"present": False, "type": "ssd1306", "sda_pin": 5, "scl_pin": 17, "asleep": False, "sleep_min": 10, "button": False}},
         "network": {"interface": "ethernet", "ip": "192.168.250.60", "hostname": NET["hostname"], "dhcp": NET["dhcp"],
                     "ethernet": {"enabled": True, "link": True, "mac": "A8:03:2A:11:3F:2A", "speed": 100,
                                  "full_duplex": True, "ip": "192.168.250.60", "gateway": "192.168.250.1",
@@ -183,6 +184,23 @@ class Handler(BaseHTTPRequestHandler):
                  "state": st(inp="timed_out")},
                 {"name": "Old Firmware", "hostname": "net2rf-c3d4", "ip": "192.168.250.64", "firmware": "0.0.2",
                  "id": "C3D4", "self": False, "online": False, "last_seen_ms": 30000, "via": ["mdns"]}]})
+        if path == "/api/tools":
+            scene = p0_scene() if APP["bracelets"]["protocol"] == 0 else []
+            tx = [{"age_ms": 400 + 2100 * k, "p": 0, "pkt": pkt, "n": 3, "manual": k == 3, "ok": True}
+                  for k, pkt in enumerate([s[1] for s in scene] + ["00FFFF0F00AAB7", "000C000F06AAC9"])]
+            ch = [int(rgb[i:i + 2], 16) for rgb, _ in scene for i in (0, 2, 4)]
+            return self.send(200, {"tx_total": 812, "tx": tx, "input": {"start": APP["input"]["start_channel"], "width": 3,
+                                                                       "seen": True, "age_ms": 25, "channels": ch}})
+        if path == "/api/rssi":
+            noise = random.randint(-90, -84)
+            return self.send(200, {"peak_dbm": noise + random.choice([0, 1, 2, 30]), "avg_dbm": noise, "freq_hz": 433889000})
+        if path == "/api/net/check":
+            running = time.time() - NETCHECK["started"] < 2.5
+            out = {"host": "github.com", "running": running}
+            if not running and NETCHECK["started"]:
+                out.update(done_ago_s=int(time.time() - NETCHECK["started"] - 2.5), dns={"ok": True, "ms": 41, "ip": "140.82.112.4"},
+                           tcp={"ok": True, "ms": 38}, https={"ok": True, "ms": 1320, "status": 200})
+            return self.send(200, out)
         if path == "/api/flash":
             return self.send(200, {"flash_bytes": 4194304, "partitions": [
                 {"label": "nvs", "offset": 0x9000, "bytes": 0x5000, "kind": "settings", "used_bytes": 5120},
@@ -206,6 +224,11 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(raw or b"{}")
         LOG.append([path, body])
         reboot = False
+        if path == "/api/net/check":
+            NETCHECK["started"] = time.time()
+            return self.send(200, {"ok": True, "reboot": False})
+        if path == "/api/identify":
+            return self.send(200, {"ok": True, "reboot": False})
         if path == "/api/update/check":
             return self.send(200, {"ok": True, "reboot": False})
         if path == "/api/update/github":

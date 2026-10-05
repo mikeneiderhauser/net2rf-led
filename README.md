@@ -51,6 +51,8 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
 - **Zones:** up to 16 groups per controller, each one RGB pixel in xLights (pixel mode), a DMX fixture with an
   effect channel (DMX mode), or the vendor transmitter's 5-channel layout (vendor mode).
 - **DDP and E1.31 input**, unicast or multicast; Ethernet or Wi-Fi, with a setup hotspot for first-time config.
+- **Built-in tools:** group tester, range walk, live input monitor, transmit log, 433 MHz channel meter,
+  connection check and identify, next to the protocol test and address probe.
 - **Web UI for everything:** live input rate and counters, last colour per zone, test mode, zone walk, address
   probe ("which group is this bracelet in?"), xLights setup helper, network settings, firmware update (from GitHub releases or a file) with
   automatic rollback, settings export/import, optional admin password.

@@ -107,6 +107,11 @@ class Engine {
     void set_suspended(bool suspended) { this->suspended_ = suspended; }  // e.g. during OTA
 
     void status_json(JsonObject out);
+    // Tools page: the last transmissions (newest first) and the input channels the zones read.
+    void tools_json(JsonObject out);
+    // Tools page: listen on the bracelet frequency for about 20 ms and report the signal strength. Runs in the
+    // engine task between transmissions; false if the radio can't listen (off, not ready, no receiver).
+    bool measure_rssi(int16_t &peak_dbm, int16_t &avg_dbm, uint32_t &freq_hz);
     EngineSnapshot snapshot();
     void reset_stats();
 
@@ -147,6 +152,24 @@ class Engine {
     ZoneState zones_[MAX_ZONES];
     std::deque<Job> manual_;
     uint8_t rr_{0};
+
+    struct TxLogEntry {
+        uint32_t ms;
+        uint8_t protocol, repeats;
+        uint8_t packet[bracelet::PACKET_LEN];
+        bool manual, ok;
+    };
+    static const uint8_t TX_LOG_SIZE = 24;
+    TxLogEntry tx_log_[TX_LOG_SIZE]{};
+    uint8_t tx_log_head_{0}, tx_log_count_{0};
+    uint32_t tx_log_total_{0};
+
+    void sample_rssi_();
+    volatile bool rssi_request_{false};
+    volatile uint32_t rssi_seq_{0};
+    bool rssi_ok_{false};
+    int16_t rssi_peak_{-127}, rssi_avg_{-127};
+    uint32_t rssi_freq_{0};
     // Base layer (protocol 0, AppConfig::base_layer): see p0_apply_base_layer(). Set by update_wants_().
     int8_t base_zone_{-1};     // the all-groups zone, or -1 when layering is not in effect
     uint16_t follows_{0};      // zones currently following the base (bit per zone)

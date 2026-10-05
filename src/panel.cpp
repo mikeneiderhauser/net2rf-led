@@ -67,6 +67,27 @@ static bool s_button_armed = false;
 static bool s_pressed = false;
 static uint32_t s_press_start = 0, s_last_change = 0;
 
+// Display sleep: the OLED switches off after a while without a USER press. It wakes on the next press (which
+// only wakes: it doesn't change the page), from the web UI / API, after a reboot, and by itself when there is
+// something to read: the network address changes, the setup hotspot starts or stops, or the radio fails.
+// Controllers without a button rely on those.
+static bool s_asleep = false;
+static bool s_wake_press = false;
+static uint32_t s_last_activity = 0;
+
+// Identify (Tools page): blink the LED fast and flash "THIS ONE" on the OLED, to tell controllers apart.
+static uint32_t s_identify_until = 0;
+
+static void wake_display(uint32_t now) {
+    s_last_activity = now;
+    if (!s_asleep)
+        return;
+    s_asleep = false;
+    if (s_oled)
+        s_oled->displayOn();
+    s_last_draw = 0;
+}
+
 static const uint32_t HOLD_NET_RESET_MS = 5000;
 static const uint32_t HOLD_FACTORY_MS = 15000;
 
@@ -125,6 +146,8 @@ static void probe_display() {
         }
         s_oled_addr = addr;
         s_oled_failures = 0;
+        s_asleep = false;  // a freshly initialised display is on
+        s_last_activity = millis();
         s_oled->flipScreenVertically();
         s_oled->setFont(ArialMT_Plain_10);
         s_oled->clear();
@@ -176,7 +199,19 @@ void display_json(JsonObject o) {
     o["sda_pin"] = s_pins_swapped ? pins::I2C_SCL : pins::I2C_SDA;
     o["scl_pin"] = s_pins_swapped ? pins::I2C_SDA : pins::I2C_SCL;
     o["pins_swapped"] = s_pins_swapped && s_oled != nullptr;
+    o["asleep"] = s_asleep && s_oled != nullptr;
+    o["sleep_min"] = display_sleep_minutes(g_app);
+    o["button"] = s_button_armed;  // a USER button is fitted (it also wakes the display)
 }
+
+void wake() { wake_display(millis()); }
+
+void identify(uint16_t seconds) {
+    s_identify_until = seconds ? (millis() + (uint32_t) seconds * 1000UL) | 1 : 0;
+    if (!seconds && s_oled)
+        s_oled->normalDisplay();
+}
+bool identifying() { return s_identify_until != 0; }
 
 void i2c_scan_json(JsonObject o) {
     JsonArray found = o["devices"].to<JsonArray>();
@@ -238,6 +273,8 @@ static void handle_button(uint32_t now) {
         s_pressed = down;
         if (down) {
             s_press_start = now;
+            s_wake_press = s_asleep;
+            wake_display(now);
         } else {
             uint32_t held = now - s_press_start;
             if (held >= HOLD_FACTORY_MS) {
@@ -252,10 +289,11 @@ static void handle_button(uint32_t now) {
                 config_network_reset();
                 delay(500);
                 ESP.restart();
-            } else {
+            } else if (!s_wake_press) {
                 s_page = (s_page + 1) % num_pages();
                 s_last_draw = 0;
             }
+            s_last_activity = now;
         }
     }
     if (s_pressed && oled_ok()) {
@@ -308,7 +346,8 @@ static void draw_page(uint32_t now) {
     }
     s_oled->clear();
     s_oled->setFont(ArialMT_Plain_10);
-    String counter = String(s_page + 1) + "/" + n_pages;
+    // "U" in front of the page counter: a newer firmware release is available.
+    String counter = String(updater::available_version() ? "U  " : "") + String(s_page + 1) + "/" + n_pages;
     s_oled->drawString(0, 0, fit(title, 124 - s_oled->getStringWidth(counter)));
     s_oled->setTextAlignment(TEXT_ALIGN_RIGHT);
     s_oled->drawString(128, 0, counter);
@@ -373,7 +412,9 @@ static void draw_page(uint32_t now) {
 static void update_led(uint32_t now) {
     EngineSnapshot s = g_engine.snapshot();
     bool on;
-    if (s.radio_state != RadioState::READY && s.radio_state != RadioState::OFF)
+    if (s_identify_until)
+        on = (now / 60) % 2;  // identify: a rapid flicker, unlike any status pattern
+    else if (s.radio_state != RadioState::READY && s.radio_state != RadioState::OFF)
         on = (now / 150) % 2;  // fast blink: radio problem
     else if (net::ap_active() && !net::connected())
         on = (now % 1000) < 100 || ((now % 1000) > 200 && (now % 1000) < 300);  // double blink: AP mode
@@ -385,6 +426,12 @@ static void update_led(uint32_t now) {
 void loop() {
     uint32_t now = millis();
     handle_button(now);
+    if (s_identify_until && (int32_t) (now - s_identify_until) >= 0) {  // identify is over (with or without an OLED)
+        s_identify_until = 0;
+        if (s_oled)
+            s_oled->normalDisplay();
+        s_last_draw = 0;
+    }
     update_led(now);
     if (!s_oled) {
         if ((int32_t) (now - s_next_probe_ms) >= 0) {
@@ -398,7 +445,43 @@ void loop() {
         s_last_auto_page = now;
         s_last_draw = 0;
     }
-    if (!s_pressed && now - s_last_draw > 500) {
+    if (s_identify_until) {
+        {
+            wake_display(now);
+            if (now - s_last_draw > 350 && oled_ok()) {
+                static bool inverted = false;
+                inverted = !inverted;
+                if (inverted)
+                    s_oled->invertDisplay();
+                else
+                    s_oled->normalDisplay();
+                draw_centered("THIS ONE", g_net.hostname);
+                s_last_draw = now;
+            }
+            return;
+        }
+    }
+    // Things worth waking for, checked once a second.
+    static uint32_t last_check = 0, last_ip = 0;
+    static bool last_ap = false, last_fault = false;
+    if (now - last_check >= 1000) {
+        last_check = now;
+        uint32_t ip = (uint32_t) net::ip();
+        bool ap = net::ap_active();
+        bool fault = g_engine.snapshot().radio_state == RadioState::NOT_DETECTED;
+        if (ip != last_ip || ap != last_ap || (fault && !last_fault))
+            wake_display(now);
+        last_ip = ip;
+        last_ap = ap;
+        last_fault = fault;
+    }
+    uint32_t sleep_ms = (uint32_t) display_sleep_minutes(g_app) * 60000UL;
+    if (sleep_ms && !s_asleep && !s_pressed && now - s_last_activity >= sleep_ms) {
+        s_oled->displayOff();
+        s_asleep = true;
+        log_i("OLED asleep");
+    }
+    if (!s_asleep && !s_pressed && now - s_last_draw > 500) {
         if (oled_ok())
             draw_page(now);
         s_last_draw = now;

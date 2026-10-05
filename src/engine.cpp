@@ -375,6 +375,17 @@ void Engine::transmit_(const Job &job) {
 
     StateLock lock;
     this->airtime_us_[this->airtime_slot_] += elapsed;
+    TxLogEntry &entry = this->tx_log_[this->tx_log_head_];
+    entry.ms = millis();
+    entry.protocol = job.protocol;
+    entry.repeats = job.repeats;
+    memcpy(entry.packet, job.packet, PACKET_LEN);
+    entry.manual = job.manual;
+    entry.ok = ok;
+    this->tx_log_head_ = (this->tx_log_head_ + 1) % TX_LOG_SIZE;
+    if (this->tx_log_count_ < TX_LOG_SIZE)
+        this->tx_log_count_++;
+    this->tx_log_total_++;
     if (ok) {
         this->out_.updates++;
         this->out_.frames += job.repeats;
@@ -543,6 +554,8 @@ void Engine::run_() {
 
         if (have_job)
             this->transmit_(job);
+        else if (this->rssi_request_)
+            this->sample_rssi_();
         else
             vTaskDelay(pdMS_TO_TICKS(2));
     }
@@ -649,6 +662,94 @@ void Engine::reset_stats() {
 static void hex_into(char *out, const uint8_t *data, size_t len) {
     for (size_t i = 0; i < len; i++)
         sprintf(out + i * 2, "%02X", data[i]);
+}
+
+// Signal meter (Tools page). Called in the engine task while nothing is being transmitted.
+void Engine::sample_rssi_() {
+    bool ok = false;
+    int16_t peak = -127;
+    int32_t sum = 0;
+    uint32_t samples = 0, freq = 0;
+    if (this->radio_state_ == RadioState::READY && this->radio_->lbt_supported()) {
+        int8_t power;
+        {
+            StateLock lock;
+            freq = g_app.freq[g_app.protocol ? 1 : 0];
+            power = constrain(g_app.tx_power, this->radio_->min_power(), this->radio_->max_power());
+        }
+        bool tuned = this->tuned_ && freq == this->tuned_freq_ && power == this->tuned_power_;
+        if (!tuned && this->radio_->tune(freq, power)) {
+            this->tuned_freq_ = freq;
+            this->tuned_power_ = power;
+            this->tuned_ = tuned = true;
+        }
+        if (tuned && this->radio_->listen_on()) {
+            delayMicroseconds(LBT_SETTLE_US);
+            uint32_t t0 = micros();
+            while (micros() - t0 < 20000) {
+                int16_t r = this->radio_->rssi_dbm();
+                if (r > peak)
+                    peak = r;
+                sum += r;
+                samples++;
+                delayMicroseconds(200);
+            }
+            this->radio_->listen_off();
+            ok = samples > 0;
+        }
+    }
+    StateLock lock;
+    this->rssi_ok_ = ok;
+    this->rssi_peak_ = peak;
+    this->rssi_avg_ = samples ? (int16_t) (sum / (int32_t) samples) : -127;
+    this->rssi_freq_ = freq;
+    this->rssi_request_ = false;
+    this->rssi_seq_ = this->rssi_seq_ + 1;
+}
+
+bool Engine::measure_rssi(int16_t &peak_dbm, int16_t &avg_dbm, uint32_t &freq_hz) {
+    uint32_t seq = this->rssi_seq_;
+    this->rssi_request_ = true;
+    for (int i = 0; i < 100 && this->rssi_seq_ == seq; i++)  // a transmission in progress finishes first
+        delay(5);
+    if (this->rssi_seq_ == seq) {
+        this->rssi_request_ = false;
+        return false;
+    }
+    StateLock lock;
+    peak_dbm = this->rssi_peak_;
+    avg_dbm = this->rssi_avg_;
+    freq_hz = this->rssi_freq_;
+    return this->rssi_ok_;
+}
+
+void Engine::tools_json(JsonObject o) {
+    StateLock lock;
+    uint32_t now = millis();
+    o["tx_total"] = this->tx_log_total_;
+    JsonArray tx = o["tx"].to<JsonArray>();
+    for (uint8_t k = 0; k < this->tx_log_count_; k++) {
+        const TxLogEntry &e = this->tx_log_[(this->tx_log_head_ + TX_LOG_SIZE - 1 - k) % TX_LOG_SIZE];
+        JsonObject j = tx.add<JsonObject>();
+        char hex[PACKET_LEN * 2 + 1];
+        hex_into(hex, e.packet, PACKET_LEN);
+        j["age_ms"] = now - e.ms;
+        j["p"] = e.protocol;
+        j["pkt"] = hex;
+        j["n"] = e.repeats;
+        j["manual"] = e.manual;
+        j["ok"] = e.ok;
+    }
+    JsonObject in = o["input"].to<JsonObject>();
+    uint8_t width = zone_width(g_app);
+    in["start"] = g_app.start_channel;
+    in["width"] = width;
+    in["seen"] = this->in_.seen;
+    in["age_ms"] = this->in_.seen ? (int32_t) (now - this->in_.last_rx_ms) : -1;
+    JsonArray ch = in["channels"].to<JsonArray>();
+    uint16_t first = g_app.start_channel - 1, count = (uint16_t) g_app.num_zones * width;
+    for (uint16_t i = 0; i < count && first + i < MAX_CHANNELS; i++)
+        ch.add(this->channels_[first + i]);
 }
 
 void Engine::status_json(JsonObject o) {

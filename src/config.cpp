@@ -104,6 +104,7 @@ void config_defaults_app(AppConfig &c) {
     c.update_check_off = 0;
     c.update_check_hours = UPDATE_CHECK_DEFAULT_HOURS;
     c.base_layer = 1;  // new controllers only: saved settings keep the old behaviour until switched on
+    c.display_sleep = 0;  // the default (10 minutes)
 }
 
 // AppConfig as saved by firmware before the listen-before-talk fields were appended.
@@ -319,6 +320,7 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     radio["lbt_threshold_dbm"] = c.lbt_threshold;
     radio["power"] = !c.radio_off;
 
+    o["display"]["sleep_min"] = display_sleep_minutes(c);
     JsonObject update = o["update"].to<JsonObject>();
     update["repo"] = c.update_repo;
     update["auto_check"] = !c.update_check_off;
@@ -424,6 +426,12 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
             return false;
         }
         strlcpy(c.update_repo, repo, sizeof(c.update_repo));
+    }
+    if (!in["display"]["sleep_min"].isNull()) {
+        uint8_t minutes = 0;
+        if (!read_int(in["display"].as<JsonObjectConst>(), "sleep_min", 0, 240, minutes, err))
+            return false;
+        c.display_sleep = minutes == 0 ? DISPLAY_SLEEP_NEVER : minutes;
     }
     JsonObjectConst update = in["update"];
     if (!update.isNull()) {

@@ -65,7 +65,14 @@ struct AppConfig {
     uint8_t update_check_off;     // 1 = don't look for new releases automatically (0 = on, so older records opt in)
     uint16_t update_check_hours;  // how often the automatic check runs
     uint8_t base_layer;     // protocol 0: the all-groups zone is a base layer under the other zones
+    uint8_t display_sleep;  // OLED sleep after this many minutes without a button press: 0 = default, 255 = never
 };
+static const uint8_t DISPLAY_SLEEP_DEFAULT_MIN = 10;
+static const uint8_t DISPLAY_SLEEP_NEVER = 255;
+// Minutes until the OLED sleeps (0 = never).
+inline uint8_t display_sleep_minutes(const AppConfig &c) {
+    return c.display_sleep == 0 ? DISPLAY_SLEEP_DEFAULT_MIN : c.display_sleep == DISPLAY_SLEEP_NEVER ? 0 : c.display_sleep;
+}
 static const uint16_t UPDATE_CHECK_DEFAULT_HOURS = 12;
 // True when transmissions may be queued (call with StateLock held).
 inline bool tx_allowed(const AppConfig &c) { return c.output_enabled && !c.radio_off; }

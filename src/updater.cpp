@@ -2,6 +2,8 @@
 
 #include <Update.h>
 #include <esp_crt_bundle.h>
+#include <Network.h>
+#include <NetworkClient.h>
 #include <esp_http_client.h>
 
 #include <version.h>
@@ -343,6 +345,105 @@ void check_json(JsonObject out) {
 
 const char *available_version() {
     return !s_checking && s_latest[0] && compare_versions(s_latest, FW_VERSION) > 0 ? s_latest : nullptr;
+}
+
+// ---- connection check ---------------------------------------------------------------------------
+
+namespace {
+struct NetCheck {
+    volatile bool running = false;
+    bool done = false;
+    uint32_t done_ms = 0;
+    bool dns_ok = false, tcp_ok = false, https_ok = false;
+    uint16_t dns_ms = 0, tcp_ms = 0, https_ms = 0;
+    int https_status = 0;
+    char ip[16] = "";
+    char https_error[40] = "";
+} s_net;
+
+void net_check_task(void *) {
+    static const char HOST[] = "github.com";
+    for (int i = 0; i < 200 && s_checking; i++)  // one secure connection at a time
+        delay(100);
+    s_checking = true;
+    s_net.dns_ok = s_net.tcp_ok = s_net.https_ok = false;
+    s_net.dns_ms = s_net.tcp_ms = s_net.https_ms = 0;
+    s_net.https_status = 0;
+    s_net.ip[0] = s_net.https_error[0] = 0;
+
+    IPAddress ip;
+    uint32_t t = millis();
+    s_net.dns_ok = Network.hostByName(HOST, ip) == 1 && ip != IPAddress((uint32_t) 0);
+    s_net.dns_ms = millis() - t;
+    if (s_net.dns_ok) {
+        strlcpy(s_net.ip, ip.toString().c_str(), sizeof(s_net.ip));
+        NetworkClient tcp;
+        t = millis();
+        s_net.tcp_ok = tcp.connect(ip, 443, 5000);
+        s_net.tcp_ms = millis() - t;
+        tcp.stop();
+    }
+    if (s_net.tcp_ok) {
+        esp_http_client_config_t cfg = {};
+        cfg.url = "https://github.com/";
+        cfg.method = HTTP_METHOD_HEAD;
+        cfg.disable_auto_redirect = true;
+        cfg.crt_bundle_attach = esp_crt_bundle_attach;
+        cfg.timeout_ms = 10000;
+        cfg.buffer_size = 8192;
+        cfg.user_agent = "net2rf-led/" FW_VERSION;
+        cfg.keep_alive_enable = false;
+        esp_http_client_handle_t http = esp_http_client_init(&cfg);
+        t = millis();
+        esp_err_t e = http ? esp_http_client_perform(http) : ESP_ERR_NO_MEM;
+        s_net.https_ms = millis() - t;
+        s_net.https_status = http ? esp_http_client_get_status_code(http) : 0;
+        s_net.https_ok = s_net.https_status >= 200 && s_net.https_status < 400;
+        if (!s_net.https_ok)
+            strlcpy(s_net.https_error, esp_err_to_name(e), sizeof(s_net.https_error));
+        if (http)
+            esp_http_client_cleanup(http);
+    }
+    s_checking = false;
+    s_net.done_ms = millis();
+    s_net.done = true;
+    s_net.running = false;
+    vTaskDelete(nullptr);
+}
+}  // namespace
+
+bool net_check_start() {
+    if (s_net.running || s_state == State::DOWNLOADING || s_state == State::DONE)
+        return false;
+    s_net.running = true;
+    if (xTaskCreate(net_check_task, "net_check", 8192, nullptr, 1, nullptr) != pdPASS) {
+        s_net.running = false;
+        return false;
+    }
+    return true;
+}
+
+void net_check_json(JsonObject out) {
+    out["host"] = "github.com";
+    out["running"] = (bool) s_net.running;
+    if (s_net.running || !s_net.done)
+        return;
+    out["done_ago_s"] = (millis() - s_net.done_ms) / 1000;
+    JsonObject dns = out["dns"].to<JsonObject>();
+    dns["ok"] = s_net.dns_ok;
+    dns["ms"] = s_net.dns_ms;
+    if (s_net.dns_ok)
+        dns["ip"] = s_net.ip;
+    JsonObject tcp = out["tcp"].to<JsonObject>();
+    tcp["ok"] = s_net.tcp_ok;
+    tcp["ms"] = s_net.tcp_ms;
+    JsonObject https = out["https"].to<JsonObject>();
+    https["ok"] = s_net.https_ok;
+    https["ms"] = s_net.https_ms;
+    if (s_net.https_status)
+        https["status"] = s_net.https_status;
+    if (s_net.https_error[0])
+        https["error"] = s_net.https_error;
 }
 
 bool busy() { return s_state == State::DOWNLOADING; }

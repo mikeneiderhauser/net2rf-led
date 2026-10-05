@@ -796,6 +796,49 @@ void begin() {
     s_server.on("/api/status", HTTP_GET, handle_status);
     s_server.on("/api/stats", HTTP_GET, handle_stats);
     s_server.on("/api/flash", HTTP_GET, handle_flash);
+    // ---- Tools page ----
+    s_server.on("/api/tools", HTTP_GET, []() {  // transmit log + input channels (live view)
+        JsonDocument doc;
+        g_engine.tools_json(doc.to<JsonObject>());
+        send_json(200, doc);
+    });
+    s_server.on("/api/rssi", HTTP_GET, protect([]() {  // signal strength on the bracelet frequency, right now
+        int16_t peak, avg;
+        uint32_t freq;
+        if (!g_engine.measure_rssi(peak, avg, freq)) {
+            send_error(409, "the radio can't listen right now (off, not ready or busy)");
+            return;
+        }
+        JsonDocument doc;
+        doc["peak_dbm"] = peak;
+        doc["avg_dbm"] = avg;
+        doc["freq_hz"] = freq;
+        send_json(200, doc);
+    }));
+    s_server.on("/api/identify", HTTP_POST, protect([]() {  // {"seconds": 10}; 0 stops
+        JsonDocument doc;
+        if (!parse_body(doc))
+            return;
+        int seconds = doc["seconds"] | 10;
+        if (seconds < 0 || seconds > 120) {
+            send_error(400, "seconds must be 0..120");
+            return;
+        }
+        panel::identify((uint16_t) seconds);
+        send_ok();
+    }));
+    s_server.on("/api/net/check", HTTP_POST, protect([]() {
+        if (!updater::net_check_start()) {
+            send_error(409, "a check or an update is already running");
+            return;
+        }
+        send_ok();
+    }));
+    s_server.on("/api/net/check", HTTP_GET, protect([]() {
+        JsonDocument doc;
+        updater::net_check_json(doc.to<JsonObject>());
+        send_json(200, doc);
+    }));
     s_server.on("/json/info", HTTP_GET, handle_wled_info);
     s_server.on("/json/cfg", HTTP_GET, handle_wled_get_cfg);
     s_server.on("/json/cfg", HTTP_POST, protect(handle_wled_post_cfg));
@@ -825,12 +868,30 @@ void begin() {
                     JsonDocument doc;
                     if (!parse_body(doc))
                         return;
-                    String type = doc["type"] | "";
-                    if (type != "ssd1306" && type != "sh1106") {
-                        send_error(400, "type must be ssd1306 or sh1106");
-                        return;
+                    if (!doc["type"].isNull()) {
+                        String type = doc["type"] | "";
+                        if (type != "ssd1306" && type != "sh1106") {
+                            send_error(400, "type must be ssd1306 or sh1106");
+                            return;
+                        }
+                        panel::set_display_type(type == "sh1106" ? panel::DISPLAY_SH1106 : panel::DISPLAY_SSD1306);
                     }
-                    panel::set_display_type(type == "sh1106" ? panel::DISPLAY_SH1106 : panel::DISPLAY_SSD1306);
+                    if (!doc["sleep_min"].isNull()) {  // minutes without a USER press before the OLED sleeps; 0 = never
+                        int minutes = doc["sleep_min"] | -1;
+                        if (minutes < 0 || minutes > 240) {
+                            send_error(400, "sleep_min must be 0..240");
+                            return;
+                        }
+                        AppConfig saved;
+                        {
+                            StateLock lock;
+                            g_app.display_sleep = minutes == 0 ? DISPLAY_SLEEP_NEVER : (uint8_t) minutes;
+                            saved = g_app;
+                        }
+                        config_save_app(saved);
+                    }
+                    if (doc["wake"] | false)
+                        panel::wake();
                     send_ok();
                 }));
     s_server.on("/api/raw", HTTP_POST, protect(handle_raw));

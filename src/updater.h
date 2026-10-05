@@ -23,6 +23,10 @@ void check_now();  // run a check as soon as possible, even with the automatic c
 void forget();     // drop the last result (the release source changed and no new check will run)
 const char *available_version();  // tag of a release newer than this firmware, or nullptr
 
+// Connection check (Tools page): can the controller resolve, reach and talk to GitHub? Runs in the background.
+bool net_check_start();              // false if a check or an update is already running
+void net_check_json(JsonObject out);
+
 bool busy();          // a download is running
 bool reboot_due();    // the new firmware is written: reboot to run it
 void status_json(JsonObject out);  // the download job

@@ -261,7 +261,6 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
 
   <!-- TOOLS -->
   <section data-page="tools" class="hide">
-    <div class="card"><h2>xLights setup</h2><pre id="t_xl"></pre></div>
     <div class="card"><h2>Which protocol is my device?</h2>
       <p class="dim small" style="margin-top:0">Switch the bracelet, stick or puck on, <b>press its button</b> so it listens, and hold it near the antenna. This alternates between the two bracelet protocols, each broadcast to all groups:
         <b style="color:#e53935">red</b> = protocol 0 (Shenzen New Dody), <b style="color:#43a047">green</b> = protocol 1 (LedGiftSupplier.com).</p>
@@ -298,6 +297,46 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div style="margin-top:12px"><span class="dim small">Current address</span> <span class="big mono" id="p_cur">&mdash;</span> <b id="p_grp"></b> <span class="dim small" id="p_step"></span></div>
       <div class="mono small" id="p_log" style="margin-top:6px"></div>
     </div>
+    <div class="card"><h2>Group tester</h2>
+      <p class="dim small" style="margin-top:0">Send one command to any combination of groups, without touching the zones. Wake the devices first (press their button). Uses the bracelet protocol set under Bracelets &amp; Radio.</p>
+      <div id="g_p0">
+        <div class="actions" id="g_boxes" style="margin-top:0"></div>
+        <div class="actions"><button id="g_all">All</button><button id="g_none">None</button><button id="g_inv">Invert</button><span class="small dim">address</span> <span class="mono" id="g_addr"></span> <span class="small dim" id="g_desc"></span></div>
+      </div>
+      <div class="form hide" id="g_p1"><label>Group code (0 = every group)<input id="g_grp" type="number" min="0" max="255" value="0"></label></div>
+      <div class="actions"><input id="g_col" type="color" value="#ff0000"><button class="primary" id="g_send">Send colour</button><button id="g_off">Off</button><button id="g_fin">Fade in</button><button id="g_fout">Fade out</button></div>
+    </div>
+    <div class="card"><h2>Range walk</h2>
+      <p class="dim small" style="margin-top:0">Cycles red, green, blue and white on every zone, one change every 2&nbsp;s. Walk the area with a device in hand: where it stops following, you are out of range. Show input is overridden while it runs.</p>
+      <div class="actions" style="margin-top:0"><button class="primary" id="rw_start">Start</button><button id="rw_stop">Stop</button><span class="sw" id="rw_sw"></span><span class="big" id="rw_n">0</span><span class="dim small">colour changes sent</span></div>
+      <div class="form"><label>TX power (dBm)<input id="rw_pow" type="number"><span class="hint" id="rw_hint"></span></label></div>
+      <div class="actions"><button id="rw_setpow">Set power</button></div>
+    </div>
+    <div class="card"><h2>Input monitor</h2>
+      <p class="dim small" style="margin-top:0">The channel values arriving from xLights / FPP right now, as each zone reads them.</p>
+      <div class="scroll"><table class="tbl"><thead><tr><th>Zone</th><th>Channels</th><th>Values</th><th>Read as</th></tr></thead><tbody id="im_rows"></tbody></table></div>
+      <div class="small dim" id="im_note" style="margin-top:6px"></div>
+    </div>
+    <div class="card"><h2>Transmit log</h2>
+      <p class="dim small" style="margin-top:0">The last RF packets sent, newest first: who each one was addressed to and what it said. <span id="tl_total"></span></p>
+      <div class="scroll"><table class="tbl"><thead><tr><th>When</th><th>To</th><th>Command</th><th>Packet</th><th></th></tr></thead><tbody id="tl_rows"></tbody></table></div>
+    </div>
+    <div class="card"><h2>Channel meter</h2>
+      <p class="dim small" style="margin-top:0">Signal strength on the bracelet frequency, measured between transmissions. Use it to spot other transmitters and to pick the listen-before-transmit threshold (about 10&nbsp;dB above the quiet level).</p>
+      <div class="actions" style="margin-top:0"><button class="primary" id="cm_start">Start</button><button id="cm_stop">Stop</button><span class="big" id="cm_now">–</span><span class="dim small">dBm peak</span></div>
+      <div class="util" id="cm_bar" style="height:14px"><i style="width:0"></i></div>
+      <div class="small dim" id="cm_info"></div>
+    </div>
+    <div class="card"><h2>Connection check</h2>
+      <p class="dim small" style="margin-top:0">Can the controller itself reach GitHub? It needs to for the automatic update check and to install a release. Takes a few seconds.</p>
+      <div class="actions" style="margin-top:0"><button class="primary" id="nc_run">Run check</button><span class="small dim" id="nc_state"></span></div>
+      <dl class="kv" id="nc_out"></dl>
+    </div>
+    <div class="card"><h2>Identify</h2>
+      <p class="dim small" style="margin-top:0">Flickers the status LED and flashes &ldquo;THIS ONE&rdquo; on the OLED for 15&nbsp;s, to tell this controller apart from others.</p>
+      <div class="actions" style="margin-top:0"><button class="primary" id="idn_go">Identify this controller</button><button id="idn_stop">Stop</button></div>
+    </div>
+    <div class="card"><h2>xLights setup</h2><pre id="t_xl"></pre></div>
   </section>
 
   <!-- SYSTEM -->
@@ -327,8 +366,10 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="form">
         <label>Display type<select id="o_type"><option value="ssd1306">SSD1306 (0.96", most common)</option><option value="sh1106">SH1106 (1.3")</option></select>
           <span class="hint">pick SH1106 if the picture is shifted or garbled</span></label>
+        <label>Sleep after (minutes)<input id="o_sleep" type="number" min="0" max="240">
+          <span class="hint" id="o_sleepHint"></span></label>
       </div>
-      <div class="actions"><button class="primary" id="o_dispSave">Apply</button><button id="o_scan">Scan I²C bus</button></div>
+      <div class="actions"><button class="primary" id="o_dispSave">Apply</button><button id="o_wake">Wake display</button><button id="o_scan">Scan I²C bus</button></div>
       <pre class="hide" id="o_scanOut" style="margin-top:10px"></pre>
       <p class="dim small">Wiring: SDA → IO5 (pin labelled <span class="mono">RXD</span>), SCL → IO17 (<span class="mono">TXD</span>), VCC → 3V3, GND → GND. The controller keeps looking at 0x3C and 0x3D every 5&nbsp;s, so a fixed connection comes alive without a reboot.</p>
     </div>
@@ -423,11 +464,11 @@ function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`
 function show(page){if(!PAGES[page])page='dashboard';
   document.querySelectorAll('section[data-page]').forEach(s=>s.classList.toggle('hide',s.dataset.page!==page));
   document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+page));
-  $('pageTitle').textContent=PAGES[page];if(page==='tools')xlights()}
+  $('pageTitle').textContent=PAGES[page];if(page==='tools'){xlights();if(S){gUi();rwTick();toolsLive()}}else if(CM.timer){clearInterval(CM.timer);CM.timer=null}}
 window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
 
 // ---------- status polling ----------
-async function poll(){try{S=await api('status');render()}catch(e){$('pills').innerHTML=pill('bad','offline')}}
+async function poll(){try{S=await api('status');render();if(location.hash==='#tools'){gUi();rwTick();toolsLive()}}catch(e){$('pills').innerHTML=pill('bad','offline')}}
 function inputState(i){if(S.engine.test.mode!=='off')return['warn','Test mode'];if(i.out_of_range_channel)return['bad','Wrong channels'];if(!i.seen)return['','No DDP yet'];if(i.timed_out)return['warn','Timed out (blank)'];return i.age_ms<3000?['good','Receiving']:['','Idle']}
 function radioState(r){return r.state==='ready'&&r.data_line==='fault'?['bad','data line fault']:r.state==='ready'?['good','ready']:r.state==='not_detected'?['bad','not detected']:r.state==='off'?['','shut down']:['warn','initializing']}
 function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.toggle('hide',!(ap&&CNA));
@@ -658,6 +699,68 @@ $('w_prev').onclick=()=>{if(W.list.length){walkPause(true);walkShow(W.i-1)}};
 $('w_next').onclick=()=>{if(W.list.length){walkPause(true);walkShow(W.i+1)}};
 $('w_stop').onclick=()=>walkStop(true);
 
+// ---- tools: group tester, range walk, input monitor, transmit log, channel meter, connection check, identify
+const P0NAME={0:'red',1:'green',2:'blue',3:'pink',4:'white',5:'yellow',8:'violet',9:'orange',10:'indigo',11:'cyan'};
+const p0rgb=c=>{const e=PAL.find(x=>x[0]===c);return e?'#'+hx(e[1])+hx(e[2])+hx(e[3]):''};
+// who a protocol 0 mask reaches, in words; a nearly full mask reads better as "all except"
+function maskWords(b1,b2){const m=b1|b2<<8,on=[],off=[];for(let k=0;k<16;k++)(m>>k&1?on:off).push(k);
+  return m===0xFFFF?'all groups':!on.length?'no group':off.length<=6?'all except '+(off.length>1?'groups ':'group ')+off.join(', '):(on.length>1?'groups ':'group ')+on.join(', ')}
+$('g_boxes').innerHTML=Array.from({length:16},(_,k)=>`<label class="inline small"><input type="checkbox" class="g_b" data-k="${k}"> ${k}</label>`).join('');
+function gMask(){let m=0;document.querySelectorAll('.g_b').forEach(b=>{if(b.checked)m|=1<<+b.dataset.k});return m}
+function gUi(){const p0=!C||C.app.bracelets.protocol==0;$('g_p0').classList.toggle('hide',!p0);$('g_p1').classList.toggle('hide',p0);$('g_fin').classList.toggle('hide',!p0);$('g_fout').classList.toggle('hide',!p0);
+  const m=gMask();$('g_addr').textContent='00'+hx(m&255)+hx(m>>8)+'0F';$('g_desc').textContent='= '+maskWords(m&255,m>>8)}
+function gSet(fn){document.querySelectorAll('.g_b').forEach(b=>{b.checked=fn(b.checked)});gUi()}
+$('g_boxes').onchange=gUi;$('g_all').onclick=()=>gSet(()=>true);$('g_none').onclick=()=>gSet(()=>false);$('g_inv').onclick=()=>gSet(c=>!c);
+async function gSend(cmd){const p=C?+C.app.bracelets.protocol:0,rgb=[1,3,5].map(k=>parseInt($('g_col').value.substr(k,2),16));let pk;
+  if(p==0){const m=gMask();if(!m)return toast('Tick at least one group');
+    pk=[0,m&255,m>>8,0x0F,...(cmd==='color'?[1,nearest(...rgb)]:cmd==='off'?[0,0xAA]:cmd==='fin'?[5,0xAA]:[6,0xAA]),0]}
+  else pk=buildPkt(1,[+$('g_grp').value&255,0xFF],rgb,cmd==='off');
+  await api('raw',{protocol:p,hex:fixSum(p,pk).map(x=>hx(x)).join(''),fix:false});toast('Sent to '+(p==0?maskWords(pk[1],pk[2]):pk[1]?'group '+pk[1]:'every group'))}
+$('g_send').onclick=()=>gSend('color');$('g_off').onclick=()=>gSend('off');$('g_fin').onclick=()=>gSend('fin');$('g_fout').onclick=()=>gSend('fout');
+
+let RW={on:false,n:0,last:''};
+$('rw_start').onclick=async()=>{RW={on:true,n:0,last:''};$('rw_n').textContent='0';await api('test',{mode:'cycle',rgb:'000000'});poll()};
+$('rw_stop').onclick=async()=>{RW.on=false;await api('test',{mode:'off',rgb:'000000'});poll()};
+$('rw_setpow').onclick=async()=>{const r=S.engine.radio,v=Math.max(r.min_power,Math.min(r.max_power,Math.round(+$('rw_pow').value)));
+  await api('config',{radio:{tx_power:v}});await loadConfig();$('rw_pow').value=v;toast('TX power '+v+' dBm')};
+function rwTick(){const r=S.engine.radio,z=S.engine.zones[0];$('rw_hint').textContent=`${r.min_power} to ${r.max_power} dBm; lower it until the far edge just starts to miss, then go back up a step`;
+  if(C&&document.activeElement!==$('rw_pow')&&$('rw_pow').value==='')$('rw_pow').value=C.app.radio.tx_power;
+  const cyc=S.engine.test.mode==='cycle';if(!cyc)RW.on=false;$('rw_sw').style.background=cyc&&z?'#'+z.rgb:'transparent';
+  if(RW.on&&z&&z.rgb!==RW.last){if(RW.last)RW.n++;RW.last=z.rgb;$('rw_n').textContent=RW.n}}
+
+function p0Words(b){if(b[0]===0xD0)return['–','effect C packet',''];const c=b[4],a=b[5];
+  return[maskWords(b[1],b[2]),c===1?(P0NAME[a]||'colour '+a):c===0?'off':c===5?'fade in':c===6?'fade out':'command '+hx(c)+' '+hx(a),c===1?p0rgb(a):c===0?'#000000':'']}
+function p1Words(b){const l=x=>hx((15-(x>>4))*17),rgb='#'+l(b[2])+l(b[3])+l(b[4]);return[b[1]?'group '+b[1]:'every group',rgb==='#000000'?'off':rgb.toUpperCase(),rgb]}
+async function toolsLive(){let t;try{t=await(await fetch('/api/tools')).json()}catch(e){return}
+  $('tl_total').textContent=t.tx_total?`${fmtN(t.tx_total)} sent since boot.`:'';
+  $('tl_rows').innerHTML=t.tx.length?t.tx.map(e=>{const b=bytes(e.pkt),[to,cmd,col]=e.p==0?p0Words(b):p1Words(b);
+    return `<tr><td class="dim nw">${fmtAge(e.age_ms)}</td><td>${esc(to)}</td><td class="nw">${col?`<span class="sw" style="background:${col}"></span> `:''}${esc(cmd)}</td><td class="mono nw">${b.map(x=>hx(x)).join(' ')}</td><td class="dim small nw">${e.ok?'':'<span class="badge bad">failed</span> '}${e.manual?'manual':''}${e.n>1?' ×'+e.n:''}</td></tr>`}).join(''):'<tr><td colspan="5" class="dim">Nothing sent yet.</td></tr>';
+  const i=t.input,w=i.width,zs=C?C.app.zones:[];
+  $('im_rows').innerHTML=zs.map((z,k)=>{const v=i.channels.slice(k*w,k*w+w),g=S.engine.zones[k]||{},s=i.start+k*w;
+    return `<tr class="${z.enabled?'':'dim'}"><td class="nw">${esc(z.name)}</td><td class="dim nw">${s}-${s+w-1}</td><td class="mono nw">${v.join(' ')}</td><td class="nw">${g.rgb?`<span class="sw" style="background:#${g.rgb}"></span> <span class="mono">#${g.rgb}</span>`:''}${g.fx?` <span class="dim small">FX ${g.fx}</span>`:''}</td></tr>`}).join('');
+  $('im_note').textContent=S.engine.test.mode!=='off'?'Test mode is on: the zones show the test colours, not these values.':!i.seen?'No show data received yet.':'Last packet '+fmtAge(i.age_ms)+'.'}
+
+let CM={timer:null,peak:-127,floor:0};
+async function cmTick(){let r;try{const x=await fetch('/api/rssi');r=await x.json();if(!x.ok)throw new Error(r.error||x.status)}catch(e){$('cm_info').textContent=String(e.message||e);return}
+  CM.peak=Math.max(CM.peak,r.peak_dbm);CM.floor=Math.min(CM.floor,r.avg_dbm);$('cm_now').textContent=r.peak_dbm;
+  const pct=Math.max(0,Math.min(100,(r.peak_dbm+120)/90*100)),thr=C?C.app.radio.lbt_threshold_dbm:-75;
+  $('cm_bar').className='util'+(r.peak_dbm>=thr?' bad':r.peak_dbm>=thr-10?' warn':'');$('cm_bar').firstElementChild.style.width=pct+'%';
+  $('cm_info').textContent=`${(r.freq_hz/1e6).toFixed(3)} MHz · average ${r.avg_dbm} dBm · strongest seen ${CM.peak} dBm · quietest average ${CM.floor} dBm · busy threshold ${thr} dBm`}
+$('cm_start').onclick=()=>{clearInterval(CM.timer);CM={timer:setInterval(cmTick,400),peak:-127,floor:0};cmTick()};
+$('cm_stop').onclick=()=>{clearInterval(CM.timer);CM.timer=null};
+
+const okBadge=(ok,t)=>`<span class="badge ${ok?'good':'bad'}">${ok?'ok':'failed'}</span> <span class="dim small">${esc(t)}</span>`;
+async function ncShow(){let r;try{r=await api('net/check')}catch(e){return}
+  if(r.running){$('nc_state').textContent='checking…';setTimeout(ncShow,700);return}
+  $('nc_run').disabled=false;$('nc_state').textContent=r.dns?`done ${r.done_ago_s<5?'just now':fmtUp(r.done_ago_s)+' ago'}`:'';if(!r.dns)return;
+  const n=S.network,rows=[['Controller',`${esc(n.ip)} <span class="dim small">${esc(n.interface)}</span>`],['Look up '+r.host,okBadge(r.dns.ok,r.dns.ok?`${r.dns.ip} in ${r.dns.ms} ms`:'DNS did not answer: check the DNS server and gateway on the Network page')]];
+  if(r.dns.ok)rows.push(['Connect (port 443)',okBadge(r.tcp.ok,r.tcp.ok?`${r.tcp.ms} ms`:'no route to the internet, or a firewall is blocking it')]);
+  if(r.dns.ok&&r.tcp.ok)rows.push(['Secure request',okBadge(r.https.ok,r.https.ok?`HTTP ${r.https.status} in ${r.https.ms} ms`:(r.https.error||'failed')+(r.https.status?`, HTTP ${r.https.status}`:''))]);
+  rows.push(['Result',r.dns.ok&&r.tcp.ok&&r.https.ok?'The controller can reach GitHub: update checks and installs will work.':'The controller cannot reach GitHub. Updates still work by uploading the .bin file on the System page.']);kv($('nc_out'),rows)}
+$('nc_run').onclick=async()=>{$('nc_run').disabled=true;try{await api('net/check',{})}catch(e){$('nc_run').disabled=false;return}setTimeout(ncShow,500)};
+
+$('idn_go').onclick=()=>api('identify',{seconds:15}).then(()=>toast('Identifying for 15 s'));
+$('idn_stop').onclick=()=>api('identify',{seconds:0});
 // tools: address probe
 const PAL=[[0,255,0,0],[1,0,255,0],[2,0,0,255],[3,255,0,128],[4,255,255,255],[5,255,255,0],[8,148,0,211],[9,255,128,0],[10,75,0,130],[11,0,255,255]];
 const p1c=v=>((15-Math.floor((15*v+127)/255))<<4)|15;
@@ -731,8 +834,14 @@ $('a_clear').onclick=async()=>{if(!await ask('Remove the admin password? Anyone 
   await api('auth',{password:''});toast('Admin password removed');poll()};
 function displayUi(){const di=S.device.display_info;if(!di)return;
   $('o_state').innerHTML=di.present?`<span class="badge good">${di.type.toUpperCase()} at ${di.address}</span>`+(di.pins_swapped?' <span class="badge warn">SDA/SCL wired swapped (working anyway)</span>':''):'<span class="badge warn">No display found</span> <span class="dim">(looking at 0x3C / 0x3D every 5 s)</span>';
-  if(document.activeElement!==$('o_type'))$('o_type').value=di.type}
-$('o_dispSave').onclick=async()=>{await api('display',{type:$('o_type').value});toast('Display type saved; re-detecting…');setTimeout(poll,1500)};
+  if(di.present&&di.asleep)$('o_state').innerHTML+=' <span class="badge">asleep</span>';
+  $('o_sleepHint').textContent=(di.button?'without a USER button press; the next press wakes it. ':'no USER button fitted: wake it here. ')+'It also wakes after a reboot, when the network address changes and when the radio fails. 0 = never';
+  $('o_wake').disabled=!di.present;
+  if(document.activeElement!==$('o_type'))$('o_type').value=di.type;if(document.activeElement!==$('o_sleep'))$('o_sleep').value=di.sleep_min}
+$('o_wake').onclick=async()=>{await api('display',{wake:true});toast('Display woken');setTimeout(poll,600)};
+$('o_dispSave').onclick=async()=>{const di=S.device.display_info||{},body={sleep_min:Math.max(0,Math.min(240,+$('o_sleep').value||0)),wake:true};
+  const retype=$('o_type').value!==di.type;if(retype)body.type=$('o_type').value;
+  await api('display',body);toast(retype?'Display settings saved; re-detecting…':'Display settings saved');setTimeout(poll,1500)};
 $('o_scan').onclick=async()=>{const r=await api('i2c/scan');const out=$('o_scanOut');out.classList.remove('hide');
   out.textContent=(r.devices.length?'Devices found: '+r.devices.join(', '):'No I2C devices answered.')+
     `\nSDA (IO5) idle: ${r.sda_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+

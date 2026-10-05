@@ -50,6 +50,11 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/test` | `{"mode": "off"\|"solid"\|"cycle", "rgb": "FF0000"}`: override DDP input |
 | POST 🔒 | `/api/send` | `{"zone": 0, "action": "color"\|"off"\|"fxa"\|"fxb"\|"fxc", "rgb": "FF0000"}` (protocol 0: `fxa` = fade in to the last colour, `fxb` = fade out, `fxc` = a third effect packet with no known result); `"zone": "all"` (or -1) = every bracelet: one broadcast packet on protocol 1, one per enabled zone on protocol 0. `"all"` + `"off"` behaves like `/api/all-off`. 400 for a zone that isn't saved; 409 when output is disabled. |
 | POST 🔒 | `/api/all-off` | Leave test mode and switch every bracelet off. Bracelets then stay off until the input changes a colour. 409 when output is disabled. |
+| GET | `/api/tools` | Live data for the Tools page: `tx` = the last 24 transmissions, newest first (`age_ms`, `p` protocol, `pkt` hex, `n` repeats, `manual`, `ok`), `tx_total`, and `input` (`start`, `width`, `channels`: the raw values the zones read). Always open. |
+| GET 🔒 | `/api/rssi` | Listen on the bracelet frequency for about 20 ms, between transmissions: `peak_dbm`, `avg_dbm`, `freq_hz`. 409 if the radio can't listen (off, not ready). |
+| POST 🔒 | `/api/identify` | `{"seconds": 15}` (0-120; 0 stops): flicker the status LED and flash the OLED |
+| POST / GET 🔒 | `/api/net/check` | Start / read a connection check to GitHub: `dns` (`ok`, `ms`, `ip`), `tcp` (port 443), `https` (`ok`, `ms`, `status`), `running`. 409 while a check or update is running. |
+| POST 🔒 | `/api/display` | Any of `{"type": "ssd1306"\|"sh1106", "sleep_min": 10, "wake": true}`: OLED driver, minutes without a USER press before it sleeps (0-240, 0 = never), and switch a sleeping display back on. `device.display_info` in `/api/status` has `asleep`, `sleep_min` and `button`. |
 | POST 🔒 | `/api/raw` | `{"protocol": 1, "hex": "55000FFFFF55FF", "repeats": 3, "fix": true}`. 409 when output is disabled. |
 | POST 🔒 | `/api/stats/reset` | Zero the packet counters |
 | POST / GET 🔒 | `/api/wifi/scan` | Start a scan / read results |
@@ -102,6 +107,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 - `radio.type`: `cc1101` or `sx1278`. `tx_power` is clamped to the module's range. `refresh_ms` defaults to 0
   (send on change only): the bracelets latch, and extra airtime only adds interference.
 - `radio.power`: `false` = radio chip shut down (same as `POST /api/radio`).
+- `display.sleep_min`: minutes without a USER button press before the OLED switches off (default 10, 0 = never).
 - `update.repo`: GitHub repository (`owner/name`) whose releases the firmware update checks and installs.
   Default `mikeneiderhauser/net2rf-led`; `""` restores the default.
 - `update.auto_check` (default `true`) and `update.check_hours` (1-168, default 12): the controller looks up the
