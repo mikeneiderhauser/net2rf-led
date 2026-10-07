@@ -88,3 +88,12 @@ Parked for now (2026-10-04): not a priority. To sort out when it is:
   transmitter comes and goes; otherwise fix the LNA gain or add an RSSI trigger.
 - [ ] Raw captures: check a real protocol 0 / protocol 1 burst against the bit guess, and an `.ook` export in
   rtl_433.
+- [ ] Receiver mode output over the network (after the decoder is proven on air with a second controller):
+  1. **DDP out** of what the receiver tracks: one pixel per group (All first, then groups 1-15, the same layout
+     the controller takes as input) to a configured address, sent on change plus a slow repeat. Drives WLED / FPP /
+     any DDP device from someone else's transmitter, and makes a second controller a repeater with no new protocol.
+     To decide: fixed RGB values for protocol 0's ten colours; fade out = black, fade in = the last colour; check
+     that a receiver hearing its own relay doesn't loop.
+  2. **Event feed**, later: one JSON line per decoded transmission (protocol, group, command, signal strength) over
+     UDP or a live HTTP stream, for logging and Home Assistant.
+  Raw pulse timings stay a download (`/api/rx/capture`): not worth streaming.
