@@ -122,7 +122,7 @@ signal strength is shown per transmission), or as a stand-in bracelet while you 
 | Button | Action |
 |---|---|
 | **USER**, short press | Next OLED page |
-| **USER**, hold 5 s | **Network reset:** DHCP, Ethernet on, setup hotspot on fallback, admin password cleared, then reboot. Zones and bracelet settings are kept. |
+| **USER**, hold 5 s | **Network reset:** DHCP, Ethernet on, setup hotspot on fallback, admin password cleared, then reboot. Everything outside the network part is kept. |
 | **USER**, hold 15 s | **Factory reset:** everything erased, then reboot |
 | **EN** | Reset (reboot) |
 | **BOOT** + EN | Hold BOOT, tap EN, release BOOT: serial bootloader, for flashing ([ASSEMBLY.md](ASSEMBLY.md#flashing)) |
@@ -196,11 +196,30 @@ controller reboots.
 30 s. If it crashes or never becomes reachable within 3 minutes, it returns to the previous firmware by itself,
 and the System page says so.
 
-## Backing up settings
+## Settings: two parts, handled separately
 
-**System → Configuration → Export settings** downloads the settings as a JSON file (the Wi-Fi password is never included).
-**Import** restores one, optionally with its network settings, then reboots. This is handy for setting up a
-second controller the same way.
+The controller keeps its settings in two parts:
+
+| Part | What's in it |
+|---|---|
+| **Network** | Hostname, Ethernet on/off, Wi-Fi network, IP settings, setup hotspot, admin password |
+| **Settings** | Everything else: controller name, zones, devices, radio, input, display, update check |
+
+Each part is exported, imported and reset by itself, under **System**:
+
+- **Export settings / Export network** download one part as its own JSON file (`net2rf-xxxx-settings.json`,
+  `net2rf-xxxx-network.json`). Neither includes the Wi-Fi or admin password.
+- **Import** replaces only the part the chosen file holds, then reboots. To set up a second controller the same
+  way, import the first one's *settings* file and leave its network alone.
+- **Reset settings** puts zones, devices, radio and the rest back to defaults and keeps the network
+  connection.
+- **Reset network** goes back to DHCP, forgets the Wi-Fi network and clears the admin password, and keeps
+  everything else. The controller may come up on another address or on its setup hotspot. Holding USER for
+  5 s does the same.
+- **Factory reset** clears both. Holding USER for 15 s does the same.
+
+Settings are not converted between firmware versions with a different settings layout: after such an update
+the affected part starts from its defaults. Export before updating if you want to restore it.
 
 ## Finding the controller from FPP or xLights
 
@@ -223,6 +242,7 @@ at `net2rf.local`. Controllers in radio range of each other share the 433 MHz ch
 |---|---|
 | Can't find it after a network change (bad static IP, wrong Wi-Fi) | Hold USER 5 s (network reset), then connect via Ethernet/DHCP or the setup hotspot |
 | Forgot the admin password | Hold USER 5 s (network reset) |
+| Zones or radio settings are a mess, but it's on the network | *System → Reset settings* (keeps the network part) |
 | Everything is wrong | Hold USER 15 s (factory reset), or *System → Factory reset* |
 | A firmware update misbehaves | It rolls back by itself; otherwise flash the `.factory.bin` over serial ([ASSEMBLY.md](ASSEMBLY.md#flashing)) |
 | Radio *not detected* | Check the radio's wiring and 3.3 V, and that the right module is selected under *Devices & Radio* |

@@ -251,8 +251,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/wifi/scan":
             return self.send(200, {"running": False, "networks": [{"ssid": "HomeNet", "rssi": -52, "secure": True},
                                                                    {"ssid": "Guest", "rssi": -71, "secure": False}]})
-        if path == "/api/export":
-            return self.send(200, {"format": "net2rf-led", "app": APP, "network": NET})
+        if path == "/api/export":  # ?part=settings | network: one part per file
+            part = self.path.partition("part=")[2].split("&")[0]
+            out = {"format": "net2rf-led"}
+            if part != "network":
+                out["app"] = APP
+            if part != "settings":
+                out["network"] = NET
+            return self.send(200, out)
         if path == "/api/discover":
             def st(radio="ready", inp="live", out=True, test=False, zones=4, up=86400):
                 return {"radio": radio, "input": inp, "output_enabled": out, "test": test, "zones": zones,
@@ -365,7 +371,7 @@ class Handler(BaseHTTPRequestHandler):
             reboot = True
         elif path == "/api/test":
             TEST.update(body)
-        elif path in ("/api/reboot", "/api/factory-reset", "/api/import"):
+        elif path in ("/api/reboot", "/api/factory-reset", "/api/import", "/api/reset"):
             reboot = True
         self.send(200, {"ok": True, "reboot": reboot})
 

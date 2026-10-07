@@ -63,8 +63,6 @@ struct AppConfig {
     uint8_t e131_multicast; // also join the universe's multicast group
     uint16_t e131_universe;
     ZoneConfig zones[MAX_ZONES];
-    // ---- added after the first release: keep new fields at the end (config_load() accepts the shorter
-    // layout saved by older firmware and fills these with defaults) ----
     uint8_t lbt_enabled;    // listen before transmit: wait for a clear channel (other controllers, key fobs)
     int8_t lbt_threshold;   // dBm; a channel louder than this counts as busy
     uint8_t radio_off;      // radio chip powered down: nothing is transmitted until it is switched back on
@@ -119,7 +117,8 @@ void config_defaults_app(AppConfig &c);
 void config_defaults_net(NetConfig &c);
 // Zone `index` back to its default name and addresses (zone 0 = every group, zone N = group N); protocols kept.
 void config_reset_zone(AppConfig &c, uint8_t index);
-void config_factory_reset();  // wipes everything
+void config_factory_reset();  // wipes everything: both records
+void config_settings_reset();  // everything except the network record back to defaults; network kept
 void config_network_reset();  // network settings back to defaults (DHCP, Ethernet, AP fallback); zones kept
 
 // JSON views (web API, export/import). *_from_json return false and fill `err` on invalid input.

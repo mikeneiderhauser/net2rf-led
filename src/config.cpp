@@ -9,7 +9,7 @@
 AppConfig g_app;
 NetConfig g_net;
 
-static const uint32_t APP_MAGIC = 0x52464204;  // "RFB" v4, bump when AppConfig layout changes
+static const uint32_t APP_MAGIC = 0x4E325231;  // "N2R1": bump when the AppConfig layout changes (older records are dropped)
 static const uint32_t NET_MAGIC = 0x52464E02;  // v2: admin password fields
 static const char *const NVS_NS = "rfb";
 
@@ -137,17 +137,6 @@ void config_defaults_app(AppConfig &c) {
     c.rx_profile = RX_PROFILE_NORMAL;
 }
 
-// AppConfig as saved by firmware before the listen-before-talk fields were appended.
-static const size_t APP_V4_SIZE = (offsetof(AppConfig, lbt_enabled) + 3) & ~(size_t) 3;
-// ... and before the update source was appended.
-static const size_t APP_V5_SIZE = (offsetof(AppConfig, update_repo) + 3) & ~(size_t) 3;
-// ... and before the automatic update check was appended.
-static const size_t APP_V6_SIZE = (offsetof(AppConfig, update_check_off) + 3) & ~(size_t) 3;
-// ... and before receiver mode was appended.
-static const size_t APP_V7_SIZE = (offsetof(AppConfig, receiver) + 3) & ~(size_t) 3;
-// ... and before the receiver profile was appended.
-static const size_t APP_V8_SIZE = (offsetof(AppConfig, rx_profile) + 3) & ~(size_t) 3;
-
 void config_defaults_net(NetConfig &c) {
     memset(&c, 0, sizeof(c));
     c.magic = NET_MAGIC;
@@ -159,53 +148,33 @@ void config_defaults_net(NetConfig &c) {
     strlcpy(c.ap_pass, "net2rf1234", sizeof(c.ap_pass));
 }
 
+// Settings are kept as two separate records, so either can be cleared, exported or imported without the other:
+//   "net": NetConfig - how to reach the controller (hostname, Ethernet / Wi-Fi, IP, setup hotspot, admin password)
+//   "app": AppConfig - everything else (zones, devices, radio, input, display, updates)
+// A record with another layout (older firmware) is not converted: that part starts from its defaults. When a
+// layout changes, bump its magic.
 void config_load() {
     Preferences p;
     p.begin(NVS_NS, true);
-    size_t app_len = p.getBytesLength("app");
-    bool app_ok = false;
-    if (app_len == sizeof(AppConfig) || app_len == APP_V8_SIZE || app_len == APP_V7_SIZE || app_len == APP_V6_SIZE || app_len == APP_V5_SIZE ||
-        app_len == APP_V4_SIZE) {
-        config_defaults_app(g_app);  // fields missing from an older, shorter record keep their defaults
-        app_ok = p.getBytes("app", &g_app, app_len) == app_len && g_app.magic == APP_MAGIC;
-        if (app_ok && app_len != sizeof(AppConfig))
-            log_i("Upgraded saved settings to the current layout");
-        if (app_ok && app_len <= offsetof(AppConfig, base_layer)) {
-            g_app.base_layer = 0;  // an existing setup keeps sending exactly as before until this is switched on
-        }
-    }
+    bool app_ok = p.getBytesLength("app") == sizeof(AppConfig) && p.getBytes("app", &g_app, sizeof(g_app)) &&
+                  g_app.magic == APP_MAGIC;
     bool net_ok = p.getBytesLength("net") == sizeof(NetConfig) && p.getBytes("net", &g_net, sizeof(g_net)) &&
                   g_net.magic == NET_MAGIC;
     p.end();
     if (!app_ok) {
-        log_i("No saved app config, using defaults");
+        log_i("No saved settings (or from another firmware layout), using defaults");
         config_defaults_app(g_app);
     }
     if (!net_ok) {
-        log_i("No saved network config, using defaults");
+        log_i("No saved network settings (or from another firmware layout), using defaults");
         config_defaults_net(g_net);
     }
     if (g_app.num_zones == 0 || g_app.num_zones > MAX_ZONES)
         g_app.num_zones = 1;
-    // Settings from before zones had their own protocols: every zone drove the controller's one protocol, and `addr`
-    // held that protocol's address. Keep it there (or move it to p1_addr) and give the other protocol its default.
-    for (uint8_t i = 0; i < MAX_ZONES; i++) {
-        ZoneConfig &z = g_app.zones[i];
-        if (z.protocols & rfproto::ALL_PROTOCOLS)
-            continue;
-        uint8_t old[4];
-        memcpy(old, z.addr, 4);
-        zone_default_addresses(z, i);
-        if (g_app.protocol == 1)
-            memcpy(z.p1_addr, old, 2);
-        else
-            memcpy(z.addr, old, 4);
-        z.protocols = rfproto::PROTOCOL_BIT[g_app.protocol & 1];
-    }
-    if (g_app.radio_type >= NUM_RADIO_TYPES)  // e.g. the removed plain-OOK option
+    if (g_app.radio_type >= NUM_RADIO_TYPES)
         g_app.radio_type = RADIO_CC1101;
     g_app.update_repo[sizeof(g_app.update_repo) - 1] = 0;
-    if (!updater::valid_repo(g_app.update_repo))  // also an older record, whose padding lands here
+    if (!updater::valid_repo(g_app.update_repo))
         strlcpy(g_app.update_repo, updater::DEFAULT_REPO, sizeof(g_app.update_repo));
     if (g_app.update_check_hours < 1 || g_app.update_check_hours > 168)
         g_app.update_check_hours = UPDATE_CHECK_DEFAULT_HOURS;
@@ -235,6 +204,11 @@ void config_factory_reset() {
 void config_network_reset() {
     config_defaults_net(g_net);
     config_save_net(g_net);
+}
+
+void config_settings_reset() {
+    config_defaults_app(g_app);
+    config_save_app(g_app);
 }
 
 // ---------------------------------------------------------------------------------------------

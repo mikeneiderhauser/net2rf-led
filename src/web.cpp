@@ -513,54 +513,89 @@ static void handle_raw() {
     send_ok();
 }
 
+// Settings come in two parts, kept and handled separately: "network" (how to reach the controller) and "settings"
+// (everything else). GET /api/export?part=settings|network downloads one part as its own file; without `part`
+// the file holds both.
 static void handle_export() {
+    String part = s_server.arg("part");
+    if (part.length() && part != "settings" && part != "network") {
+        send_error(400, "part must be settings or network");
+        return;
+    }
     JsonDocument doc;
     doc["format"] = "net2rf-led";
     doc["firmware"] = FW_VERSION;
     {
         StateLock lock;
-        app_to_json(g_app, doc["app"].to<JsonObject>());
-        net_to_json(g_net, doc["network"].to<JsonObject>(), false);  // never export the Wi-Fi password
+        if (part != "network")
+            app_to_json(g_app, doc["app"].to<JsonObject>());
+        if (part != "settings")
+            net_to_json(g_net, doc["network"].to<JsonObject>(), false);  // never export the Wi-Fi password
     }
     String body;
     serializeJsonPretty(doc, body);
-    String name = String("net2rf-") + device_suffix() + ".json";
+    String name = String("net2rf-") + device_suffix() + (part.length() ? "-" + part : String()) + ".json";
     s_server.sendHeader("Content-Disposition", "attachment; filename=\"" + name + "\"");
     s_server.send(200, "application/json", body);
 }
 
+// Imports whichever parts the file holds: "app" (settings), "network", or both. The other part is left alone.
 static void handle_import() {
     JsonDocument doc;
     if (!parse_body(doc))
         return;
-    if (doc["app"].isNull()) {
-        send_error(400, "not a controller config file");
+    bool has_app = !doc["app"].isNull(), has_net = !doc["network"].isNull();
+    if (!has_app && !has_net) {
+        send_error(400, "not a controller settings file");
         return;
     }
     String err;
-    bool include_net = doc["include_network"] | false;
     AppConfig next;
     NetConfig next_net;
     {
         StateLock lock;
         next = g_app;
-        if (!app_from_json(doc["app"].as<JsonObjectConst>(), next, err)) {
-            send_error(400, err);
-            return;
-        }
         next_net = g_net;
-        if (include_net && !doc["network"].isNull() &&
-            !net_from_json(doc["network"].as<JsonObjectConst>(), next_net, err)) {
+        if (has_app && !app_from_json(doc["app"].as<JsonObjectConst>(), next, err)) {
             send_error(400, err);
             return;
         }
-        g_app = next;
-        if (include_net)
+        if (has_net && !net_from_json(doc["network"].as<JsonObjectConst>(), next_net, err)) {
+            send_error(400, err);
+            return;
+        }
+        if (has_app)
+            g_app = next;
+        if (has_net)
             g_net = next_net;
     }
-    config_save_app(next);
-    if (include_net)
+    if (has_app)
+        config_save_app(next);
+    if (has_net)
         config_save_net(next_net);
+    schedule_reboot();
+    send_ok(true);
+}
+
+// Clear one part of the settings, or both: {"what": "settings" | "network" | "all"}. Reboots.
+static void handle_reset() {
+    JsonDocument doc;
+    if (!parse_body(doc))
+        return;
+    String what = doc["what"] | "";
+    if (what == "settings") {
+        StateLock lock;
+        config_settings_reset();
+    } else if (what == "network") {
+        StateLock lock;
+        config_network_reset();
+    } else if (what == "all") {
+        config_factory_reset();
+    } else {
+        send_error(400, "what must be settings, network or all");
+        return;
+    }
+    log_i("Reset: %s", what.c_str());
     schedule_reboot();
     send_ok(true);
 }
@@ -952,6 +987,7 @@ void begin() {
                 }));
     s_server.on("/api/export", HTTP_GET, protect(handle_export));
     s_server.on("/api/import", HTTP_POST, protect(handle_import));
+    s_server.on("/api/reset", HTTP_POST, protect(handle_reset));
     s_server.on("/api/reboot", HTTP_POST, protect([]() {
                     schedule_reboot();
                     send_ok(true);

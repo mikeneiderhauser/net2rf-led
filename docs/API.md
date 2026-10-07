@@ -58,10 +58,11 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/raw` | `{"protocol": 1, "hex": "55000FFFFF55FF", "repeats": 3, "fix": true}`. 409 when output is disabled. |
 | POST 🔒 | `/api/stats/reset` | Zero the packet counters |
 | POST / GET 🔒 | `/api/wifi/scan` | Start a scan / read results |
-| GET 🔒 | `/api/export` | Download settings (never includes the Wi-Fi password) |
-| POST 🔒 | `/api/import` | Body = an export file; add `"include_network": true` to also import network settings. Reboots. |
+| GET 🔒 | `/api/export` | Download settings. `?part=settings` gives the `app` part, `?part=network` the `network` part, each as its own file; without `part` the file holds both. Passwords are never included. |
+| POST 🔒 | `/api/import` | Body = an export file. Replaces the parts it holds (`app`, `network` or both) and leaves the other alone. Reboots. |
+| POST 🔒 | `/api/reset` | `{"what": "settings"\|"network"\|"all"}`: put that part back to defaults (`all` = both). Reboots. |
 | POST 🔒 | `/api/reboot` | Reboot |
-| POST 🔒 | `/api/factory-reset` | Erase all settings and reboot |
+| POST 🔒 | `/api/factory-reset` | Same as `/api/reset` with `all` |
 | POST 🔒 | `/api/update/check` | Ask GitHub for the latest release now (also works with the automatic check off). The result appears in `device.update_check` a few seconds later. |
 | POST 🔒 | `/api/update/github` | `{"tag": "v1.2.3", "asset": "net2rf-led-1.2.3.bin"}`: the controller downloads that file from the release of the configured repository (`update.repo`) over HTTPS and flashes it, then reboots. Returns at once; progress is `device.update_job` in `/api/status` (`state`: `idle` / `downloading` / `done` / `failed`, `progress` in %, `error`). 409 while an update is running. Needs internet access. |
 | POST 🔒 | `/update` | `multipart/form-data` firmware upload (`firmware.bin`). Origin and credentials are checked before anything is written to flash. Reboots when done; see *Update rollback*. |

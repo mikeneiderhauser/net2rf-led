@@ -407,14 +407,18 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <p class="dim small">The dashboard and <span class="mono">/api/stats</span> stay readable without it. Forgot it? Hold the front-panel button 5&nbsp;s (network reset) to clear it.</p>
     </div>
     <div class="card"><h2>Configuration</h2>
-      <div class="actions" style="margin-top:0"><a href="/api/export"><button>Export settings</button></a>
-        <label class="small dim" style="display:flex;align-items:center;gap:6px"><input type="file" id="s_import" accept=".json"> </label>
-        <label class="small" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="s_impNet"> include network settings</label>
-        <button id="s_importBtn" disabled>Import</button></div>
-      <p class="dim small">Exports never include the Wi-Fi password.</p>
+      <p class="dim small" style="margin-top:0">The controller keeps two separate sets of settings: <b>network</b> (hostname, Ethernet / Wi-Fi, IP address, setup hotspot, admin password) and <b>settings</b> (everything else: zones, devices, radio, input, display, updates). Each is exported, imported and reset by itself.</p>
+      <div class="actions" style="margin-top:0"><a href="/api/export?part=settings"><button>Export settings</button></a><a href="/api/export?part=network"><button>Export network</button></a></div>
+      <div class="actions"><label class="small dim" style="display:flex;align-items:center;gap:6px"><input type="file" id="s_import" accept=".json"> </label>
+        <button id="s_importBtn" disabled>Import</button><span class="small dim" id="s_importWhat"></span></div>
+      <p class="dim small">An import replaces only the part the file holds. Exports never include the Wi-Fi or admin password.</p>
     </div>
     <div class="card"><h2>Maintenance</h2>
-      <div class="actions" style="margin-top:0"><button id="s_reboot">Reboot</button><button class="danger" id="s_factory">Factory reset</button></div>
+      <div class="actions" style="margin-top:0"><button id="s_reboot">Reboot</button></div>
+      <div class="actions"><button class="danger" id="s_resetApp" title="Zones, devices, radio, input, display and update settings go back to defaults. Network settings are kept.">Reset settings</button>
+        <button class="danger" id="s_resetNet" title="Hostname, Ethernet / Wi-Fi, IP address, hotspot and admin password go back to defaults. Everything else is kept.">Reset network</button>
+        <button class="danger" id="s_factory" title="Both of the above">Factory reset</button></div>
+      <p class="dim small">Reset settings keeps the network connection. Reset network keeps your zones and radio settings, but the controller goes back to DHCP and forgets its Wi-Fi, so it may come up on another address or on its setup hotspot.</p>
     </div>
     <details class="card adv" id="s_adv"><summary>Advanced: flash storage</summary>
       <div class="small dim" id="s_flashSum" style="margin-top:10px"></div>
@@ -1003,11 +1007,20 @@ function ghJob(){const j=S.device.update_job;if(!j||j.state==='idle'||!ghWatch&&
   else if(j.state==='done'){ghWatch=false;pr.value=100;msg.textContent=`${j.tag} installed. Rebooting…`;setTimeout(()=>location.reload(),12000)}
   else if(j.state==='failed'){ghWatch=false;pr.classList.add('hide');
     msg.innerHTML=`<span class="badge bad">update failed</span> ${esc(j.error||'')}.`+(GH?` If the controller has no internet access, <a href="${esc(GH.url)}" rel="noopener">download the .bin</a> and upload it above.`:'')}}
-$('s_import').onchange=()=>{$('s_importBtn').disabled=!$('s_import').files.length};
+// what a settings file holds: "settings", "network" or both
+const cfgParts=c=>[c.app?'settings':'',c.network?'network':''].filter(Boolean);
+$('s_import').onchange=async()=>{const f=$('s_import').files[0];$('s_importBtn').disabled=true;$('s_importWhat').textContent='';if(!f)return;
+  let c;try{c=JSON.parse(await f.text())}catch(e){$('s_importWhat').textContent='not a valid JSON file';return}
+  const p=cfgParts(c);if(!p.length){$('s_importWhat').textContent='not a controller settings file';return}
+  $('s_importWhat').textContent='holds '+p.join(' and ');$('s_importBtn').disabled=false};
 $('s_importBtn').onclick=async()=>{let cfg;try{cfg=JSON.parse(await $('s_import').files[0].text())}catch(e){return toast('Not a valid JSON file',3000)}
-  cfg.include_network=$('s_impNet').checked;if(!await ask('Import these settings and reboot?'))return;const j=await api('import',cfg);afterSave(j,'Settings')};
+  const p=cfgParts(cfg);if(!await ask(`Replace the ${p.join(' and ')} ${p.length>1?'parts':'part'} with this file and reboot?`+(p.includes('network')?' The controller may come back on another address.':'')))return;
+  const j=await api('import',cfg);afterSave(j,'Import')};
 $('s_reboot').onclick=async()=>{if(await ask('Reboot the controller?')){await api('reboot',{});toast('Rebooting…',5000);setTimeout(()=>location.reload(),7000)}};
-$('s_factory').onclick=async()=>{if(await ask('Erase ALL settings (zones, devices, radio, network) and reboot?')&&await ask('Really? Network settings go back to DHCP.','Erase everything')){await api('factory-reset',{});toast('Factory reset. Rebooting…',6000)}};
+const doReset=async(what,msg)=>{await api('reset',{what});toast(msg+' Rebooting…',6000);setTimeout(()=>location.reload(),9000)};
+$('s_resetApp').onclick=async()=>{if(await ask('Reset zones, devices, radio, input, display and update settings to their defaults? Network settings are kept.','Reset settings'))doReset('settings','Settings reset.')};
+$('s_resetNet').onclick=async()=>{if(await ask('Reset the network settings (hostname, Wi-Fi, IP address, hotspot, admin password)? The controller goes back to DHCP and may come up on another address or on its setup hotspot. Everything else is kept.','Reset network'))doReset('network','Network reset.')};
+$('s_factory').onclick=async()=>{if(await ask('Erase ALL settings, network included, and reboot?')&&await ask('Really? Zones, radio and network settings all go back to defaults.','Erase everything'))doReset('all','Factory reset.')};
 
 // boot
 show(location.hash.slice(1));

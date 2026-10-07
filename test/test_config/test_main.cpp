@@ -11,17 +11,6 @@ bool valid_repo(const char *) { return true; }
 
 using namespace rfproto;
 
-// Saves `c` as the firmware would, as it was laid out before zones had their own protocols: the zone's protocols and
-// p1_addr bytes were spare (zero), and `addr` held the address in the controller's one protocol.
-static void save_single_protocol(AppConfig c) {
-    for (ZoneConfig &z : c.zones) {
-        z.protocols = 0;
-        z.p1_addr[0] = z.p1_addr[1] = 0;
-    }
-    Preferences::store().clear();
-    config_save_app(c);
-}
-
 void test_defaults(void) {
     AppConfig c;
     config_defaults_app(c);
@@ -33,49 +22,67 @@ void test_defaults(void) {
     TEST_ASSERT_EQUAL_UINT8(PROTOCOL_BIT[0], zones_common_protocols(c));
 }
 
-void test_migrate_protocol0_controller(void) {
-    AppConfig old;
-    config_defaults_app(old);
-    old.protocol = 0;
-    const uint8_t custom[4] = {0x00, 0x0C, 0x00, 0x0F};  // groups 2 and 3
-    memcpy(old.zones[1].addr, custom, 4);
-    save_single_protocol(old);
-    config_load();
-    TEST_ASSERT_EQUAL_UINT8(PROTOCOL_BIT[0], g_app.zones[1].protocols);   // still protocol 0 only: no new airtime
-    TEST_ASSERT_EQUAL_HEX8_ARRAY(custom, g_app.zones[1].addr, 4);         // its address kept
-    TEST_ASSERT_EQUAL_HEX8(1, g_app.zones[1].p1_addr[0]);                 // protocol 1 address: the default
-    TEST_ASSERT_EQUAL_HEX8(0xFF, g_app.zones[1].p1_addr[1]);
-}
-
-void test_migrate_protocol1_controller(void) {
-    AppConfig old;
-    config_defaults_app(old);
-    old.protocol = 1;
-    old.mode = MODE_VENDOR;
-    for (uint8_t i = 0; i < MAX_ZONES; i++) {  // protocol 1 addresses lived in addr[0..1]
-        uint8_t a[4] = {(uint8_t) (i == 3 ? 42 : i), 0xFF, 0, 0};
-        memcpy(old.zones[i].addr, a, 4);
-    }
-    save_single_protocol(old);
-    config_load();
-    TEST_ASSERT_EQUAL_UINT8(PROTOCOL_BIT[1], g_app.zones[3].protocols);
-    TEST_ASSERT_EQUAL_HEX8(42, g_app.zones[3].p1_addr[0]);
-    TEST_ASSERT_EQUAL_HEX8(0xFF, g_app.zones[3].p1_addr[1]);
-    const uint8_t p0_group3[4] = {0x00, 0x08, 0x00, 0x0F};
-    TEST_ASSERT_EQUAL_HEX8_ARRAY(p0_group3, g_app.zones[3].addr, 4);  // protocol 0 address: the default
-    TEST_ASSERT_EQUAL_UINT8(MODE_VENDOR, g_app.mode);
-    TEST_ASSERT_FALSE(protocol_in_use(g_app, 0));
-}
-
-void test_migrated_settings_stay_migrated(void) {
+void test_settings_survive_a_save_and_load(void) {
     AppConfig c;
     config_defaults_app(c);
     c.zones[1].protocols = ALL_PROTOCOLS;
+    strlcpy(c.name, "Front Yard", sizeof(c.name));
     Preferences::store().clear();
     config_save_app(c);
     config_load();
     TEST_ASSERT_EQUAL_UINT8(ALL_PROTOCOLS, g_app.zones[1].protocols);
     TEST_ASSERT_EQUAL_UINT8(PROTOCOL_BIT[0], g_app.zones[0].protocols);
+    TEST_ASSERT_EQUAL_STRING("Front Yard", g_app.name);
+}
+
+// A record written with another layout (older firmware) is not converted: that part starts from defaults.
+void test_other_layouts_are_not_loaded(void) {
+    AppConfig c;
+    config_defaults_app(c);
+    strlcpy(c.name, "Old Layout", sizeof(c.name));
+    Preferences::store().clear();
+    config_save_app(c);
+    Preferences::store()["rfb/app"].pop_back();  // not the size this firmware saves
+    config_load();
+    TEST_ASSERT_EQUAL_STRING("Net2RF LED", g_app.name);
+
+    Preferences::store().clear();
+    c.magic ^= 1;  // the right size, but marked as another layout
+    config_save_app(c);
+    config_load();
+    TEST_ASSERT_EQUAL_STRING("Net2RF LED", g_app.name);
+}
+
+// The two parts are stored separately: clearing one leaves the other exactly as it was.
+void test_reset_one_part_keeps_the_other(void) {
+    Preferences::store().clear();
+    config_defaults_app(g_app);
+    config_defaults_net(g_net);
+    strlcpy(g_app.name, "Front Yard", sizeof(g_app.name));
+    g_app.num_zones = 9;
+    strlcpy(g_net.wifi_ssid, "ShowNet", sizeof(g_net.wifi_ssid));
+    g_net.dhcp = 0;
+    config_save_app(g_app);
+    config_save_net(g_net);
+
+    config_settings_reset();
+    config_load();
+    TEST_ASSERT_EQUAL_STRING("Net2RF LED", g_app.name);    // settings back to defaults
+    TEST_ASSERT_EQUAL_UINT8(5, g_app.num_zones);
+    TEST_ASSERT_EQUAL_STRING("ShowNet", g_net.wifi_ssid);  // network untouched
+    TEST_ASSERT_EQUAL_UINT8(0, g_net.dhcp);
+
+    strlcpy(g_app.name, "Back Yard", sizeof(g_app.name));
+    config_save_app(g_app);
+    config_network_reset();
+    config_load();
+    TEST_ASSERT_EQUAL_STRING("", g_net.wifi_ssid);         // network back to defaults
+    TEST_ASSERT_EQUAL_UINT8(1, g_net.dhcp);
+    TEST_ASSERT_EQUAL_STRING("Back Yard", g_app.name);     // settings untouched
+
+    config_factory_reset();
+    config_load();
+    TEST_ASSERT_EQUAL_STRING("Net2RF LED", g_app.name);
 }
 
 static bool apply(AppConfig &c, const char *json, String &err) {
@@ -194,9 +201,9 @@ void tearDown(void) {}
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_defaults);
-    RUN_TEST(test_migrate_protocol0_controller);
-    RUN_TEST(test_migrate_protocol1_controller);
-    RUN_TEST(test_migrated_settings_stay_migrated);
+    RUN_TEST(test_settings_survive_a_save_and_load);
+    RUN_TEST(test_other_layouts_are_not_loaded);
+    RUN_TEST(test_reset_one_part_keeps_the_other);
     RUN_TEST(test_json_controller_wide);
     RUN_TEST(test_json_per_zone);
     RUN_TEST(test_json_older_clients);
