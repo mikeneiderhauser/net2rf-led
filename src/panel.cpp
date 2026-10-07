@@ -470,7 +470,12 @@ static void draw_page(uint32_t now) {
 static void update_led(uint32_t now) {
     EngineSnapshot s = g_engine.snapshot();
     bool on;
-    if (s_identify_until)
+    if (s_pressed) {
+        // USER held: show what releasing will do, for boards without an OLED. Steady = just a press; a slow,
+        // even blink = network reset; a rapid blink = factory reset.
+        uint32_t held = now - s_press_start;
+        on = held < HOLD_NET_RESET_MS ? true : held < HOLD_FACTORY_MS ? (now / 500) % 2 : (now / 80) % 2;
+    } else if (s_identify_until)
         on = (now / 60) % 2;  // identify: a rapid flicker, unlike any status pattern
     else if (s.radio_state != RadioState::READY && s.radio_state != RadioState::OFF)
         on = (now / 150) % 2;  // fast blink: radio problem

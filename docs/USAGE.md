@@ -127,7 +127,10 @@ signal strength is shown per transmission), or as a stand-in bracelet while you 
 | **EN** | Reset (reboot) |
 | **BOOT** + EN | Hold BOOT, tap EN, release BOOT: serial bootloader, for flashing ([ASSEMBLY.md](ASSEMBLY.md#flashing)) |
 
-While USER is held, the OLED shows what will happen on release. The USER button is only active if its pull-up
+While USER is held, the OLED shows what will happen on release, and the status LED shows it too, for
+controllers without a display: **steady on** while it's just a press, a **slow even blink** (once a second)
+from 5 s, when releasing resets the network part, and a **rapid blink** from 15 s, when releasing does a
+factory reset. The USER button is only active if its pull-up
 resistor is fitted (IO39 reads high at boot), so a missing button can't trigger resets.
 
 ### Status LED
@@ -140,6 +143,7 @@ The WT32-ETH01's onboard LED (IO2):
 | Fast blink | Radio not detected or still starting |
 | Double blink | Setup hotspot active, no network connection |
 | Rapid flicker | *Identify* is running (Tools page) |
+| Steady on, then slow blink, then rapid blink | USER is being held: see [Buttons](#buttons) |
 
 ### OLED
 
