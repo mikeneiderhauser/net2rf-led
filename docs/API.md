@@ -73,21 +73,30 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
   "name": "Front Yard",
   "output_enabled": true,
   "role": "controller",
-  "bracelets": {"protocol": 1, "mode": "pixel", "color_order": "RGB"},
+  "bracelets": {"protocols": [0, 1], "per_zone": true, "protocol": 0, "mode": "pixel", "color_order": "RGB"},
   "input":     {"ddp_enabled": true, "ddp_port": 4048, "e131_enabled": false, "e131_universe": 1,
                 "e131_multicast": true, "start_channel": 1, "timeout_s": 300},
   "radio":     {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000,
                 "repeats": 3, "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
                 "lbt_enabled": false, "lbt_threshold_dbm": -75, "power": true},
   "zones": [
-    {"enabled": true, "name": "Left side", "addr": "00FF", "start": 1},
-    {"enabled": true, "name": "Right side", "addr": "01FF", "start": 4}
+    {"enabled": true, "name": "Bracelets", "protocols": [0], "addr_p0": "0002000F", "addr_p1": "01FF", "start": 1},
+    {"enabled": true, "name": "Pucks", "protocols": [1], "addr_p0": "0004000F", "addr_p1": "05FF", "start": 4},
+    {"enabled": true, "name": "Everyone", "protocols": [0, 1], "addr_p0": "00FFFF0F", "addr_p1": "00FF", "start": 7}
   ]
 }
 ```
 
-- `bracelets.protocol`: 0 = Shenzen New Dody (433.889 MHz, 10-colour palette), 1 = LedGiftSupplier.com
-  (433.920 MHz, RGB, group codes). Changing it without sending `zones` resets every zone address to the default.
+- Protocols: 0 = Shenzen New Dody (433.889 MHz, 10-colour palette), 1 = LedGiftSupplier.com (433.920 MHz, RGB,
+  group codes). **Each zone drives its own** (`zones[].protocols`: `[0]`, `[1]` or `[0, 1]`), and only those go
+  on air: a zone on `[0]` never costs protocol 1 airtime. A zone on both sends every change twice, protocol 0 then
+  protocol 1 (an FX channel effect becomes "off" for fade out, and the plain colour otherwise, on protocol 1,
+  which has no effects). Broadcasts (All off, input-timeout blanking, test colours) go only to protocols some
+  enabled zone uses.
+- `bracelets.protocols` (write): sets every zone at once. Read: what every zone uses, or, with `per_zone: true`,
+  what the zones use between them. `bracelets.protocol` is the default protocol (new zones when they differ, the
+  channel meter); an older client that changes it switches every zone to that protocol. Zones always keep an
+  address in both protocols, so nothing has to be re-entered when a zone changes protocol.
 - `bracelets.base_layer` (protocol 0): the zone addressed to every group (mask `FFFF`) is a base layer. A zone
   whose colour is not black is cut out of that zone's address ("everyone except"), so base changes don't
   reach it; a black zone follows the base and gets no packet of its own while the base's broadcast covers
@@ -95,13 +104,18 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
   combined. Default `true` for new settings, `false` for settings saved by older firmware. In `/api/status` the
   base zone's `packet` shows the address actually used (e.g. `00FBFF0F` with group 2 cut out).
 - `bracelets.mode`: `pixel` (3 channels per zone: R G B in `color_order`), `dmx` (4: R, G, B, FX) or `vendor`
-  (5: boot code, group, R, G, B, the LedGiftSupplier DMX transmitter's layout; protocol 1 only). In `vendor` mode a
-  zone only transmits while its first channel is 85, and the group comes from its second channel.
-- `zones[].addr`: protocol 0 = 4 bytes (packet bytes 0-3; `00FFFF0F` = all groups, `0002000F` = group 1,
-  `0004000F` = group 2, ...); protocol 1 = group code byte + byte 6 (`00FF` = group 0, all groups; `01FF` =
-  group 1). Factory default: protocol 0 with five zones, *All Zones* and *Zone 1* to *4* (groups 1-4). Zone
-  *k* defaults to group *k*, and zone 0 to all groups. `zones[].start` is read-only: zone *k* starts at
-  `start_channel + k × (3, 4 or 5)`.
+  (5: boot code, group, R, G, B, the LedGiftSupplier DMX transmitter's layout). Vendor mode drives protocol 1 only,
+  so every enabled zone must use protocol 1 (a zone also on protocol 0 sends only protocol 1). A zone only transmits
+  while its first channel is 85, and the group comes from its second channel.
+- `zones[].addr_p0`: 4 bytes (packet bytes 0-3; `00FFFF0F` = all groups, `0002000F` = group 1, `0004000F` =
+  group 2, ...). `zones[].addr_p1`: group code byte + byte 6 (`00FF` = group 0, all groups; `01FF` = group 1).
+  Factory default: protocol 0 with five zones, *All Zones* and *Zone 1* to *4* (groups 1-4). Zone *k* defaults
+  to group *k* in both protocols, and zone 0 to all groups. `zones[].start` is read-only: zone *k* starts at
+  `start_channel + k × (3, 4 or 5)`. Older clients and exports may send one `addr` per zone: it is read in the
+  default protocol, and the zone then drives that protocol alone. Settings saved by firmware before per-zone
+  protocols load with every zone on the controller's old protocol and its address kept.
+- `/api/status` → `engine.zones[].packets`: the last packet sent on each of the zone's protocols (`p`, `pkt`);
+  `packet` is the first of them.
 - Transmit order: zones are sent when their colour changes, taking turns. When zones that reach the same
   bracelets change together, the broader address goes first (all groups before a single group), so the more
   specific colour lands last.

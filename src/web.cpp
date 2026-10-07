@@ -746,11 +746,18 @@ static void handle_wled_post_cfg() {
         }
         if (next.mode == MODE_PIXEL && w.pixels != next.num_zones) {
             // A zone that was never set up still has the address for every group: give it its own group.
-            uint8_t every_group[4];
-            default_address(next.protocol, every_group);
-            for (uint8_t i = max<uint8_t>(next.num_zones, 1); i < w.pixels; i++)
-                if (memcmp(next.zones[i].addr, every_group, address_len(next.protocol)) == 0)
+            // New zones drive the protocols the existing ones share.
+            uint8_t p0_all[4], p1_all[4], common = zones_common_protocols(next);
+            default_address(0, p0_all);
+            default_address(1, p1_all);
+            for (uint8_t i = max<uint8_t>(next.num_zones, 1); i < w.pixels; i++) {
+                ZoneConfig &z = next.zones[i];
+                if ((!zone_uses(z, 0) || memcmp(z.addr, p0_all, 4) == 0) &&
+                    (!zone_uses(z, 1) || memcmp(z.p1_addr, p1_all, 2) == 0))
                     config_reset_zone(next, i);
+                if (i >= next.num_zones && common)
+                    z.protocols = common;
+            }
             next.num_zones = w.pixels;
         }
         next.ddp_enabled = w.ddp;

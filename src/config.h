@@ -8,9 +8,10 @@
 // Persistent settings (NVS). Network settings are stored separately so a network reset
 // (button hold) can recover a device without losing the zone configuration.
 //
-// Model: one controller drives ONE kind of bracelet (protocol) in ONE input mode (pixel or DMX).
-// Zones are the addressable units: each has a name and address bytes, and its DDP channels are
-// assigned in order from the controller's start channel (pixel: 3 per zone, DMX: 4 per zone).
+// Model: one controller runs ONE input mode (pixel, DMX or vendor). Zones are the addressable units: each has a
+// name, the bracelet protocols it drives (0, 1 or both) with an address in each, and DDP channels assigned in order
+// from the controller's start channel (pixel: 3 per zone, DMX: 4, vendor: 5). Only the protocols a zone is set to
+// are transmitted; a zone on both sends each change twice, protocol 0 then protocol 1.
 
 static const uint8_t MAX_ZONES = 16;
 static const uint16_t MAX_CHANNELS = 512;
@@ -26,16 +27,22 @@ const char *radio_type_name(uint8_t type);
 
 struct ZoneConfig {
     uint8_t enabled;
-    uint8_t addr[4];  // protocol 0: packet bytes 0-3; protocol 1: addr[0] = byte 1, addr[1] = byte 6
-    uint8_t reserved[3];
+    uint8_t addr[4];     // protocol 0 address: packet bytes 0-3
+    uint8_t protocols;   // bracelet::PROTOCOL_BIT set: 1 = protocol 0, 2 = protocol 1, 3 = both. 0 only in settings
+                         // saved before zones had their own protocols (config_load() migrates them).
+    uint8_t p1_addr[2];  // protocol 1 address: packet byte 1 (group code) and byte 6
     char name[24];
 };
+inline bool zone_uses(const ZoneConfig &z, uint8_t protocol) { return bracelet::has_protocol(z.protocols, protocol); }
+// The zone's address in `protocol`, in build_packet()'s layout.
+inline const uint8_t *zone_addr(const ZoneConfig &z, uint8_t protocol) { return protocol ? z.p1_addr : z.addr; }
 
 struct AppConfig {
     uint32_t magic;
     char name[24];         // controller name, e.g. "Front Yard"
     // Bracelets / input mapping
-    uint8_t protocol;      // 0 = Shenzen New Dody (433.889, 10-colour palette), 1 = LedGiftSupplier (433.920, RGB)
+    uint8_t protocol;      // default protocol (new zones, channel meter): 0 = Shenzen New Dody (433.889, 10-colour
+                           // palette), 1 = LedGiftSupplier (433.920, RGB). Each zone has its own: ZoneConfig::protocols.
     uint8_t mode;          // InputMode
     uint8_t color_order;   // bracelet::ColorOrder (pixel mode)
     uint8_t num_zones;
@@ -110,7 +117,7 @@ void config_save_app(const AppConfig &c);
 void config_save_net(const NetConfig &c);
 void config_defaults_app(AppConfig &c);
 void config_defaults_net(NetConfig &c);
-// Zone `index` back to its default name and address (zone 0 = every group, zone N = group N).
+// Zone `index` back to its default name and addresses (zone 0 = every group, zone N = group N); protocols kept.
 void config_reset_zone(AppConfig &c, uint8_t index);
 void config_factory_reset();  // wipes everything
 void config_network_reset();  // network settings back to defaults (DHCP, Ethernet, AP fallback); zones kept
@@ -134,6 +141,19 @@ inline uint16_t zone_start_channel(const AppConfig &c, uint8_t zone) {
 }
 uint8_t address_len(uint8_t protocol);                       // 4 or 2
 void default_address(uint8_t protocol, uint8_t *addr);       // 00FFFF0F / 00FF
+// A zone's protocol is live: the zone is enabled, uses it, and the input mode drives it (vendor mode: protocol 1 only).
+inline bool zone_live(const AppConfig &c, uint8_t zone, uint8_t protocol) {
+    return c.zones[zone].enabled && zone_uses(c.zones[zone], protocol) && (protocol == 1 || c.mode != MODE_VENDOR);
+}
+// Any enabled zone drives `protocol`. Broadcasts (All off, blanking, test colours) only go to protocols in use.
+inline bool protocol_in_use(const AppConfig &c, uint8_t protocol) {
+    for (uint8_t i = 0; i < c.num_zones && i < MAX_ZONES; i++)
+        if (zone_live(c, i, protocol))
+            return true;
+    return false;
+}
+// The protocols the zones use: their common set, or 0 when zones differ (set per zone).
+uint8_t zones_common_protocols(const AppConfig &c);
 
 // Hex string -> bytes. Non-hex characters (spaces, ':') are ignored; false unless exactly `len` bytes remain.
 bool parse_hex(const char *str, uint8_t *out, size_t len);

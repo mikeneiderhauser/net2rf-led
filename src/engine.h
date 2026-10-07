@@ -26,16 +26,34 @@ enum class TestMode : uint8_t { OFF, SOLID, CYCLE };
 
 const char *radio_state_name(RadioState s);
 
+// One zone's packet in one protocol: what the bracelets should show (want) and what was last sent (sent).
+struct ZoneLane {
+    uint8_t want[bracelet::PACKET_LEN]{};
+    uint8_t sent[bracelet::PACKET_LEN]{};
+    bool have_want{false};  // the zone is live on this protocol and has a colour
+    bool have_sent{false};
+    uint32_t last_tx_ms{0};
+};
+
 struct ZoneState {
     uint8_t r{0}, g{0}, b{0}, fx{0};
     bool gated{false};  // vendor mode: boot-code channel != 85, so nothing is transmitted
     uint8_t group{0};   // vendor mode: group code taken from the input
-    uint8_t want[bracelet::PACKET_LEN]{};
-    uint8_t sent[bracelet::PACKET_LEN]{};
-    bool have_want{false};
-    bool have_sent{false};
-    uint32_t last_tx_ms{0};
+    // One lane per protocol. Only the protocols the zone uses ever have a packet; a zone on both sends each change
+    // on protocol 0, then protocol 1.
+    ZoneLane lane[bracelet::NUM_PROTOCOLS];
     uint32_t tx_count{0};
+    bool have_sent() const { return this->lane[0].have_sent || this->lane[1].have_sent; }
+    uint32_t last_tx_ms() const {  // the latest transmission on any of its protocols
+        if (this->lane[0].have_sent && this->lane[1].have_sent)
+            return (int32_t) (this->lane[1].last_tx_ms - this->lane[0].last_tx_ms) > 0 ? this->lane[1].last_tx_ms
+                                                                                      : this->lane[0].last_tx_ms;
+        return this->lane[0].have_sent ? this->lane[0].last_tx_ms : this->lane[1].last_tx_ms;
+    }
+    void resend() {  // forget what was sent, so every live lane goes out again
+        for (ZoneLane &l : this->lane)
+            l.have_sent = false;
+    }
 };
 
 enum class InputSource : uint8_t { NONE, DDP, E131 };
@@ -155,16 +173,19 @@ class Engine {
     static void task_entry_(void *arg);
     void run_();
     void try_init_radio_();
-    // Protocol 1 has a confirmed "all groups" address (group 0), so fan-out actions can be one packet.
-    bool can_broadcast_() const { return g_app.protocol == 1; }
+    // Protocol 1 has a confirmed "all groups" address (group 0), so fan-out actions to the protocol 1 zones can be
+    // one packet. Only when some zone uses protocol 1: a protocol 0-only controller never sends one.
+    bool can_broadcast_() const { return protocol_in_use(g_app, 1); }
     void queue_broadcast_(bracelet::Action action, uint8_t r, uint8_t g, uint8_t b);
-    void mark_zones_sent_(uint32_t now);
+    // Treat the zones' current packets in these protocols (bracelet::PROTOCOL_BIT set) as delivered.
+    void mark_zones_sent_(uint32_t now, uint8_t protocols);
     void apply_input_(uint32_t offset, const uint8_t *data, size_t len, bool frame_end, uint32_t src_ip,
                       InputSource source);
     void update_wants_(uint32_t now);
     bool pick_job_(uint32_t now, Job &job);
-    bool zone_changed_(uint8_t zone) const;
-    bool held_back_(uint8_t zone) const;  // a broader overlapping zone must be sent first
+    bool zone_changed_(uint8_t zone, uint8_t protocol) const;
+    bool held_back_(uint8_t zone, uint8_t protocol) const;  // a broader overlapping zone must be sent first
+    void take_lane_(uint8_t zone, uint8_t protocol, uint32_t now);  // record the lane's packet as sent
     void transmit_(const Job &job);
     bool wait_for_clear_channel_(int8_t threshold);  // false if it gave up (busy too long)
     void tick_stats_(uint32_t now);
@@ -180,7 +201,7 @@ class Engine {
     uint8_t channels_[MAX_CHANNELS]{};
     ZoneState zones_[MAX_ZONES];
     std::deque<Job> manual_;
-    uint8_t rr_{0};
+    uint8_t rr_{0};  // round robin over lanes: zone * NUM_PROTOCOLS + protocol
 
     struct TxLogEntry {
         uint32_t ms;

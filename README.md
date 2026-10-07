@@ -44,7 +44,8 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
 
 ## Features
 
-- **Two bracelet families:** Shenzen New Dody (10-colour palette) and LedGiftSupplier.com (RGB, group codes).
+- **Two bracelet families:** Shenzen New Dody (10-colour palette) and LedGiftSupplier.com (RGB, group codes), on
+  one controller: each zone drives protocol 0, protocol 1 or both, and only the protocols in use go on air.
   Bracelets and light sticks both work the same way.
 - **Layered zones:** an All Zones layer under per-group zones, so a group keeps its own colour while everyone
   else follows the crowd-wide effect (protocol 0).
@@ -127,7 +128,7 @@ welcome; [DEVICES.md](docs/DEVICES.md#reporting-a-device) lists what helps.
 ```bash
 pio run -e wt32-eth01                  # build firmware.bin and firmware.factory.bin
 pio run -e xiao-esp32s3                # the same firmware for a Seeed XIAO ESP32-S3 (Wi-Fi only; docs/ASSEMBLY.md)
-pio test -e native                     # unit tests: packets, receiver decoding, zone layering, input parsers, radio maths, discovery
+pio test -e native                     # unit tests: packets, scheduler, settings, receiver decoding, input parsers, radio maths, discovery
 python3 tools/mock_server.py           # develop the web UI against a fake API at http://127.0.0.1:8765/
 python3 tools/ddp_test.py <ip> cycle   # send DDP without xLights
 python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the network

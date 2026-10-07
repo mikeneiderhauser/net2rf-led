@@ -185,7 +185,8 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
   <section data-page="zones" class="hide">
     <div class="card"><h2>Zones</h2>
       <p class="dim small" style="margin-top:0">Each zone is one set of bracelets that share an address. Zones take consecutive DDP channels from the start channel (<span id="z_widthNote"></span>). Disabling a zone keeps the channel layout.</p>
-      <div class="scroll"><table class="tbl"><thead><tr><th>#</th><th>On</th><th>Name</th><th>Group / address</th><th>Channels</th><th>Test</th></tr></thead><tbody id="z_rows"></tbody></table></div>
+      <div class="scroll"><table class="tbl"><thead><tr><th>#</th><th>On</th><th>Name</th><th>Protocols</th><th title="Protocol 0: 4 bytes, group mask in bytes 1-2">Protocol 0 address</th><th title="Protocol 1: group code, 0 = every group">Protocol 1 group</th><th>Channels</th><th>Test</th></tr></thead><tbody id="z_rows"></tbody></table></div>
+      <div class="small dim" id="z_protoNote" style="margin:6px 0"></div>
       <div class="note hide" id="z_mixNote"></div>
       <label class="inline" style="margin-top:10px"><input type="checkbox" id="z_layer"> <b>All Zones is a base layer</b></label>
       <div class="small dim" id="z_layerHint" style="margin:2px 0 8px 24px"></div>
@@ -206,10 +207,10 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
   <!-- ZONE & OUTPUT -->
   <section data-page="output" class="hide">
     <div class="card"><h2>Bracelets</h2>
-      <p class="dim small" style="margin-top:0">One controller drives one kind of bracelet in one input mode. Use another controller for a different bracelet type.</p>
+      <p class="dim small" style="margin-top:0">One controller runs one input mode. It can drive both kinds of bracelet: pick the protocols here, or per zone. Only the protocols in use are transmitted.</p>
       <div class="form">
         <label>Controller name<input id="b_name" maxlength="23"></label>
-        <label>Bracelet protocol<select id="b_proto"><option value="0">0 &middot; Shenzen New Dody (433.889, 10 colours)</option><option value="1">1 &middot; LedGiftSupplier.com (433.920, RGB)</option></select><span class="hint">changing it resets zone addresses to the default</span></label>
+        <label>Bracelet protocols<select id="b_proto"><option value="0">Protocol 0 only &middot; Shenzen New Dody (433.889, 10 colours)</option><option value="1">Protocol 1 only &middot; LedGiftSupplier.com (433.920, RGB)</option><option value="both">Both &middot; every change sent on each (twice the airtime)</option><option value="zone">Per zone (set on the Zones page)</option></select><span class="hint" id="b_protoHint">only these are transmitted; every zone keeps an address in both</span></label>
         <label>Input mode<select id="b_mode"><option value="pixel">Pixel (R, G, B)</option><option value="dmx">DMX (R, G, B, FX)</option><option value="vendor">Vendor DMX transmitter (85, group, R, G, B)</option></select><span class="hint" id="b_modeHint">3 or 4 DDP channels per zone</span></label>
         <label id="b_orderWrap">Colour order<select id="b_order"><option>RGB</option><option>RBG</option><option>GRB</option><option>GBR</option><option>BRG</option><option>BGR</option></select><span class="hint">match the xLights model's string type</span></label>
       </div></div>
@@ -320,7 +321,8 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="mono small" id="p_log" style="margin-top:6px"></div>
     </div>
     <div class="card"><h2>Group tester</h2>
-      <p class="dim small" style="margin-top:0">Send one command to any combination of groups, without touching the zones. Wake the devices first (press their button). Uses the bracelet protocol set under Bracelets &amp; Radio.</p>
+      <p class="dim small" style="margin-top:0">Send one command to any combination of groups, without touching the zones. Wake the devices first (press their button).</p>
+      <div class="form" style="margin-bottom:6px"><label>Protocol<select id="g_proto"><option value="0">0 &middot; Shenzen New Dody</option><option value="1">1 &middot; LedGiftSupplier.com</option></select></label></div>
       <div id="g_p0">
         <div class="actions" id="g_boxes" style="margin-top:0"></div>
         <div class="actions"><button id="g_all">All</button><button id="g_none">None</button><button id="g_inv">Invert</button><span class="small dim">address</span> <span class="mono" id="g_addr"></span> <span class="small dim" id="g_desc"></span></div>
@@ -529,63 +531,80 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
   // live zones
   const w=C?({dmx:4,vendor:5}[C.app.bracelets.mode]||3):3;
   const rows=e.zones.map((g,k)=>{const cfg=C&&C.app.zones[k];if(!cfg)return'';
-    return `<tr class="${cfg.enabled?'':'dim'}"><td class="dim">${k+1}</td><td class="nw">${esc(cfg.name)}</td><td class="dim nw">${cfg.start}-${cfg.start+w-1}</td><td class="nw"><span class="sw" style="background:#${g.rgb}"></span> <span class="mono">#${g.rgb}</span></td><td class="small dim nw">${w===4?'fx '+g.fx:w===5?(g.gated?'<span class="badge warn">held: ch1 ≠ 85</span>':'group '+g.group):''}</td><td class="mono nw">${g.packet?g.packet.match(/../g).join(' '):'–'}</td><td>${fmtN(g.tx)}</td><td class="dim">${fmtAge(g.tx_age_ms)}</td></tr>`}).join('');
+    return `<tr class="${cfg.enabled?'':'dim'}"><td class="dim">${k+1}</td><td class="nw">${esc(cfg.name)}</td><td class="dim nw">${cfg.start}-${cfg.start+w-1}</td><td class="nw"><span class="sw" style="background:#${g.rgb}"></span> <span class="mono">#${g.rgb}</span></td><td class="small dim nw">${w===4?'fx '+g.fx:w===5?(g.gated?'<span class="badge warn">held: ch1 ≠ 85</span>':'group '+g.group):''}</td><td class="mono nw">${(g.packets&&g.packets.length?g.packets:g.packet?[{p:'',pkt:g.packet}]:[]).map(e=>(g.packets&&g.packets.length>1?`<span class="dim">P${e.p}</span> `:'')+e.pkt.match(/../g).join(' ')).join('<br>')||'–'}</td><td>${fmtN(g.tx)}</td><td class="dim">${fmtAge(g.tx_age_ms)}</td></tr>`}).join('');
   $('d_zones').innerHTML=rows;
   document.querySelectorAll('#testSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===e.test.mode));
   renderNetStatus();sysInfo();if(location.hash==='#tools')xlights();
 }
 
 // ---------- config ----------
-async function loadConfig(){C=await api('config');fillOutput();fillNetwork();if(!zonesDirty)renderZones()}
+async function loadConfig(){C=await api('config');if(perZoneWanted)C.app.bracelets.per_zone=true;fillOutput();fillNetwork();if(!zonesDirty)renderZones()}
 
 // zones editor
-let zonesDirty=false;
-const addrLen=()=>C.app.bracelets.protocol==0?8:4;
-const defAddr=k=>{const p0=C.app.bracelets.protocol==0;if(!k||k>15)return p0?'00FFFF0F':'00FF';return p0?'00'+hx(1<<k&255)+hx(1<<k>>8)+'0F':hx(k)+'FF'};
+let zonesDirty=false,perZoneWanted=false;  // "Per zone" picked while every zone still has the same protocols
+// A zone's protocols ([0], [1] or [0, 1]) and its address in each: protocol 0 = 4 bytes (group mask in bytes 1-2),
+// protocol 1 = group code (byte 1; 0 = all groups) + byte 6 (kept as-is, normally FF).
+const zprot=z=>z.protocols&&z.protocols.length?z.protocols:[C.app.bracelets.protocol];
+const zuses=(z,p)=>zprot(z).includes(p);
+const protoName=ps=>ps.length>1?'0 + 1':String(ps[0]);
+const defAddr=(p,k)=>{if(!k||k>15)return p==0?'00FFFF0F':'00FF';return p==0?'00'+hx(1<<k&255)+hx(1<<k>>8)+'0F':hx(k)+'FF'};
+const perZone=()=>!!C.app.bracelets.per_zone;
 function zoneWidth(){return {dmx:4,vendor:5}[C.app.bracelets.mode]||3}
-// Protocol 1 addresses are "group code" (byte 1; 0 = all groups) + byte 6 (kept as-is, normally FF).
-function addrCell(z,start){
-  if(C.app.bracelets.protocol==0)return `<input data-f="addr" class="mono w90" maxlength="8" value="${z.addr}">`;
-  const grp=parseInt(z.addr.slice(0,2),16)||0,b6=z.addr.slice(2,4)||'FF';
-  if(C.app.bracelets.mode==='vendor')return `<input type="hidden" data-f="addr" value="${z.addr}"><span class="dim small nw">group from channel ${start+1}</span>`;
-  return `<span class="nw"><input data-f="group" type="number" class="w70" min="0" max="255" value="${grp}"> <span class="dim small">${grp==0?'all groups':''}</span></span><input type="hidden" data-f="b6" value="${b6}">`}
+function zoneAddrText(z){return zprot(z).map(p=>p==0?'P0 '+z.addr_p0:'P1 '+(C.app.bracelets.mode==='vendor'?'group from input':z.addr_p1)).join(' · ')}
+function protoCell(z){const v=zprot(z).length>1?'both':String(zprot(z)[0]);
+  if(!perZone())return `<span class="dim">${protoName(zprot(z))}</span><input type="hidden" data-f="proto" value="${v}">`;
+  return `<select data-f="proto" class="w70">${[['0','0'],['1','1'],['both','0 + 1']].map(([k,t])=>`<option value="${k}" ${k===v?'selected':''}>${t}</option>`).join('')}</select>`}
+function p0Cell(z){const on=zuses(z,0)&&C.app.bracelets.mode!=='vendor';
+  return `<input data-f="addr_p0" class="mono w90" maxlength="8" value="${z.addr_p0}" style="${on?'':'opacity:.4'}" title="${on?'':'kept, not used: this zone is not on protocol 0'}">`}
+function p1Cell(z,start){const grp=parseInt(z.addr_p1.slice(0,2),16)||0,b6=z.addr_p1.slice(2,4)||'FF',on=zuses(z,1);
+  if(C.app.bracelets.mode==='vendor')return `<input type="hidden" data-f="group" value="${grp}"><input type="hidden" data-f="b6" value="${b6}"><span class="dim small nw">from channel ${start+1}</span>`;
+  return `<span class="nw" style="${on?'':'opacity:.4'}" title="${on?'':'kept, not used: this zone is not on protocol 1'}"><input data-f="group" type="number" class="w70" min="0" max="255" value="${grp}"> <span class="dim small">${grp==0?'all groups':''}</span></span><input type="hidden" data-f="b6" value="${b6}">`}
 function zoneRow(z,k){const w=zoneWidth(),start=C.app.input.start_channel+k*w;
   return `<td class="dim">${k+1}</td><td><input type="checkbox" data-f="enabled" ${z.enabled?'checked':''}></td>
   <td><input data-f="name" class="w150" maxlength="23" value="${esc(z.name)}"></td>
-  <td>${addrCell(z,start)}</td>
+  <td>${protoCell(z)}</td><td>${p0Cell(z)}</td><td>${p1Cell(z,start)}</td>
   <td class="dim">${start}-${start+w-1}</td>
   <td style="white-space:nowrap"><input type="color" class="tc" value="#ff0000"> <button class="ts">Send</button> <button class="to">Off</button>
-   <select class="tfx ${C.app.bracelets.protocol==0?'':'hide'}"><option value="">FX…</option><option value="fxa">Fade in</option><option value="fxb">Fade out</option><option value="fxc">Effect C (untested)</option></select></td>`}
-function renderZones(){const p0=C.app.bracelets.protocol==0;$('z_layer').checked=p0&&!!C.app.bracelets.base_layer;$('z_layer').disabled=!p0;
-  $('z_layerHint').textContent=p0?'A zone showing its own colour is left alone when the all-groups zone changes or goes black. A black zone follows the all-groups zone, so you cannot hold one zone dark while it is lit. Off: every zone is sent independently, and the all-groups zone overrides the others.':'Protocol 0 only: protocol 1 addresses one group or all of them, so it cannot leave groups out.';
-  const tb=$('z_rows');tb.innerHTML='';C.app.zones.forEach((z,k)=>{const tr=tb.insertRow();tr.innerHTML=zoneRow(z,k);bindZone(tr,k)});
+   <select class="tfx ${zuses(z,0)&&C.app.bracelets.mode!=='vendor'?'':'hide'}" title="Built-in effects: protocol 0 only"><option value="">FX…</option><option value="fxa">Fade in</option><option value="fxb">Fade out</option><option value="fxc">Effect C (untested)</option></select></td>`}
+function renderZones(){const zs=C.app.zones,p0=C.app.bracelets.mode!=='vendor'&&zs.some(z=>zuses(z,0));
+  $('z_layer').checked=p0&&!!C.app.bracelets.base_layer;$('z_layer').disabled=!p0;
+  $('z_layerHint').textContent=p0?'Protocol 0 zones: a zone showing its own colour is left alone when the all-groups zone changes or goes black. A black zone follows the all-groups zone, so you cannot hold one zone dark while it is lit. Off: every zone is sent independently, and the all-groups zone overrides the others.':'Protocol 0 only: protocol 1 addresses one group or all of them, so it cannot leave groups out.';
+  $('z_protoNote').textContent=perZone()?'Each zone sends only on its own protocols; a zone on 0 + 1 sends every change twice, protocol 0 then protocol 1.':
+    `Every zone uses protocol ${protoName(zprot(zs[0]||{}))}: change it under Bracelets & Radio, or pick "Per zone" there to mix protocols. Addresses in a protocol a zone doesn't use are kept (greyed).`;
+  const tb=$('z_rows');tb.innerHTML='';zs.forEach((z,k)=>{const tr=tb.insertRow();tr.innerHTML=zoneRow(z,k);bindZone(tr,k)});
   mixCheck();
   $('z_widthNote').textContent={3:'3 channels each: R, G, B',4:'4 channels each: R, G, B, FX',5:'5 channels each: boot code (85 = transmit), group, R, G, B'}[zoneWidth()]}
-function readZone(tr){const f=n=>tr.querySelector(`[data-f=${n}]`);
-  const addr=f('group')?hx(Math.max(0,Math.min(255,+f('group').value||0)))+f('b6').value:f('addr').value.replace(/[^0-9a-f]/gi,'').toUpperCase();
-  return{enabled:f('enabled').checked,name:f('name').value,addr}}
-function bindZone(tr,k){tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>{zonesDirty=true;mixCheck()}));
+function readZone(tr){const f=n=>tr.querySelector(`[data-f=${n}]`),pv=f('proto').value;
+  return{enabled:f('enabled').checked,name:f('name').value,protocols:pv==='both'?[0,1]:[+pv],
+    addr_p0:f('addr_p0').value.replace(/[^0-9a-f]/gi,'').toUpperCase(),
+    addr_p1:hx(Math.max(0,Math.min(255,+f('group').value||0)))+f('b6').value}}
+function bindZone(tr,k){tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>{zonesDirty=true;
+    if(el.dataset.f==='proto'){C.app.zones=collectZones();renderZones()}else mixCheck()}));
   tr.querySelector('.ts').onclick=()=>api('send',{zone:k,action:'color',rgb:tr.querySelector('.tc').value.slice(1)});
   tr.querySelector('.to').onclick=()=>api('send',{zone:k,action:'off'});
   tr.querySelector('.tfx').onchange=ev=>{if(ev.target.value)api('send',{zone:k,action:ev.target.value});ev.target.value=''}}
-// Warn when an "all groups" zone is mixed with specific groups: its changes override every group.
+// Warn when a protocol 1 "all groups" zone is mixed with specific groups: its changes override every group.
 function mixCheck(){const b=C.app.bracelets,note=$('z_mixNote');
-  if(b.protocol!=1||b.mode==='vendor'){note.classList.add('hide');return}
-  const zs=[...$('z_rows').rows].map((tr,k)=>({k,z:readZone(tr)})).filter(x=>x.z.enabled);
-  const all=zs.filter(x=>x.z.addr.slice(0,2)==='00'),some=zs.filter(x=>x.z.addr.slice(0,2)!=='00');
+  if(b.mode==='vendor'){note.classList.add('hide');return}
+  const zs=[...$('z_rows').rows].map((tr,k)=>({k,z:readZone(tr)})).filter(x=>x.z.enabled&&x.z.protocols.includes(1));
+  const all=zs.filter(x=>x.z.addr_p1.slice(0,2)==='00'),some=zs.filter(x=>x.z.addr_p1.slice(0,2)!=='00');
   note.classList.toggle('hide',!(all.length&&some.length));
-  if(all.length&&some.length)note.innerHTML=`Zone ${all.map(x=>x.k+1).join(', ')} is <b>all groups</b>: whenever its colour changes, every bracelet follows it, including the bracelets in zone ${some.map(x=>x.k+1).join(', ')}. Use it as a deliberate "everyone" layer, or give it a specific group.`}
+  if(all.length&&some.length)note.innerHTML=`Protocol 1: zone ${all.map(x=>x.k+1).join(', ')} is <b>all groups</b>: whenever its colour changes, every protocol 1 bracelet follows it, including the bracelets in zone ${some.map(x=>x.k+1).join(', ')}. Use it as a deliberate "everyone" layer, or give it a specific group.`}
 function collectZones(){return[...$('z_rows').rows].map(readZone)}
-$('z_add').onclick=()=>{const zs=collectZones();if(zs.length>=16)return toast('16 zones maximum');
-  zs.push({enabled:true,name:zs.length?'Zone '+zs.length:'All Zones',addr:defAddr(zs.length)});C.app.zones=zs;zonesDirty=true;renderZones()};
+$('z_add').onclick=()=>{const zs=collectZones();if(zs.length>=16)return toast('16 zones maximum');const k=zs.length;
+  const prev=zs[k-1],protocols=prev?prev.protocols:[C.app.bracelets.protocol];
+  zs.push({enabled:true,name:k?'Zone '+k:'All Zones',protocols,addr_p0:defAddr(0,k),addr_p1:defAddr(1,k)});C.app.zones=zs;zonesDirty=true;renderZones()};
 $('z_del').onclick=()=>{const zs=collectZones();if(zs.length<=1)return;zs.pop();C.app.zones=zs;zonesDirty=true;renderZones()};
 $('z_layer').onchange=()=>{zonesDirty=true};
-$('z_save').onclick=async()=>{const zs=collectZones(),need=addrLen();
-  for(const [k,z] of zs.entries())if(z.addr.length!==need)return toast(`Zone ${k+1}: address must be ${need/2} bytes (${need} hex digits)`,4000);
+$('z_save').onclick=async()=>{const zs=collectZones();
+  for(const [k,z] of zs.entries())if(z.addr_p0.length!==8)return toast(`Zone ${k+1}: a protocol 0 address is 4 bytes (8 hex digits)`,4000);
+  if(C.app.bracelets.mode==='vendor'&&zs.some(z=>z.enabled&&!z.protocols.includes(1)))return toast('Vendor mode drives protocol 1 only: every enabled zone needs protocol 1',4500);
   const j=await api('config',{zones:zs,bracelets:{base_layer:$('z_layer').checked}});zonesDirty=false;afterSave(j,'Zones');await loadConfig()};
 
 // bracelets & radio
-function fillOutput(){const a=C.app;$('b_name').value=a.name;$('b_proto').value=a.bracelets.protocol;$('b_mode').value=a.bracelets.mode;$('b_order').value=a.bracelets.color_order;$('i_start').value=a.input.start_channel;modeUi();
+// The controller-wide protocol choice: one protocol, both, or set per zone.
+function protoSel(b){return b.per_zone?'zone':b.protocols.length>1?'both':String(b.protocols[0])}
+function fillOutput(){const a=C.app;$('b_name').value=a.name;$('b_proto').value=protoSel(a.bracelets);$('b_mode').value=a.bracelets.mode;$('b_order').value=a.bracelets.color_order;$('i_start').value=a.input.start_channel;modeUi();
   $('i_ddp').checked=a.input.ddp_enabled;$('i_e131').checked=a.input.e131_enabled;$('i_univ').value=a.input.e131_universe;$('i_mcast').checked=a.input.e131_multicast;
   $('r_type').value=a.radio.type;$('r_power').value=a.radio.tx_power;$('r_f0').value=a.radio.freq_p0;$('r_f1').value=a.radio.freq_p1;
   $('r_rep').value=a.radio.repeats;$('r_ref').value=a.radio.refresh_ms;$('r_jit').value=a.radio.tx_jitter_ms;$('r_thr').value=a.radio.off_threshold;
@@ -595,14 +614,18 @@ const POWER={cc1101:[-30,10],sx1278:[2,17]};
 function radioTypeUi(){const t=$('r_type').value,[lo,hi]=POWER[t]||POWER.cc1101;$('r_power').min=lo;$('r_power').max=hi;$('r_powerHint').textContent=`${lo} to ${hi} dBm for this module`}
 $('r_type').onchange=radioTypeUi;
 function modeUi(){const m=$('b_mode').value;$('b_orderWrap').classList.toggle('hide',m!=='pixel');
-  if(m==='vendor')$('b_proto').value='1';$('b_proto').disabled=m==='vendor';
+  if(m==='vendor')$('b_proto').value='1';$('b_proto').disabled=m==='vendor';protoHint();
   $('b_modeHint').textContent={pixel:'3 channels per zone',dmx:'4 channels per zone',vendor:'5 channels per zone, same layout as the vendor transmitter; LedGiftSupplier only'}[m]}
 $('b_mode').onchange=modeUi;
-$('b_proto').onchange=()=>{if($('b_proto').value==='0'&&$('b_mode').value==='vendor'){$('b_mode').value='pixel';modeUi()}};
+function protoHint(){$('b_protoHint').textContent={0:'protocol 1 is never transmitted',1:'protocol 0 is never transmitted',both:'each change goes out twice: protocol 0, then protocol 1',zone:'each zone transmits only its own protocols'}[$('b_proto').value]+'; zones keep an address in both'}
+$('b_proto').onchange=protoHint;
 $('o_save').onclick=async()=>{const t=$('r_type').value,[lo,hi]=POWER[t];
   if(t!==C.app.radio.type&&!await ask('Changing the radio module reboots the controller. Continue?'))return;
-  if(+$('b_proto').value!==C.app.bracelets.protocol&&!await ask('Changing the bracelet protocol resets every zone address to the default. Continue?'))return;
-  const body={name:$('b_name').value,bracelets:{protocol:+$('b_proto').value,mode:$('b_mode').value,color_order:$('b_order').value},
+  const pv=$('b_proto').value,bracelets={mode:$('b_mode').value,color_order:$('b_order').value};
+  if(pv!=='zone')bracelets.protocols=pv==='both'?[0,1]:[+pv];
+  perZoneWanted=pv==='zone';
+  if(pv==='zone'&&!C.app.bracelets.per_zone)toast('Per zone: set each zone\'s protocols on the Zones page',4000);
+  const body={name:$('b_name').value,bracelets,
     radio:{type:t,tx_power:Math.max(lo,Math.min(hi,+$('r_power').value||0)),freq_p0:+$('r_f0').value,freq_p1:+$('r_f1').value,repeats:+$('r_rep').value,refresh_ms:+$('r_ref').value,tx_jitter_ms:+$('r_jit').value,off_threshold:+$('r_thr').value,
       lbt_enabled:$('r_lbt').checked,lbt_threshold_dbm:Math.max(-120,Math.min(-30,+$('r_lbtThr').value||-75))},
     input:{ddp_enabled:$('i_ddp').checked,ddp_port:+$('i_port').value,e131_enabled:$('i_e131').checked,e131_universe:+$('i_univ').value,e131_multicast:$('i_mcast').checked,start_channel:+$('i_start').value,timeout_s:+$('i_to').value}};
@@ -642,7 +665,7 @@ $('n_save').onclick=async()=>{const body={hostname:$('n_host').value,eth_enabled
 
 // tools: xLights helper
 function xlights(){if(!C||!S)return;const a=C.app,w={dmx:4,vendor:5}[a.bracelets.mode]||3,n=a.zones.length,first=a.input.start_channel,last=first+n*w-1;
-  const pal=a.bracelets.protocol==0?'\nProtocol 0 bracelets have 10 colours; other colours snap to the nearest.':'';
+  const pal=a.zones.some(z=>zuses(z,0))&&a.bracelets.mode!=='vendor'?'\nProtocol 0 bracelets have 10 colours; other colours snap to the nearest.':'';
   let models;
   if(w===3){models=`Option A: one model for the whole controller
   Ready-made: import Net2RF_All_plus_4.xmodel or Net2RF_All_plus_15.xmodel (tools/xlights in the repo), or build:
@@ -702,16 +725,16 @@ async function idStep(){const p=ID.step%2,A0=[0x00,0xFF,0xFF,0x0F],A1=[0x00,0xFF
 function idStop(){clearInterval(ID.timer);ID.timer=null;if(ID.step)$('id_now').textContent='Stopped';}
 $('id_start').onclick=()=>{idStop();ID.step=0;idStep();ID.timer=setInterval(idStep,2500)};
 $('id_stop').onclick=idStop;
-async function idUse(proto){idStop();if(C.app.bracelets.protocol===proto)return toast('Already using protocol '+proto);
-  if(!await ask(`Switch this controller to protocol ${proto} (${proto?'LedGiftSupplier.com':'Shenzen New Dody'})? Zone addresses reset to the default.`))return;
-  const body={bracelets:{protocol:proto}};if(proto===0&&C.app.bracelets.mode==='vendor')body.bracelets.mode='pixel';
+async function idUse(proto){idStop();const b=C.app.bracelets;if(!b.per_zone&&b.protocols.length===1&&b.protocols[0]===proto)return toast('Already using protocol '+proto);
+  if(!await ask(`Switch every zone to protocol ${proto} only (${proto?'LedGiftSupplier.com':'Shenzen New Dody'})? Zone addresses are kept. To use both protocols, pick "Both" or "Per zone" under Bracelets & Radio instead.`))return;
+  const body={bracelets:{protocols:[proto]}};if(proto===0&&C.app.bracelets.mode==='vendor')body.bracelets.mode='pixel';
   const j=await api('config',body);afterSave(j,'Protocol');await loadConfig()}
 $('id_p0').onclick=()=>idUse(0);$('id_p1').onclick=()=>idUse(1);
 
 // zones: zone walk (one saved zone lit at a time)
 let W={list:[],i:-1,lit:-1,timer:null,paused:false};
 async function walkShow(i){if(!W.list.length)return;W.i=(i+W.list.length)%W.list.length;const k=W.list[W.i],z=C.app.zones[k];
-  $('w_cur').textContent=`Zone ${k+1} · ${z.name||'(unnamed)'}`;$('w_step').textContent=`${z.addr} · ${W.i+1} of ${W.list.length}${W.paused?' · paused':''}`;
+  $('w_cur').textContent=`Zone ${k+1} · ${z.name||'(unnamed)'}`;$('w_step').textContent=`${zoneAddrText(z)} · ${W.i+1} of ${W.list.length}${W.paused?' · paused':''}`;
   try{if($('w_off').checked&&W.lit>=0&&W.lit!==k)await api('send',{zone:W.lit,action:'off'});
     await api('send',{zone:k,action:'color',rgb:$('w_col').value.slice(1).toUpperCase()});W.lit=k}catch(e){walkStop(false)}}
 function walkTimer(){clearInterval(W.timer);W.timer=W.paused?null:setInterval(()=>walkShow(W.i+1),Math.max(500,+$('w_dwell').value))}
@@ -735,11 +758,11 @@ function maskWords(b1,b2){const m=b1|b2<<8,on=[],off=[];for(let k=0;k<16;k++)(m>
   return m===0xFFFF?'all groups':!on.length?'no group':off.length<=6?'all except '+(off.length>1?'groups ':'group ')+off.join(', '):(on.length>1?'groups ':'group ')+on.join(', ')}
 $('g_boxes').innerHTML=Array.from({length:16},(_,k)=>`<label class="inline small"><input type="checkbox" class="g_b" data-k="${k}"> ${k}</label>`).join('');
 function gMask(){let m=0;document.querySelectorAll('.g_b').forEach(b=>{if(b.checked)m|=1<<+b.dataset.k});return m}
-function gUi(){const p0=!C||C.app.bracelets.protocol==0;$('g_p0').classList.toggle('hide',!p0);$('g_p1').classList.toggle('hide',p0);$('g_fin').classList.toggle('hide',!p0);$('g_fout').classList.toggle('hide',!p0);
+function gUi(){const p0=$('g_proto').value==='0';$('g_p0').classList.toggle('hide',!p0);$('g_p1').classList.toggle('hide',p0);$('g_fin').classList.toggle('hide',!p0);$('g_fout').classList.toggle('hide',!p0);
   const m=gMask();$('g_addr').textContent='00'+hx(m&255)+hx(m>>8)+'0F';$('g_desc').textContent='= '+maskWords(m&255,m>>8)}
 function gSet(fn){document.querySelectorAll('.g_b').forEach(b=>{b.checked=fn(b.checked)});gUi()}
-$('g_boxes').onchange=gUi;$('g_all').onclick=()=>gSet(()=>true);$('g_none').onclick=()=>gSet(()=>false);$('g_inv').onclick=()=>gSet(c=>!c);
-async function gSend(cmd){const p=C?+C.app.bracelets.protocol:0,rgb=[1,3,5].map(k=>parseInt($('g_col').value.substr(k,2),16));let pk;
+$('g_boxes').onchange=gUi;$('g_proto').onchange=gUi;$('g_all').onclick=()=>gSet(()=>true);$('g_none').onclick=()=>gSet(()=>false);$('g_inv').onclick=()=>gSet(c=>!c);
+async function gSend(cmd){const p=+$('g_proto').value,rgb=[1,3,5].map(k=>parseInt($('g_col').value.substr(k,2),16));let pk;
   if(p==0){const m=gMask();if(!m)return toast('Tick at least one group');
     pk=[0,m&255,m>>8,0x0F,...(cmd==='color'?[1,nearest(...rgb)]:cmd==='off'?[0,0xAA]:cmd==='fin'?[5,0xAA]:[6,0xAA]),0]}
   else pk=buildPkt(1,[+$('g_grp').value&255,0xFF],rgb,cmd==='off');
@@ -800,7 +823,7 @@ function addrGroups(p,a){if(p==1)return a[0]?`group ${a[0]}`:'all groups';const 
   return m===0xFFFF?'all groups':!b.length?'no group':(b.length>1?'groups ':'group ')+b.join(', ')}
 let P={list:[],i:0,timer:null,paused:false,marks:[],cur:null};
 function probeFields(){const p=$('p_p').value;$('p_field').innerHTML=FIELDS[p].map(f=>`<option value="${f[0]}">${f[1]}</option>`).join('');
-  $('p_base').value=C&&C.app.bracelets.protocol==p?C.app.zones[0].addr:(p==0?'00FFFF0F':'00FF')}
+  $('p_base').value=C&&C.app.zones[0]?(p==0?C.app.zones[0].addr_p0:C.app.zones[0].addr_p1):(p==0?'00FFFF0F':'00FF')}
 $('p_p').onchange=probeFields;
 function probeList(){const p=+$('p_p').value,field=$('p_field').value,base=bytes($('p_base').value),bits=field==='m16'?16:8,vals=[];
   if($('p_mode').value==='bits'){for(let k=0;k<bits;k++)vals.push(1<<k)}else{for(let v=+$('p_from').value;v<=+$('p_to').value&&vals.length<4096;v++)vals.push(v)}
@@ -894,7 +917,7 @@ function showCapture(c){const p=c.pulses,W=$('d_rxWave'),scale=20;  // 20 us per
 // dashboard actions
 $('d_allOff').onclick=async()=>{
   await api('all-off',{});poll();
-  toast(C&&C.app.bracelets.protocol==1?'All off sent to every group. Bracelets stay off until xLights changes a colour.':'Off sent to every zone. Bracelets stay off until xLights changes a colour.',4500)};
+  toast('Off sent to every zone (protocol 1: one packet to every group). Bracelets stay off until xLights changes a colour.',4500)};
 // The switches follow the controller's state; while one is being changed (confirmation open, request in
 // flight) the 1 s poll must not flip it back.
 let swBusy=false;
@@ -988,7 +1011,7 @@ $('s_factory').onclick=async()=>{if(await ask('Erase ALL settings (zones, bracel
 
 // boot
 show(location.hash.slice(1));
-(async()=>{pollPeers();try{await loadConfig();$('p_p').value=C.app.bracelets.protocol;$('t_p').value=C.app.bracelets.protocol}catch(e){}probeFields();rawPrev();await poll();setInterval(poll,1000)})();
+(async()=>{pollPeers();try{await loadConfig();$('p_p').value=C.app.bracelets.protocol;$('t_p').value=C.app.bracelets.protocol;$('g_proto').value=C.app.bracelets.protocol}catch(e){}probeFields();rawPrev();await poll();setInterval(poll,1000)})();
 </script>
 </body>
 </html>

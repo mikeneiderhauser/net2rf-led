@@ -173,6 +173,8 @@ void Engine::update_wants_(uint32_t now) {
     for (uint8_t i = 0; i < g_app.num_zones; i++) {
         const ZoneConfig &zc = g_app.zones[i];
         ZoneState &zs = this->zones_[i];
+        for (ZoneLane &l : zs.lane)
+            l.have_want = false;  // set again below for each protocol the zone drives
         if (!zc.enabled)
             continue;
         uint16_t base = zone_start_channel(g_app, i) - 1;
@@ -186,19 +188,18 @@ void Engine::update_wants_(uint32_t now) {
         } else if (g_app.mode == MODE_VENDOR) {
             // Vendor transmitter layout: [boot code][group][R][G][B]. Only transmit while the boot code is 85,
             // so sequences can switch the bracelets' transmitter on and off exactly as with the vendor hardware.
+            // Protocol 1 only (zone_live() leaves protocol 0 out in this mode).
             zs.gated = this->channels_[base] != VENDOR_BOOT_CODE;
             zs.group = this->channels_[base + 1];
             zs.r = this->channels_[base + 2];
             zs.g = this->channels_[base + 3];
             zs.b = this->channels_[base + 4];
             zs.fx = 0;
-            if (zs.gated) {
-                zs.have_want = false;
+            if (zs.gated || !zone_live(g_app, i, 1))
                 continue;
-            }
-            uint8_t addr[4] = {zs.group, zc.addr[1], 0, 0};
-            build_packet(1, addr, ACTION_COLOR, zs.r, zs.g, zs.b, g_app.off_threshold, zs.want);
-            zs.have_want = true;
+            uint8_t addr[4] = {zs.group, zc.p1_addr[1], 0, 0};
+            build_packet(1, addr, ACTION_COLOR, zs.r, zs.g, zs.b, g_app.off_threshold, zs.lane[1].want);
+            zs.lane[1].have_want = true;
             continue;
         } else if (g_app.mode == MODE_DMX) {
             zs.r = this->channels_[base];
@@ -209,20 +210,26 @@ void Engine::update_wants_(uint32_t now) {
             extract_rgb(g_app.color_order, &this->channels_[base], &zs.r, &zs.g, &zs.b);
             zs.fx = 0;
         }
-        build_packet(g_app.protocol, zc.addr, fx_action(zs.fx), zs.r, zs.g, zs.b, g_app.off_threshold, zs.want);
-        zs.have_want = true;
+        for (uint8_t p = 0; p < NUM_PROTOCOLS; p++) {
+            if (!zone_live(g_app, i, p))
+                continue;  // a protocol the zone doesn't use: no packet, no airtime
+            Action action = p == 1 ? p1_action(fx_action(zs.fx)) : fx_action(zs.fx);
+            build_packet(p, zone_addr(zc, p), action, zs.r, zs.g, zs.b, g_app.off_threshold, zs.lane[p].want);
+            zs.lane[p].have_want = true;
+        }
     }
 
-    // Base layer: zones showing their own colour are cut out of the All Zones address, black zones follow it.
+    // Base layer (protocol 0 lanes): zones showing their own colour are cut out of the All Zones address, black
+    // zones follow it.
     this->base_zone_ = -1;
     this->follows_ = 0;
-    if (g_app.protocol == 0 && g_app.base_layer) {
+    if (g_app.base_layer && protocol_in_use(g_app, 0)) {
         uint8_t wants[MAX_ZONES][PACKET_LEN];
         uint8_t addrs[MAX_ZONES][4];
         bool active[MAX_ZONES];
         for (uint8_t i = 0; i < g_app.num_zones; i++) {
-            active[i] = g_app.zones[i].enabled && this->zones_[i].have_want;
-            memcpy(wants[i], this->zones_[i].want, PACKET_LEN);
+            active[i] = this->zones_[i].lane[0].have_want;
+            memcpy(wants[i], this->zones_[i].lane[0].want, PACKET_LEN);
             memcpy(addrs[i], g_app.zones[i].addr, 4);
         }
         uint16_t mask;
@@ -230,16 +237,17 @@ void Engine::update_wants_(uint32_t now) {
         if (this->base_zone_ >= 0) {
             for (uint8_t i = 0; i < g_app.num_zones; i++)
                 if (active[i])
-                    memcpy(this->zones_[i].want, wants[i], PACKET_LEN);
+                    memcpy(this->zones_[i].lane[0].want, wants[i], PACKET_LEN);
             if (mask == 0) {  // every group has a zone with its own colour: nobody left for the base to address
-                ZoneState &base = this->zones_[this->base_zone_];
+                ZoneLane &base = this->zones_[this->base_zone_].lane[0];
                 memcpy(base.sent, base.want, PACKET_LEN);
                 base.have_sent = true;
             }
         }
     }
 
-    // Test mode on protocol 1: one broadcast packet per colour change instead of one per zone.
+    // Test mode, protocol 1 zones: one broadcast packet per colour change instead of one per zone. Protocol 0 zones
+    // are still sent zone by zone.
     if (this->test_mode_ != TestMode::OFF && this->can_broadcast_()) {
         const uint8_t *rgb = this->test_mode_ == TestMode::SOLID ? this->test_rgb_ : cycle;
         if (!this->test_sent_ || memcmp(rgb, this->test_last_rgb_, 3) != 0) {
@@ -247,12 +255,12 @@ void Engine::update_wants_(uint32_t now) {
             memcpy(this->test_last_rgb_, rgb, 3);
             this->test_sent_ = true;
         }
-        this->mark_zones_sent_(now);  // the broadcast covers every zone
+        this->mark_zones_sent_(now, PROTOCOL_BIT[1]);  // the broadcast covers every protocol 1 zone
     }
 }
 
 void Engine::queue_broadcast_(Action action, uint8_t r, uint8_t g, uint8_t b) {
-    // Called with StateLock held. Group 0 = all groups; byte 6 as normally sent (FF).
+    // Called with StateLock held. Protocol 1, group 0 = all groups; byte 6 as normally sent (FF).
     static const uint8_t ALL_GROUPS[4] = {0x00, 0xFF, 0x00, 0x00};
     if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE)
         return;
@@ -264,45 +272,54 @@ void Engine::queue_broadcast_(Action action, uint8_t r, uint8_t g, uint8_t b) {
     this->manual_.push_back(job);
 }
 
-// Treat every zone's current state as delivered (a broadcast already carried it).
-void Engine::mark_zones_sent_(uint32_t now) {
+void Engine::mark_zones_sent_(uint32_t now, uint8_t protocols) {
     for (uint8_t i = 0; i < g_app.num_zones; i++) {
-        ZoneState &zs = this->zones_[i];
-        if (!g_app.zones[i].enabled || !zs.have_want)
-            continue;
-        memcpy(zs.sent, zs.want, PACKET_LEN);
-        zs.have_sent = true;
-        zs.last_tx_ms = now;
+        for (uint8_t p = 0; p < NUM_PROTOCOLS; p++) {
+            ZoneLane &l = this->zones_[i].lane[p];
+            if (!has_protocol(protocols, p) || !l.have_want)
+                continue;
+            memcpy(l.sent, l.want, PACKET_LEN);
+            l.have_sent = true;
+            l.last_tx_ms = now;
+        }
     }
 }
 
-bool Engine::zone_changed_(uint8_t i) const {
-    const ZoneState &zs = this->zones_[i];
-    if (!g_app.zones[i].enabled || !zs.have_want)
+bool Engine::zone_changed_(uint8_t i, uint8_t p) const {
+    const ZoneLane &l = this->zones_[i].lane[p];
+    if (!l.have_want)
         return false;
-    if (!zs.have_sent)
+    if (!l.have_sent)
         return true;
     // The base zone's address shrinks and grows as other zones take and release their groups; only a new
     // colour (command bytes) is a reason to transmit it again.
-    if (i == this->base_zone_)
-        return zs.want[0] != zs.sent[0] || memcmp(zs.want + 4, zs.sent + 4, 2) != 0;
-    return memcmp(zs.want, zs.sent, PACKET_LEN) != 0;
+    if (p == 0 && i == this->base_zone_)
+        return l.want[0] != l.sent[0] || memcmp(l.want + 4, l.sent + 4, 2) != 0;
+    return memcmp(l.want, l.sent, PACKET_LEN) != 0;
 }
 
 // When zones that reach the same bracelets change together, the broader address (All Zones) must go out first
-// so the more specific colour lands last. A changed zone therefore waits while a broader, overlapping zone is
-// also waiting to be sent. Zones that don't overlap keep taking turns.
-bool Engine::held_back_(uint8_t i) const {
-    const uint8_t *mine = this->zones_[i].want;
-    uint8_t breadth = address_breadth(g_app.protocol, mine);
+// so the more specific colour lands last. A changed zone therefore waits while a broader, overlapping zone of the
+// same protocol is also waiting to be sent. Zones that don't overlap keep taking turns.
+bool Engine::held_back_(uint8_t i, uint8_t p) const {
+    const uint8_t *mine = this->zones_[i].lane[p].want;
+    uint8_t breadth = address_breadth(p, mine);
     for (uint8_t j = 0; j < g_app.num_zones; j++) {
-        if (j == i || !this->zone_changed_(j))
+        if (j == i || !this->zone_changed_(j, p))
             continue;
-        const uint8_t *other = this->zones_[j].want;
-        if (address_breadth(g_app.protocol, other) > breadth && addresses_overlap(g_app.protocol, mine, other))
+        const uint8_t *other = this->zones_[j].lane[p].want;
+        if (address_breadth(p, other) > breadth && addresses_overlap(p, mine, other))
             return true;
     }
     return false;
+}
+
+void Engine::take_lane_(uint8_t i, uint8_t p, uint32_t now) {
+    ZoneLane &l = this->zones_[i].lane[p];
+    memcpy(l.sent, l.want, PACKET_LEN);
+    l.have_sent = true;
+    l.last_tx_ms = now;
+    this->zones_[i].tx_count++;
 }
 
 bool Engine::pick_job_(uint32_t now, Job &job) {
@@ -311,50 +328,49 @@ bool Engine::pick_job_(uint32_t now, Job &job) {
         this->manual_.pop_front();
         return true;
     }
-    uint8_t n = g_app.num_zones;
-    // Pass 0: zones whose packet changed (newest state wins). Pass 1: periodic refresh.
+    // Lanes in the order zone 0 / protocol 0, zone 0 / protocol 1, zone 1 / protocol 0, ... taking turns.
+    uint8_t n = g_app.num_zones, lanes = (uint8_t) (n * NUM_PROTOCOLS);
+    // Pass 0: lanes whose packet changed (newest state wins). Pass 1: periodic refresh.
     for (int pass = 0; pass < 2; pass++) {
-        for (uint8_t k = 0; k < n; k++) {
-            uint8_t i = (this->rr_ + k) % n;
-            ZoneState &zs = this->zones_[i];
-            if (!g_app.zones[i].enabled || !zs.have_want)
+        for (uint8_t k = 0; k < lanes; k++) {
+            uint8_t idx = (uint8_t) ((this->rr_ + k) % lanes), i = idx / NUM_PROTOCOLS, p = idx % NUM_PROTOCOLS;
+            // For one change, a zone on both protocols sends protocol 0 first, then protocol 1.
+            if (pass == 0 && p == 1 && this->zone_changed_(i, 0) && !this->held_back_(i, 0))
+                idx = (uint8_t) (i * NUM_PROTOCOLS), p = 0;
+            ZoneLane &l = this->zones_[i].lane[p];
+            if (!l.have_want)
                 continue;
-            bool changed = this->zone_changed_(i);
-            bool refresh = g_app.refresh_ms > 0 && now - zs.last_tx_ms >= g_app.refresh_ms;
-            if (pass == 0 ? !changed || this->held_back_(i) : !refresh)
+            bool changed = this->zone_changed_(i, p);
+            bool refresh = g_app.refresh_ms > 0 && now - l.last_tx_ms >= g_app.refresh_ms;
+            if (pass == 0 ? !changed || this->held_back_(i, p) : !refresh)
                 continue;
-            job.protocol = g_app.protocol;
-            memcpy(job.packet, zs.want, PACKET_LEN);
+            job.protocol = p;
+            memcpy(job.packet, l.want, PACKET_LEN);
             job.repeats = g_app.repeats;
             job.manual = false;
-            memcpy(zs.sent, zs.want, PACKET_LEN);
-            zs.have_sent = true;
-            zs.last_tx_ms = now;
-            zs.tx_count++;
-            this->rr_ = (i + 1) % n;
-            if (pass == 0 && g_app.protocol == 0 && g_app.base_layer && i != this->base_zone_) {
-                // One packet per colour, not per zone: every other zone waiting to send this same command
-                // joins this transmission through the group mask.
+            this->take_lane_(i, p, now);
+            this->rr_ = (uint8_t) ((idx + 1) % lanes);
+            if (p == 0 && pass == 0 && g_app.base_layer && i != this->base_zone_) {
+                // One packet per colour, not per zone: every other protocol 0 zone waiting to send this same
+                // command joins this transmission through the group mask.
                 for (uint8_t j = 0; j < n; j++) {
-                    ZoneState &other = this->zones_[j];
-                    if (j == i || j == this->base_zone_ || !this->zone_changed_(j) || this->held_back_(j) ||
+                    const ZoneLane &other = this->zones_[j].lane[0];
+                    if (j == i || j == this->base_zone_ || !this->zone_changed_(j, 0) || this->held_back_(j, 0) ||
                         !p0_can_merge(job.packet, other.want))
                         continue;
                     p0_merge(job.packet, other.want);
-                    memcpy(other.sent, other.want, PACKET_LEN);
-                    other.have_sent = true;
-                    other.last_tx_ms = now;
-                    other.tx_count++;
+                    this->take_lane_(j, 0, now);
                 }
             }
-            if (i == this->base_zone_) {
+            if (p == 0 && i == this->base_zone_) {
                 // The broadcast also reached every zone that follows the base: they now show its colour.
                 for (uint8_t j = 0; j < n; j++) {
                     if (!(this->follows_ >> j & 1))
                         continue;
-                    memcpy(this->zones_[j].sent, this->zones_[j].want, PACKET_LEN);
-                    this->zones_[j].have_sent = true;
-                    this->zones_[j].last_tx_ms = now;
+                    ZoneLane &f = this->zones_[j].lane[0];
+                    memcpy(f.sent, f.want, PACKET_LEN);
+                    f.have_sent = true;
+                    f.last_tx_ms = now;
                 }
             }
             return true;
@@ -566,24 +582,25 @@ void Engine::run_() {
                 last_cycle_step = now / TEST_CYCLE_MS;
             if (this->config_dirty_) {
                 for (auto &zs : this->zones_)
-                    zs.have_sent = false;  // push new addressing/protocol out immediately
+                    zs.resend();  // push new addressing/protocols out immediately
                 this->tuned_ = false;
             }
             if (this->config_dirty_ || this->input_dirty_ || cycle_step)
                 this->update_wants_(now);
             this->config_dirty_ = this->input_dirty_ = false;
             if (this->blank_broadcast_) {
-                // One broadcast "off" blanks every group, including ones no zone is configured for.
+                // One broadcast "off" blanks every protocol 1 group, including ones no zone is configured for.
+                // Protocol 0 zones are blanked zone by zone (their colours have just gone to black).
                 this->blank_broadcast_ = false;
                 if (tx_allowed(g_app)) {
                     this->queue_broadcast_(ACTION_OFF, 0, 0, 0);
-                    this->mark_zones_sent_(now);
+                    this->mark_zones_sent_(now, PROTOCOL_BIT[1]);
                 }
             }
             if (this->hold_after_update_) {
                 // After all_off(): don't re-send the unchanged input colours over the "off".
                 this->hold_after_update_ = false;
-                this->mark_zones_sent_(now);
+                this->mark_zones_sent_(now, ALL_PROTOCOLS);
             }
 
             bool enabled = tx_allowed(g_app);
@@ -591,7 +608,7 @@ void Engine::run_() {
                 log_i("RF output %s", enabled ? "enabled" : "disabled");
                 if (enabled) {
                     for (auto &zs : this->zones_)
-                        zs.have_sent = false;  // bring bracelets up to date immediately
+                        zs.resend();  // bring bracelets up to date immediately
                 } else {
                     this->manual_.clear();
                 }
@@ -600,13 +617,14 @@ void Engine::run_() {
             if (!enabled) {
                 // Consume ("eat") updates without transmitting, so they are counted but not queued.
                 for (uint8_t i = 0; i < g_app.num_zones; i++) {
-                    ZoneState &zs = this->zones_[i];
-                    if (!g_app.zones[i].enabled || !zs.have_want)
-                        continue;
-                    if (!zs.have_sent || memcmp(zs.want, zs.sent, PACKET_LEN) != 0) {
-                        memcpy(zs.sent, zs.want, PACKET_LEN);
-                        zs.have_sent = true;
-                        this->out_.suppressed++;
+                    for (ZoneLane &l : this->zones_[i].lane) {
+                        if (!l.have_want)
+                            continue;
+                        if (!l.have_sent || memcmp(l.want, l.sent, PACKET_LEN) != 0) {
+                            memcpy(l.sent, l.want, PACKET_LEN);
+                            l.have_sent = true;
+                            this->out_.suppressed++;
+                        }
                     }
                 }
             } else if (this->radio_state_ == RadioState::READY && !this->suspended_) {
@@ -646,23 +664,31 @@ bool Engine::send_zone(int zone, Action action, uint8_t r, uint8_t g, uint8_t b)
     StateLock lock;
     if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE || zone >= (int) g_app.num_zones)
         return false;
-    if (zone < 0 && this->can_broadcast_()) {  // "all zones" = one packet to every group
+    // Built-in effects exist on protocol 0 only: they aren't sent to a zone's protocol 1 bracelets.
+    bool effect = action == ACTION_FX_A || action == ACTION_FX_B || action == ACTION_FX_C;
+    // "All zones" on protocol 1: one packet to every group instead of one per zone.
+    bool p1_broadcast = zone < 0 && !effect && this->can_broadcast_();
+    if (p1_broadcast) {
         this->queue_broadcast_(action, r, g, b);
-        this->manual_.back().manual = true;
-        return true;
+        if (!this->manual_.empty())
+            this->manual_.back().manual = true;
     }
     for (uint8_t i = 0; i < g_app.num_zones; i++) {
         const ZoneConfig &zc = g_app.zones[i];
         if (zone >= 0 ? zone != i : !zc.enabled)
             continue;
-        if (this->manual_.size() >= MAX_MANUAL_QUEUE)
-            break;
-        Job job{};
-        job.protocol = g_app.protocol;
-        job.repeats = g_app.repeats;
-        job.manual = true;
-        build_packet(g_app.protocol, zc.addr, action, r, g, b, g_app.off_threshold, job.packet);
-        this->manual_.push_back(job);
+        for (uint8_t p = 0; p < NUM_PROTOCOLS; p++) {  // protocol 0, then protocol 1
+            if (!zone_uses(zc, p) || (p == 0 && g_app.mode == MODE_VENDOR) || (p == 1 && (effect || p1_broadcast)))
+                continue;
+            if (this->manual_.size() >= MAX_MANUAL_QUEUE)
+                return true;
+            Job job{};
+            job.protocol = p;
+            job.repeats = g_app.repeats;
+            job.manual = true;
+            build_packet(p, zone_addr(zc, p), action, r, g, b, g_app.off_threshold, job.packet);
+            this->manual_.push_back(job);
+        }
     }
     return true;
 }
@@ -674,22 +700,22 @@ bool Engine::all_off() {
     this->test_mode_ = TestMode::OFF;
     this->test_sent_ = false;
     this->manual_.clear();  // drop anything queued that would land after the "off"
+    // Each protocol 0 zone gets an "off"; the protocol 1 zones share one broadcast to every group. A protocol that
+    // no zone uses gets nothing.
+    for (uint8_t i = 0; i < g_app.num_zones; i++) {
+        if (!zone_live(g_app, i, 0) || this->manual_.size() >= MAX_MANUAL_QUEUE)
+            continue;
+        Job job{};
+        job.protocol = 0;
+        job.repeats = g_app.repeats;
+        job.manual = true;
+        build_packet(0, g_app.zones[i].addr, ACTION_OFF, 0, 0, 0, g_app.off_threshold, job.packet);
+        this->manual_.push_back(job);
+    }
     if (this->can_broadcast_()) {
         this->queue_broadcast_(ACTION_OFF, 0, 0, 0);
         if (!this->manual_.empty())
             this->manual_.back().manual = true;
-    } else {
-        for (uint8_t i = 0; i < g_app.num_zones; i++) {
-            const ZoneConfig &zc = g_app.zones[i];
-            if (!zc.enabled)
-                continue;
-            Job job{};
-            job.protocol = g_app.protocol;
-            job.repeats = g_app.repeats;
-            job.manual = true;
-            build_packet(g_app.protocol, zc.addr, ACTION_OFF, 0, 0, 0, g_app.off_threshold, job.packet);
-            this->manual_.push_back(job);
-        }
     }
     this->input_dirty_ = true;        // recompute the real (input) colours...
     this->hold_after_update_ = true;  // ...but treat them as already sent
@@ -701,7 +727,7 @@ void Engine::set_test(TestMode mode, uint8_t r, uint8_t g, uint8_t b) {
     StateLock lock;
     if (mode == TestMode::OFF && this->test_mode_ != TestMode::OFF) {
         for (auto &zs : this->zones_)
-            zs.have_sent = false;  // put the real (input-driven) colours back
+            zs.resend();  // put the real (input-driven) colours back
     }
     this->test_mode_ = mode;
     this->test_rgb_[0] = r, this->test_rgb_[1] = g, this->test_rgb_[2] = b;
@@ -755,7 +781,11 @@ void Engine::sample_rssi_() {
         int8_t power;
         {
             StateLock lock;
-            freq = g_app.freq[g_app.protocol ? 1 : 0];
+            // The channel of the protocol in use (the default protocol's when both or neither are).
+            uint8_t p = protocol_in_use(g_app, 0) == protocol_in_use(g_app, 1) ? g_app.protocol & 1
+                        : protocol_in_use(g_app, 1)                          ? 1
+                                                                             : 0;
+            freq = g_app.freq[p];
             power = constrain(g_app.tx_power, this->radio_->min_power(), this->radio_->max_power());
         }
         bool tuned = this->tuned_ && freq == this->tuned_freq_ && power == this->tuned_power_;
@@ -907,12 +937,24 @@ void Engine::status_json(JsonObject o) {
         hex_into(rgb, c, 3);
         j["rgb"] = rgb;
         j["fx"] = gs.fx;
+        // The last packet sent on each protocol the zone drives; "packet" is the first of them (older clients).
         char pkt[PACKET_LEN * 2 + 1] = "";
-        if (gs.have_sent)
-            hex_into(pkt, gs.sent, PACKET_LEN);
-        j["packet"] = pkt;
+        JsonArray packets = j["packets"].to<JsonArray>();
+        for (uint8_t p = 0; p < NUM_PROTOCOLS; p++) {
+            const ZoneLane &l = gs.lane[p];
+            if (!l.have_sent || !zone_live(g_app, i, p))
+                continue;
+            hex_into(pkt, l.sent, PACKET_LEN);
+            JsonObject e = packets.add<JsonObject>();
+            e["p"] = p;
+            e["pkt"] = pkt;
+            if (j["packet"].isNull())
+                j["packet"] = pkt;
+        }
+        if (j["packet"].isNull())
+            j["packet"] = "";
         j["tx"] = gs.tx_count;
-        j["tx_age_ms"] = gs.have_sent ? (int32_t) (now - gs.last_tx_ms) : -1;
+        j["tx_age_ms"] = gs.have_sent() ? (int32_t) (now - gs.last_tx_ms()) : -1;
         if (g_app.mode == MODE_VENDOR) {
             j["gated"] = gs.gated;
             j["group"] = gs.group;

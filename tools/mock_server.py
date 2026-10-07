@@ -46,12 +46,12 @@ APP = {
     "update": {"repo": "mikeneiderhauser/net2rf-led", "auto_check": True, "check_hours": 12},
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
               "e131_multicast": True, "start_channel": 1, "timeout_s": 300},
-    "zones": [  # the firmware's defaults: every group, then groups 1-4
-        {"enabled": True, "name": "All Zones", "addr": "00FFFF0F", "start": 1},
-        {"enabled": True, "name": "Zone 1", "addr": "0002000F", "start": 4},
-        {"enabled": True, "name": "Zone 2", "addr": "0004000F", "start": 7},
-        {"enabled": True, "name": "Zone 3", "addr": "0008000F", "start": 10},
-        {"enabled": True, "name": "Zone 4", "addr": "0010000F", "start": 13},
+    "zones": [  # the firmware's defaults: every group, then groups 1-4; an address in both protocols
+        {"enabled": True, "name": "All Zones", "protocols": [0], "addr_p0": "00FFFF0F", "addr_p1": "00FF", "start": 1},
+        {"enabled": True, "name": "Zone 1", "protocols": [0], "addr_p0": "0002000F", "addr_p1": "01FF", "start": 4},
+        {"enabled": True, "name": "Zone 2", "protocols": [0], "addr_p0": "0004000F", "addr_p1": "02FF", "start": 7},
+        {"enabled": True, "name": "Zone 3", "protocols": [0], "addr_p0": "0008000F", "addr_p1": "03FF", "start": 10},
+        {"enabled": True, "name": "Zone 4", "protocols": [0], "addr_p0": "0010000F", "addr_p1": "04FF", "start": 13},
     ],
 }
 NET = {"hostname": "net2rf-3f2a", "eth_enabled": True, "wifi_ssid": "", "wifi_pass_set": False, "dhcp": True,
@@ -83,16 +83,16 @@ def p0_scene():
     own = ["FF0000", "000000", "0000FF", "00FF00", "000000"]
     zs = APP["zones"]
     rgbs = [own[i] if i < len(own) else "000000" for i in range(len(zs))]
-    if not APP["bracelets"].get("base_layer") or not zs or zs[0]["addr"][2:6] != "FFFF":
-        return [(rgb, p0_packet(z["addr"], rgb)) for z, rgb in zip(zs, rgbs)]
+    if not APP["bracelets"].get("base_layer") or not zs or zs[0]["addr_p0"][2:6] != "FFFF":
+        return [(rgb, p0_packet(z["addr_p0"], rgb)) for z, rgb in zip(zs, rgbs)]
     mask = 0xFFFF
     out = []
     for z, rgb in list(zip(zs, rgbs))[1:]:
         if rgb not in ("000000", rgbs[0]):
-            mask &= ~int(z["addr"][2:6], 16)
-            out.append((rgb, p0_packet(z["addr"], rgb)))
+            mask &= ~int(z["addr_p0"][2:6], 16)
+            out.append((rgb, p0_packet(z["addr_p0"], rgb)))
         else:
-            out.append((rgb, p0_packet(z["addr"], rgbs[0])))  # follows the base
+            out.append((rgb, p0_packet(z["addr_p0"], rgbs[0])))  # follows the base
     return [(rgbs[0], p0_packet(f"00{mask:04X}0F", rgbs[0]))] + out
 
 
@@ -126,6 +126,14 @@ CAPTURES = {
 }
 for c in CAPTURES.values():
     c["us"] = sum(abs(v) for v in c["pulses"])
+
+
+def app_view():
+    """APP as the firmware reports it: bracelets.protocols / per_zone derived from the zones."""
+    sets = [tuple(z["protocols"]) for z in APP["zones"]]
+    every = sorted({p for s in sets for p in s})
+    br = dict(APP["bracelets"], protocols=list(sets[0]) if len(set(sets)) == 1 else every, per_zone=len(set(sets)) > 1)
+    return dict(APP, bracelets=br)
 
 
 def receiver(up):
@@ -162,11 +170,12 @@ def status():
     STATS["packets"] += 40
     STATS["frames"] += 40
     colors = ["FF0000", "00FF00", "0000FF", "FFFFFF"]
-    scene = p0_scene() if APP["bracelets"]["protocol"] == 0 else None
+    scene = p0_scene()
     zones = []
-    for i, _ in enumerate(APP["zones"]):
-        rgb = scene[i][0] if scene else colors[(int(up / 2) + i) % 4]
-        z = {"rgb": rgb, "fx": 0, "packet": scene[i][1] if scene else p1_packet(APP["zones"][i]["addr"], rgb),
+    for i, cfg in enumerate(APP["zones"]):
+        rgb = scene[i][0]
+        packets = [{"p": p, "pkt": scene[i][1] if p == 0 else p1_packet(cfg["addr_p1"], rgb)} for p in cfg["protocols"]]
+        z = {"rgb": rgb, "fx": 0, "packets": packets, "packet": packets[0]["pkt"] if packets else "",
              "tx": 120 + i, "tx_age_ms": random.randint(50, 900)}
         if APP["bracelets"]["mode"] == "vendor":
             z.update(gated=(i == 1), group=i)
@@ -226,7 +235,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/status":
             return self.send(200, status())
         if path == "/api/config":
-            return self.send(200, {"app": APP, "network": NET})
+            return self.send(200, {"app": app_view(), "network": NET})
         if path == "/api/rx/capture":
             q = dict(kv.split("=", 1) for kv in (self.path.split("?") + [""])[1].split("&") if "=" in kv)
             c = CAPTURES.get(int(q.get("id", 0)))
@@ -263,7 +272,7 @@ class Handler(BaseHTTPRequestHandler):
                 {"name": "Old Firmware", "hostname": "net2rf-c3d4", "ip": "192.168.250.64", "firmware": "0.0.2",
                  "id": "C3D4", "self": False, "online": False, "last_seen_ms": 30000, "via": ["mdns"]}]})
         if path == "/api/tools":
-            scene = p0_scene() if APP["bracelets"]["protocol"] == 0 else []
+            scene = p0_scene()
             tx = [{"age_ms": 400 + 2100 * k, "p": 0, "pkt": pkt, "n": 3, "manual": k == 3, "ok": True}
                   for k, pkt in enumerate([s[1] for s in scene] + ["00FFFF0F00AAB7", "000C000F06AAC9"])]
             ch = [int(rgb[i:i + 2], 16) for rgb, _ in scene for i in (0, 2, 4)]
@@ -344,6 +353,13 @@ class Handler(BaseHTTPRequestHandler):
             if "zones" in body:
                 w = 4 if APP["bracelets"]["mode"] == "dmx" else 3
                 APP["zones"] = [dict(z, start=APP["input"]["start_channel"] + k * w) for k, z in enumerate(body["zones"])]
+            protocols = body.get("bracelets", {}).pop("protocols", None)  # every zone; not stored on its own
+            APP["bracelets"].pop("protocols", None)
+            APP["bracelets"].pop("per_zone", None)
+            if protocols:
+                for z in APP["zones"]:
+                    z["protocols"] = protocols
+                APP["bracelets"]["protocol"] = 1 if protocols == [1] else 0
         elif path == "/api/network":
             NET.update({k: v for k, v in body.items() if k not in ("wifi_pass", "ap_pass")})
             reboot = True

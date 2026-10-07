@@ -32,7 +32,13 @@ other controllers, and optionally an **admin password** under **System**.
 2. **Tools → Which protocol is my device? → Start test.** The controller alternates:
    - **red** = protocol 0 (Shenzen New Dody)
    - **green** = protocol 1 (LedGiftSupplier.com)
-3. Click the matching **use protocol** button.
+3. Click the matching **use protocol** button: every zone switches to that protocol.
+
+**Both kinds of bracelets?** Under **Bracelets & Radio → Bracelet protocols**, pick **Both** (every zone sends
+each change on both protocols, so any bracelet in its group follows it) or **Per zone**, then choose each zone's
+protocols on the **Zones** page, for example protocol 0 bracelets in one zone and protocol 1 pucks in another.
+Only the protocols you pick are transmitted: a protocol 0-only setup never spends airtime on protocol 1. Every zone
+keeps an address in both protocols, so switching never loses one.
 
 Nothing lights? Press the bracelet's button again (it may have gone back to sleep), check its battery, move closer,
 and raise **TX power**.
@@ -47,7 +53,7 @@ need:
 - **Sections:** one zone per group of bracelets, for example left and right of the yard, or kids' and adults'
   bracelets. It only works if your bracelets come in different groups. Find out with the steps below.
 
-A new controller starts on protocol 0 with five zones: **All Zones** (every bracelet), then **Zone 1** to
+A new controller starts with every zone on protocol 0, and five zones: **All Zones** (every bracelet), then **Zone 1** to
 **Zone 4** (groups 1 to 4). Remove the ones you don't need on the **Zones** page; *Add zone*
 continues with the next group.
 

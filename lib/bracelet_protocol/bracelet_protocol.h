@@ -227,6 +227,21 @@ inline void build_packet(uint8_t protocol, const uint8_t *addr, Action action, u
     }
 }
 
+// Protocol sets: bit per protocol (1 = protocol 0, 2 = protocol 1, 3 = both).
+static const uint8_t PROTOCOL_BIT[NUM_PROTOCOLS] = {1, 2};
+static const uint8_t ALL_PROTOCOLS = 3;
+inline bool has_protocol(uint8_t set, uint8_t protocol) { return set & PROTOCOL_BIT[protocol & 1]; }
+
+// Protocol 1 has no built-in effects. For a zone on both protocols, an effect meant for its protocol 0 bracelets
+// becomes the closest protocol 1 command: fade out -> off; fade in and effect C -> keep showing the colour.
+inline Action p1_action(Action a) {
+    if (a == ACTION_FX_B)
+        return ACTION_OFF;
+    if (a == ACTION_FX_A || a == ACTION_FX_C)
+        return ACTION_COLOR;
+    return a;
+}
+
 // Map the optional per-group FX channel (DMX value 0-255) to an action.
 inline Action fx_action(uint8_t v) {
     if (v < 20)
