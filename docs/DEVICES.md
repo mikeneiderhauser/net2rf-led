@@ -37,9 +37,10 @@ What to know:
 
 ### 🧪 LedGiftSupplier.com bracelets and light sticks (protocol 1)
 
-Supported from the protocol as decoded from the Flipper Zero app and the vendor's DMX transmitter guide: RGB with 16
-levels per channel, group codes, group 0 = all. Not yet tested with a real device. This is the protocol the
-vendor's "DMX to RF transmitter" kits use.
+Supported from the protocol as decoded from the Flipper Zero app and the vendor's DMX transmitter guide, with the
+colour and checksum bytes matched to off-air captures of the vendor's transmitter: full 8-bit RGB, group codes,
+group 0 = all. Not yet tested with a real device. This is the protocol the vendor's "DMX to RF transmitter" kits
+use.
 
 ### ❔ Other products
 

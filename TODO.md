@@ -73,3 +73,13 @@ Parked for now (2026-10-04): not a priority. To sort out when it is:
 - [ ] Range test across the yard (CC1101 at +10 dBm; Ra-02 as the long-range option).
 - [ ] Test with more bracelets at once, and with protocol 1 (LedGiftSupplier) hardware.
 - [ ] Carrier board and enclosure (in progress, tracked outside the repo for now).
+
+## Protocol 1 / receiver mode
+
+- [ ] Try the vendor-matched protocol 1 encoding (full 8-bit colour, checksum with the group) on real LedGiftSupplier
+  bracelets, including a group above 15, and the old Flipper-style packet for comparison.
+- [ ] Scope the vendor transmitter's sync: the captures suggest a long mark and a ~1000 µs gap and two copies per
+  burst; we send the Flipper app's 200 / 1600 µs sync. Change it if bracelets care.
+- [ ] Receiver mode on hardware: decode range against a second controller and the vendor transmitter; check the
+  edge interrupt load when the channel is noisy (the `edges` / `dropped` counters in `/api/status`).
+- [ ] SX1278 receive path (continuous mode, DIO2 as data out) so receiver mode works with a Ra-02 too.

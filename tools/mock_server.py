@@ -37,6 +37,7 @@ def gh_job():
 APP = {
     "name": "Front Yard",
     "output_enabled": True,
+    "role": "controller",
     "bracelets": {"protocol": 0, "mode": "pixel", "color_order": "RGB", "base_layer": True},
     "radio": {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
@@ -61,8 +62,9 @@ STATS = {"packets": 0, "frames": 0}
 
 def p1_packet(addr, rgb):
     """Protocol 1 packet for a zone address (group + byte 6) and colour, as the firmware builds it."""
-    lvl = [((15 - (15 * int(rgb[k:k + 2], 16) + 127) // 255) << 4) | 0x0F for k in (0, 2, 4)]
-    b = [0x55, int(addr[0:2], 16), *lvl, lvl[0] ^ lvl[1] ^ lvl[2] ^ 0x5A, int(addr[2:4], 16)]
+    lvl = [~int(rgb[k:k + 2], 16) & 0xFF for k in (0, 2, 4)]
+    gp = int(addr[0:2], 16)
+    b = [0x55, gp, *lvl, gp ^ lvl[0] ^ lvl[1] ^ lvl[2] ^ 0x55, int(addr[2:4], 16)]
     return "".join(f"{x:02X}" for x in b)
 
 
@@ -91,6 +93,30 @@ def p0_scene():
         else:
             out.append((rgb, p0_packet(z["addr"], rgbs[0])))  # follows the base
     return [(rgbs[0], p0_packet(f"00{mask:04X}0F", rgbs[0]))] + out
+
+
+def receiver(up):
+    """Receiver mode: a few groups heard on air, from both protocols."""
+    t = int(up)
+    zones = [
+        {"p": 0, "group": "all", "rgb": "FF0000", "label": "red", "pkt": "00FFFF0F01000E", "updates": 4, "age_ms": 41000,
+         "rssi_dbm": -58},
+        {"p": 0, "group": "2", "rgb": "0000FF", "label": "blue", "pkt": "0004000F010214", "updates": 9, "age_ms": 3200,
+         "rssi_dbm": -61},
+        {"p": 0, "group": "3", "rgb": "FF0000", "label": "red", "pkt": "00FFFF0F01000E", "updates": 4, "age_ms": 41000,
+         "rssi_dbm": -58},
+        {"p": 1, "group": "all", "rgb": "00FF00", "pkt": "5500FF00FFAAFF", "updates": 2, "age_ms": 9000, "rssi_dbm": -71},
+        {"p": 1, "group": "1", "rgb": ["FF8000", "8000FF"][t // 3 % 2], "pkt": p1_packet("01FF", ["FF8000", "8000FF"][t // 3 % 2]),
+         "updates": 12 + t // 3, "age_ms": (t % 3) * 1000 + 120, "rssi_dbm": -74},
+    ]
+    log = [{"age_ms": (t % 3) * 1000 + 120, "p": 1, "pkt": zones[4]["pkt"], "n": 3, "rssi_dbm": -74, "checksum": "vendor"},
+           {"age_ms": 3200, "p": 0, "pkt": "0004000F010214", "n": 3, "rssi_dbm": -61},
+           {"age_ms": 9000, "p": 1, "pkt": "5500FF00FFAAFF", "n": 2, "rssi_dbm": -71, "checksum": "vendor"},
+           {"age_ms": 12000, "p": 1, "pkt": "55000FFFFF55FF", "n": 3, "rssi_dbm": -80, "checksum": "legacy"}]
+    return {"enabled": APP["role"] == "receiver", "active": APP["role"] == "receiver" and APP["radio"]["power"],
+            "supported": APP["radio"]["type"] == "cc1101", "error": False, "freq": 433904500,
+            "frames": 120 + t, "bad": 3, "updates": 31 + t // 3, "edges": 900000 + t * 4000, "dropped": 0,
+            "rssi_dbm": -96, "rssi_peak_dbm": -71, "last_age_ms": (t % 3) * 1000 + 120, "zones": zones, "log": log}
 
 
 def status():
@@ -122,6 +148,8 @@ def status():
                     "wifi": {"ssid": NET["wifi_ssid"], "active": False, "connected": False, "mac": "A8:03:2A:11:3F:28"},
                     "ap": {"active": False}},
         "engine": {
+            "role": APP["role"],
+            "receiver": receiver(up),
             "radio": {"type": APP["radio"]["type"], "name": {"cc1101": "CC1101", "sx1278": "SX1278"}[APP["radio"]["type"]],
                       "state": "ready" if APP["radio"]["power"] else "off", "power": APP["radio"]["power"], "detail": "version 0x14",
                       "min_power": -30, "max_power": 10, "queue": 0,
@@ -245,6 +273,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"ok": True, "power": APP["radio"]["power"]})
         if path == "/api/all-off":
             TEST.update(mode="off")
+        if path in ("/api/send", "/api/raw", "/api/all-off") and APP["role"] == "receiver":
+            return self.send(409, {"ok": False, "error": "receiver mode: this controller only listens"})
         if path in ("/api/send", "/api/raw", "/api/all-off") and not APP["radio"]["power"]:
             return self.send(409, {"ok": False, "error": "radio is shut down"})
         if path in ("/api/send", "/api/raw", "/api/all-off") and not APP["output_enabled"]:
@@ -252,6 +282,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/config":
             if "name" in body:
                 APP["name"] = body["name"]
+            if "role" in body:
+                APP["role"] = body["role"]
             for key in ("bracelets", "radio", "input", "update"):
                 if key in body:
                     if key == "radio" and body[key].get("type") != APP["radio"]["type"]:

@@ -86,6 +86,26 @@ The pill row at the top of every page shows the radio, input and network state a
 - **Input timeout:** if no show data arrives for 5 minutes (configurable, or 0 for never), the bracelets are
   switched off.
 
+### Receiver mode
+
+The **Receiver mode** switch on the Dashboard turns the controller into a listener: it stops transmitting and
+instead decodes every bracelet command it hears on 433 MHz, from this project's controllers, the vendor's DMX
+transmitter or a Flipper. Both protocols are decoded at once (the radio listens between their two frequencies).
+Use it to check what a transmitter is really sending, to walk the yard and see where commands still arrive (the
+signal strength is shown per transmission), or as a stand-in bracelet while you have none.
+
+- The Dashboard's **Heard on air** card lists every group with the colour it was last told, how many commands it
+  got, their signal strength and when; below it, the latest transmissions (repeats of one transmission are
+  counted as copies). Protocol 1 packets with the old checksum (Flipper app, firmware up to v0.0.5) are marked.
+- A command to every group (protocol 0 mask `FFFF`, protocol 1 group 0) updates the *every group* row and every
+  group already listed.
+- The OLED shows a Receiver page and the heard groups, 4 per page (see [OLED](#oled)).
+- Nothing is transmitted while it is on: show input is still counted, and sends from the Tools page are refused.
+  Switching it off sends the current colours again.
+- Needs a **CC1101**; no extra wiring, since its GDO0 line carries the received signal back on IO33. The SX1278
+  driver has no receive path yet.
+- Bracelets that were already lit before the receiver started only appear once something changes them.
+
 ## Front panel
 
 ### Buttons
@@ -122,6 +142,8 @@ name and page number.
 | Status | IP and interface (ETH / WiFi / AP / offline), hostname (or hotspot name), radio state, firmware version (and a newer release, if one was found) |
 | Input | DDP / E1.31 state (live, nothing yet, timed out, TEST MODE, OUTPUT OFF), frame rate, packet count, time since the last packet, enabled inputs |
 | Zones | Zone number, name and current colour (hex), 4 per page |
+| Receiver *(receiver mode, instead of Input)* | Listening state, frequency and channel level, commands / frames / bad frames, time since the last one |
+| Heard *(receiver mode, instead of Zones)* | Protocol and group (`All` = every group), colour (palette name or hex) and age, 4 per page |
 
 - **Update marker:** a **U** in front of the page number (top right) means a newer firmware release is
   available; the Status page's version line says which.

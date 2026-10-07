@@ -63,6 +63,9 @@ class Cc1101Radio : public Radio {
     bool listen_on() override { return this->chip_.rx_on(); }
     int16_t rssi_dbm() override { return this->chip_.rssi_dbm(); }
     void listen_off() override { this->chip_.tx_off(); }
+    bool rx_supported() const override { return true; }
+    bool rx_data_on() override { return this->chip_.rx_data_on(); }
+    void rx_data_off() override { this->chip_.tx_off(); }
     void shutdown() override { this->chip_.power_down(); }
 
  private:
@@ -162,6 +165,13 @@ bool OokSender::begin() {
     if (!this->ready_)
         log_e("RMT init failed on GPIO%d", pins::RADIO_DATA);
     return this->ready_;
+}
+
+void OokSender::end() {
+    if (this->ready_)
+        rmtDeinit(pins::RADIO_DATA);
+    this->ready_ = false;
+    pinMode(pins::RADIO_DATA, INPUT);
 }
 
 bool OokSender::send(uint8_t protocol, const uint8_t *packet, uint8_t repeats) {

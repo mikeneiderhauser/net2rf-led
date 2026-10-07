@@ -66,6 +66,7 @@ struct AppConfig {
     uint16_t update_check_hours;  // how often the automatic check runs
     uint8_t base_layer;     // protocol 0: the all-groups zone is a base layer under the other zones
     uint8_t display_sleep;  // OLED sleep after this many minutes without a button press: 0 = default, 255 = never
+    uint8_t receiver;       // 1 = receiver mode: listen on 433 MHz and show what the bracelets are told; never transmits
 };
 static const uint8_t DISPLAY_SLEEP_DEFAULT_MIN = 10;
 static const uint8_t DISPLAY_SLEEP_NEVER = 255;
@@ -75,7 +76,7 @@ inline uint8_t display_sleep_minutes(const AppConfig &c) {
 }
 static const uint16_t UPDATE_CHECK_DEFAULT_HOURS = 12;
 // True when transmissions may be queued (call with StateLock held).
-inline bool tx_allowed(const AppConfig &c) { return c.output_enabled && !c.radio_off; }
+inline bool tx_allowed(const AppConfig &c) { return c.output_enabled && !c.radio_off && !c.receiver; }
 static const int8_t LBT_DEFAULT_THRESHOLD = -75;
 
 struct NetConfig {

@@ -72,6 +72,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 {
   "name": "Front Yard",
   "output_enabled": true,
+  "role": "controller",
   "bracelets": {"protocol": 1, "mode": "pixel", "color_order": "RGB"},
   "input":     {"ddp_enabled": true, "ddp_port": 4048, "e131_enabled": false, "e131_universe": 1,
                 "e131_multicast": true, "start_channel": 1, "timeout_s": 300},
@@ -107,6 +108,15 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 - `radio.type`: `cc1101` or `sx1278`. `tx_power` is clamped to the module's range. `refresh_ms` defaults to 0
   (send on change only): the bracelets latch, and extra airtime only adds interference.
 - `radio.power`: `false` = radio chip shut down (same as `POST /api/radio`).
+- `role`: `controller` (default) or `receiver`. A receiver never transmits: it listens between the two protocol
+  frequencies and decodes both protocols. `/api/status` → `engine.receiver` has `enabled`, `active` (listening),
+  `supported` (CC1101 fitted), `freq`, `frames` (decoded), `bad` (right shape, wrong checksum), `updates`
+  (distinct commands), `rssi_dbm` / `rssi_peak_dbm` (channel level over the last 0.5 s), `last_age_ms`, `zones`
+  (per group: `p`, `group` (`"all"` = every group), `rgb`, `label` (protocol 0 colour or effect), `pkt`, `updates`,
+  `age_ms`, `rssi_dbm`) and `noise_pauses` (times a flood of noise edges paused listening for 50 ms, to keep the controller responsive), `log`
+  (latest transmissions, newest first: `p`, `pkt`, `n` copies heard, `rssi_dbm`,
+  and for protocol 1 `checksum`: `vendor` or `legacy`). `POST /api/stats/reset` clears it. Transmit requests return
+  409 in receiver mode.
 - `display.sleep_min`: minutes without a USER button press before the OLED switches off (default 10, 0 = never).
 - `update.repo`: GitHub repository (`owner/name`) whose releases the firmware update checks and installs.
   Default `mikeneiderhauser/net2rf-led`; `""` restores the default.

@@ -31,23 +31,35 @@ static const uint32_t PROBE_INTERVAL_MS = 5000;
 static const char *const NVS_NS = "rfb";
 
 // Pages: Status, Input, then one Zones page per ZONES_PER_PAGE enabled zones.
-enum PageKind : uint8_t { PAGE_STATUS, PAGE_INPUT, PAGE_ZONES };
+// Receiver mode: Status, Receiver, then one Heard page per ZONES_PER_PAGE groups heard on air.
+enum PageKind : uint8_t { PAGE_STATUS, PAGE_INPUT, PAGE_ZONES, PAGE_RECEIVER, PAGE_HEARD };
 struct Page {
     PageKind kind;
     uint8_t first;  // index into the list of enabled zones (PAGE_ZONES)
 };
 static const uint8_t ZONES_PER_PAGE = 4;
-static const uint8_t MAX_PAGES = 2 + (MAX_ZONES + ZONES_PER_PAGE - 1) / ZONES_PER_PAGE;
+static const uint8_t MAX_PAGES = 2 + (bracelet::RxTracker::MAX_ZONES + ZONES_PER_PAGE - 1) / ZONES_PER_PAGE;
+static_assert(bracelet::RxTracker::MAX_ZONES >= MAX_ZONES, "MAX_PAGES must cover the controller's zone pages too");
 
 static uint8_t build_pages(Page *pages) {
     uint8_t enabled = 0;
+    bool receiver;
     {
         StateLock lock;
+        receiver = g_app.receiver;
         for (uint8_t i = 0; i < g_app.num_zones; i++)
             enabled += g_app.zones[i].enabled ? 1 : 0;
     }
     uint8_t n = 0;
     pages[n++] = {PAGE_STATUS, 0};
+    if (receiver) {
+        uint8_t heard = g_engine.rx_zone_count();
+        pages[n++] = {PAGE_RECEIVER, 0};
+        uint8_t heard_pages = heard ? (heard + ZONES_PER_PAGE - 1) / ZONES_PER_PAGE : 1;
+        for (uint8_t k = 0; k < heard_pages; k++)
+            pages[n++] = {PAGE_HEARD, (uint8_t) (k * ZONES_PER_PAGE)};
+        return n;
+    }
     pages[n++] = {PAGE_INPUT, 0};
     uint8_t zone_pages = enabled ? (enabled + ZONES_PER_PAGE - 1) / ZONES_PER_PAGE : 1;
     for (uint8_t k = 0; k < zone_pages; k++)
@@ -324,6 +336,46 @@ static String fit(const String &text, uint16_t max_px) {
     return t + "..";
 }
 
+// Receiver mode pages: the summary, or a list of the groups heard on air with what they were last told.
+static void draw_receiver(bool list, uint8_t first, const EngineSnapshot &s) {
+    static ReceiverSnapshot rx;  // large: keep it off the loop task's stack
+    g_engine.rx_snapshot(rx);
+    if (!list) {
+        String state = !rx.supported                           ? "needs a CC1101"
+                       : s.radio_state == RadioState::OFF      ? "radio shut down"
+                       : s.radio_state != RadioState::READY    ? "radio not ready"
+                       : rx.active                             ? "listening"
+                                                               : "starting";
+        s_oled->drawString(0, 14, fit("Receiver: " + state, 128));
+        String level = rx.active && rx.rssi_dbm > -127 ? String("  " + String(rx.rssi_dbm) + " dBm") : String();
+        s_oled->drawString(0, 26, fit(String(rx.freq_hz / 1e6, 3) + " MHz" + level, 128));
+        s_oled->drawString(0, 38, fit(String(rx.updates) + " cmds, " + rx.frames + " frames" +
+                                          (rx.bad ? String(", " + String(rx.bad) + " bad") : String()),
+                                      128));
+        s_oled->drawString(0, 50, rx.last_age_ms < 0 ? String("nothing heard yet")
+                                                     : String("last heard " + age_string(rx.last_age_ms) + " ago"));
+        return;
+    }
+    if (rx.count == 0) {
+        s_oled->drawString(0, 14, "Listening...");
+        s_oled->drawString(0, 26, "no bracelet commands yet");
+        return;
+    }
+    for (uint8_t i = first, row = 0; i < rx.count && row < ZONES_PER_PAGE; i++, row++) {
+        const ReceiverSnapshot::Row &z = rx.rows[i];
+        uint8_t y = 14 + row * 12;
+        String name = String("P") + z.protocol + " " +
+                      (z.group == bracelet::RxTracker::ALL_GROUPS ? String("All") : String("G" + String(z.group)));
+        char hex[7];
+        snprintf(hex, sizeof(hex), "%02X%02X%02X", z.r, z.g, z.b);
+        String what = (z.label ? String(z.label) : String(hex)) + " " + age_string(z.age_ms);
+        s_oled->drawString(0, y, name);
+        s_oled->setTextAlignment(TEXT_ALIGN_RIGHT);
+        s_oled->drawString(128, y, fit(what, 128 - 4 - s_oled->getStringWidth(name)));
+        s_oled->setTextAlignment(TEXT_ALIGN_LEFT);
+    }
+}
+
 static void draw_page(uint32_t now) {
     (void) now;
     EngineSnapshot s = g_engine.snapshot();
@@ -364,13 +416,15 @@ static void draw_page(uint32_t now) {
         else
             s_oled->drawString(0, 26, fit(g_net.hostname, 128));
         String radio = String(s.radio_name) + ": ";
-        radio += s.radio_state == RadioState::READY          ? "ready"
+        radio += s.radio_state == RadioState::READY          ? (g_engine.receiving() ? "receiving" : "ready")
                  : s.radio_state == RadioState::NOT_DETECTED ? "NOT DETECTED"
                  : s.radio_state == RadioState::OFF          ? "OFF"
                                                               : "starting";
         s_oled->drawString(0, 38, radio);
         const char *newer = updater::available_version();
         s_oled->drawString(0, 50, newer ? fit(String("v" FW_VERSION " > ") + newer + " avail", 128) : String("v" FW_VERSION));
+    } else if (page.kind == PAGE_RECEIVER || page.kind == PAGE_HEARD) {
+        draw_receiver(page.kind == PAGE_HEARD, page.first, s);
     } else if (page.kind == PAGE_INPUT) {
         const char *proto = s.last_source == InputSource::E131 ? "E1.31"
                             : s.last_source == InputSource::DDP ? "DDP"

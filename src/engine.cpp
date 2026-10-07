@@ -2,7 +2,11 @@
 #include "input_parsers.h"
 
 #include <esp_random.h>
+#include <esp_timer.h>
 #include <freertos/semphr.h>
+#include <hal/gpio_ll.h>
+
+#include "pins.h"
 
 using namespace bracelet;
 
@@ -39,6 +43,42 @@ static const uint32_t LBT_WINDOW_US = 2500;
 static const uint32_t LBT_SETTLE_US = 300;    // RX start-up / RSSI settling after entering RX
 static const uint32_t LBT_SAMPLE_US = 100;
 static const uint32_t LBT_MAX_WAIT_MS = 250;  // never hold an update longer than this: send anyway
+
+// ---------------------------------------------------------------------------------------------
+// Receiver mode: edge capture
+// ---------------------------------------------------------------------------------------------
+// The interrupt runs on the engine task's core and only timestamps edges into a ring; decoding happens in
+// the engine task. Each entry is (duration_us << 1) | level, the level being the one that just ended.
+namespace {
+constexpr uint32_t RX_RING = 1024;  // power of two
+volatile uint32_t s_rx_ring[RX_RING];
+volatile uint32_t s_rx_head = 0, s_rx_tail = 0, s_rx_dropped = 0;
+volatile int64_t s_rx_last_us = 0;
+
+void IRAM_ATTR rx_edge_isr() {
+    int64_t now = esp_timer_get_time();
+    uint32_t level = gpio_ll_get_level(&GPIO, pins::RADIO_DATA) ? 1 : 0;
+    int64_t d = now - s_rx_last_us;
+    s_rx_last_us = now;
+    uint32_t dur = d > 0x00FFFFFF ? 0x00FFFFFF : (uint32_t) d;
+    uint32_t head = s_rx_head;
+    if (head - s_rx_tail >= RX_RING) {
+        s_rx_dropped = s_rx_dropped + 1;
+        return;
+    }
+    s_rx_ring[head & (RX_RING - 1)] = (dur << 1) | (level ^ 1);
+    s_rx_head = head + 1;
+}
+}  // namespace
+
+static const uint32_t RX_RETRY_MS = 3000;
+static const uint32_t RX_RSSI_EVERY_MS = 10;
+static const uint32_t RX_RSSI_WINDOW_MS = 500;
+// Noise guard: a receiver with no signal can toggle its data line very fast, and an interrupt per edge would
+// starve the web server on this core. Bracelet frames need under 5000 edges/s; above this, pause briefly.
+static const uint32_t RX_STORM_WINDOW_MS = 100;
+static const uint32_t RX_STORM_EDGES = 2500;  // per window (25 000 edges/s)
+static const uint32_t RX_STORM_PAUSE_MS = 50;
 
 void Engine::begin() {
     this->radio_ = create_radio((RadioType) g_app.radio_type);
@@ -324,6 +364,7 @@ bool Engine::pick_job_(uint32_t now, Job &job) {
 }
 
 void Engine::try_init_radio_() {
+    this->stop_rx_();
     this->radio_state_ = RadioState::INITIALIZING;
     bool ok = this->radio_->init();
     this->sender_.begin();  // init() may have borrowed the data pin for its wiring check
@@ -464,6 +505,7 @@ void Engine::run_() {
         }
         if (want_off) {
             if (this->radio_state_ != RadioState::OFF) {
+                this->stop_rx_();
                 this->radio_->shutdown();
                 StateLock lock;
                 this->radio_state_ = RadioState::OFF;
@@ -474,6 +516,24 @@ void Engine::run_() {
                    (this->radio_state_ == RadioState::NOT_DETECTED && (int32_t) (now - this->next_init_ms_) >= 0)) {
             this->try_init_radio_();  // also wakes the chip after a shutdown
         }
+
+        // Receiver mode: listen instead of transmitting.
+        bool want_rx;
+        uint32_t rx_freq;
+        {
+            StateLock lock;
+            want_rx = g_app.receiver;
+            rx_freq = (uint32_t) (((uint64_t) g_app.freq[0] + g_app.freq[1]) / 2);  // hears both protocols
+        }
+        want_rx = want_rx && this->radio_state_ == RadioState::READY && !this->suspended_ && this->radio_->rx_supported();
+        if (this->rx_active_ && (!want_rx || rx_freq != this->rx_freq_))
+            this->stop_rx_();
+        if (!want_rx)
+            this->rx_failed_ = false;
+        else if (!this->rx_active_ && (int32_t) (now - this->rx_retry_ms_) >= 0)
+            this->start_rx_(rx_freq);
+        if (this->rx_active_)
+            this->poll_rx_(now);
 
         Job job;
         bool have_job = false;
@@ -657,6 +717,12 @@ void Engine::reset_stats() {
     this->out_ = OutputStats{};
     for (auto &zs : this->zones_)
         zs.tx_count = 0;
+    this->tracker_.clear();
+    this->decoder_.reset_counts();
+    this->rx_edges_ = 0;
+    this->rx_storms_ = 0;
+    s_rx_dropped = 0;
+    this->rx_log_head_ = this->rx_log_count_ = 0;
 }
 
 static void hex_into(char *out, const uint8_t *data, size_t len) {
@@ -670,6 +736,17 @@ void Engine::sample_rssi_() {
     int16_t peak = -127;
     int32_t sum = 0;
     uint32_t samples = 0, freq = 0;
+    if (this->rx_active_) {
+        // Already listening (receiver mode): report the running measurement instead of leaving RX.
+        StateLock lock;
+        this->rssi_ok_ = this->rx_rssi_avg_ > -127;
+        this->rssi_peak_ = this->rx_rssi_peak_;
+        this->rssi_avg_ = this->rx_rssi_avg_;
+        this->rssi_freq_ = this->rx_freq_;
+        this->rssi_request_ = false;
+        this->rssi_seq_ = this->rssi_seq_ + 1;
+        return;
+    }
     if (this->radio_state_ == RadioState::READY && this->radio_->lbt_supported()) {
         int8_t power;
         {
@@ -755,6 +832,9 @@ void Engine::tools_json(JsonObject o) {
 void Engine::status_json(JsonObject o) {
     StateLock lock;
     uint32_t now = millis();
+
+    o["role"] = g_app.receiver ? "receiver" : "controller";
+    this->rx_json_(o["receiver"].to<JsonObject>(), now);
 
     JsonObject radio = o["radio"].to<JsonObject>();
     radio["type"] = radio_type_name(g_app.radio_type);
@@ -846,7 +926,7 @@ EngineSnapshot Engine::snapshot() {
     s.input_seen = this->in_.seen;
     s.timed_out = this->in_.timed_out;
     s.test_active = this->test_mode_ != TestMode::OFF;
-    s.output_enabled = g_app.output_enabled;
+    s.output_enabled = g_app.output_enabled && !g_app.receiver;  // a receiver never transmits
     s.last_source = this->in_.last_source;
     s.input_age_ms = this->in_.seen ? millis() - this->in_.last_rx_ms : 0;
     s.num_zones = g_app.num_zones;
@@ -856,4 +936,193 @@ EngineSnapshot Engine::snapshot() {
         s.enabled[i] = g_app.zones[i].enabled;
     }
     return s;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Receiver mode
+// ---------------------------------------------------------------------------------------------
+
+void Engine::start_rx_(uint32_t freq) {
+    this->sender_.end();  // the radio drives the data line from here
+    bool ok = this->radio_->tune(freq, this->radio_->min_power()) && this->radio_->rx_data_on();
+    this->tuned_ = false;  // the next transmission re-tunes
+    if (!ok) {
+        log_w("%s could not start receiving", this->radio_->name());
+        this->radio_->rx_data_off();
+        this->sender_.begin();
+        this->rx_retry_ms_ = millis() + RX_RETRY_MS;
+        this->rx_failed_ = true;
+        return;
+    }
+    this->decoder_.reset();
+    s_rx_tail = s_rx_head;
+    s_rx_last_us = esp_timer_get_time();
+    attachInterrupt(pins::RADIO_DATA, rx_edge_isr, CHANGE);
+    this->rx_active_ = true;
+    this->rx_failed_ = false;
+    this->rx_paused_until_ = 0;
+    this->rx_storm_win_ms_ = millis();
+    this->rx_storm_edges_ = 0;
+    this->rx_freq_ = freq;
+    this->rx_rssi_win_ms_ = millis();
+    log_i("Receiver listening on %lu Hz", (unsigned long) freq);
+}
+
+void Engine::stop_rx_() {
+    if (!this->rx_active_)
+        return;
+    if (!this->rx_paused_until_)
+        detachInterrupt(pins::RADIO_DATA);
+    this->rx_paused_until_ = 0;
+    this->radio_->rx_data_off();
+    this->sender_.begin();
+    this->rx_active_ = false;
+    this->tuned_ = false;
+    StateLock lock;
+    this->rx_rssi_avg_ = this->rx_rssi_peak_ = -127;
+    log_i("Receiver stopped");
+}
+
+void Engine::poll_rx_(uint32_t now) {
+    uint32_t tail = s_rx_tail, head = s_rx_head;
+    this->rx_edges_ += head - tail;
+    this->rx_storm_edges_ += head - tail;
+    if (this->rx_paused_until_) {
+        if ((int32_t) (now - this->rx_paused_until_) >= 0) {
+            this->rx_paused_until_ = 0;
+            this->decoder_.reset();
+            s_rx_last_us = esp_timer_get_time();
+            attachInterrupt(pins::RADIO_DATA, rx_edge_isr, CHANGE);
+        }
+    } else if (now - this->rx_storm_win_ms_ >= RX_STORM_WINDOW_MS) {
+        if (this->rx_storm_edges_ > RX_STORM_EDGES) {
+            detachInterrupt(pins::RADIO_DATA);
+            this->rx_paused_until_ = (now + RX_STORM_PAUSE_MS) | 1;
+            this->rx_storms_++;
+        }
+        this->rx_storm_win_ms_ = now;
+        this->rx_storm_edges_ = 0;
+    }
+    bracelet::RxFrame f;
+    while (tail != head) {
+        uint32_t v = s_rx_ring[tail & (RX_RING - 1)];
+        tail++;
+        if (!this->decoder_.push(v & 1, v >> 1, f))
+            continue;
+        // The transmitter usually sends the frame several times back to back, so the carrier is likely still
+        // up: a fair reading of how strong this transmitter is here.
+        int16_t rssi = this->radio_->rssi_dbm();
+        uint32_t ms = millis();
+        StateLock lock;
+        bool fresh = this->tracker_.apply(f, ms, rssi);
+        RxLogEntry *e = this->rx_log_count_ ? &this->rx_log_[(this->rx_log_head_ + RX_LOG_SIZE - 1) % RX_LOG_SIZE]
+                                            : nullptr;
+        if (!fresh && e) {
+            e->copies++;
+            e->ms = ms;
+        } else {
+            e = &this->rx_log_[this->rx_log_head_];
+            e->ms = ms;
+            e->protocol = f.protocol;
+            memcpy(e->packet, f.pkt, PACKET_LEN);
+            e->copies = 1;
+            e->rssi_dbm = rssi;
+            this->rx_log_head_ = (this->rx_log_head_ + 1) % RX_LOG_SIZE;
+            if (this->rx_log_count_ < RX_LOG_SIZE)
+                this->rx_log_count_++;
+        }
+    }
+    s_rx_tail = tail;
+
+    if (now - this->rx_last_rssi_ms_ >= RX_RSSI_EVERY_MS) {
+        this->rx_last_rssi_ms_ = now;
+        int16_t r = this->radio_->rssi_dbm();
+        this->rx_rssi_sum_ += r;
+        this->rx_rssi_n_++;
+        if (r > this->rx_rssi_peak_win_)
+            this->rx_rssi_peak_win_ = r;
+    }
+    if (now - this->rx_rssi_win_ms_ >= RX_RSSI_WINDOW_MS && this->rx_rssi_n_) {
+        StateLock lock;
+        this->rx_rssi_avg_ = (int16_t) (this->rx_rssi_sum_ / this->rx_rssi_n_);
+        this->rx_rssi_peak_ = this->rx_rssi_peak_win_;
+        this->rx_rssi_sum_ = 0;
+        this->rx_rssi_n_ = 0;
+        this->rx_rssi_peak_win_ = -127;
+        this->rx_rssi_win_ms_ = now;
+    }
+}
+
+static String group_name(uint8_t group) {
+    if (group == bracelet::RxTracker::ALL_GROUPS)
+        return "all";
+    return String(group);
+}
+
+void Engine::rx_json_(JsonObject o, uint32_t now) {
+    // Called with StateLock held.
+    o["enabled"] = (bool) g_app.receiver;
+    o["active"] = this->rx_active_;
+    o["supported"] = this->radio_->rx_supported();
+    o["error"] = this->rx_failed_;
+    o["freq"] = this->rx_active_ ? this->rx_freq_ : (uint32_t) (((uint64_t) g_app.freq[0] + g_app.freq[1]) / 2);
+    o["frames"] = this->tracker_.frames();
+    o["bad"] = this->decoder_.bad();
+    o["updates"] = this->tracker_.updates();
+    o["edges"] = this->rx_edges_;
+    o["dropped"] = (uint32_t) s_rx_dropped;
+    o["noise_pauses"] = this->rx_storms_;  // edge storms (no usable signal) that paused listening briefly
+    o["rssi_dbm"] = this->rx_rssi_avg_;
+    o["rssi_peak_dbm"] = this->rx_rssi_peak_;
+    o["last_age_ms"] = this->tracker_.have_last() ? (int32_t) (now - this->tracker_.last_ms()) : -1;
+    char hex[PACKET_LEN * 2 + 1], rgb[7];
+    JsonArray zones = o["zones"].to<JsonArray>();
+    for (uint8_t i = 0; i < this->tracker_.count(); i++) {
+        const bracelet::RxZone &z = this->tracker_.zone(i);
+        JsonObject j = zones.add<JsonObject>();
+        j["p"] = z.protocol;
+        j["group"] = group_name(z.group);
+        uint8_t c[3] = {z.r, z.g, z.b};
+        hex_into(rgb, c, 3);
+        j["rgb"] = rgb;
+        if (z.label)
+            j["label"] = z.label;
+        hex_into(hex, z.pkt, PACKET_LEN);
+        j["pkt"] = hex;
+        j["updates"] = z.updates;
+        j["age_ms"] = now - z.last_ms;
+        j["rssi_dbm"] = z.rssi_dbm;
+    }
+    JsonArray log = o["log"].to<JsonArray>();
+    for (uint8_t k = 0; k < this->rx_log_count_; k++) {
+        const RxLogEntry &e = this->rx_log_[(this->rx_log_head_ + RX_LOG_SIZE - 1 - k) % RX_LOG_SIZE];
+        JsonObject j = log.add<JsonObject>();
+        hex_into(hex, e.packet, PACKET_LEN);
+        j["age_ms"] = now - e.ms;
+        j["p"] = e.protocol;
+        j["pkt"] = hex;
+        j["n"] = e.copies;
+        j["rssi_dbm"] = e.rssi_dbm;
+        if (e.protocol == 1)
+            j["checksum"] = bracelet::p1_checksum_kind(e.packet) == bracelet::P1_CK_LEGACY ? "legacy" : "vendor";
+    }
+}
+
+void Engine::rx_snapshot(ReceiverSnapshot &s) {
+    StateLock lock;
+    uint32_t now = millis();
+    s.enabled = g_app.receiver;
+    s.active = this->rx_active_;
+    s.supported = this->radio_->rx_supported();
+    s.freq_hz = this->rx_freq_;
+    s.frames = this->tracker_.frames();
+    s.bad = this->decoder_.bad();
+    s.updates = this->tracker_.updates();
+    s.rssi_dbm = this->rx_rssi_avg_;
+    s.last_age_ms = this->tracker_.have_last() ? (int32_t) (now - this->tracker_.last_ms()) : -1;
+    s.count = this->tracker_.count();
+    for (uint8_t i = 0; i < s.count; i++) {
+        const bracelet::RxZone &z = this->tracker_.zone(i);
+        s.rows[i] = {z.protocol, z.group, z.r, z.g, z.b, z.label, now - z.last_ms};
+    }
 }

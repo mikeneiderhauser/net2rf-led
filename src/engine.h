@@ -5,6 +5,7 @@
 #include <deque>
 
 #include "bracelet_protocol.h"
+#include "bracelet_rx.h"
 #include "config.h"
 #include "radio.h"
 
@@ -70,6 +71,24 @@ struct OutputStats {
     uint32_t lbt_wait_ms{0};  // total time spent waiting for a clear channel
 };
 
+// Receiver mode, for the OLED.
+struct ReceiverSnapshot {
+    bool enabled;    // receiver mode is selected
+    bool active;     // ... and the radio is listening
+    bool supported;  // the fitted radio can receive (CC1101)
+    uint32_t freq_hz;
+    uint32_t frames, bad, updates;
+    int16_t rssi_dbm;          // channel level now (average over the last half second)
+    int32_t last_age_ms;       // -1 = nothing heard yet
+    uint8_t count;
+    struct Row {
+        uint8_t protocol, group;  // group bracelet::RxTracker::ALL_GROUPS = every group
+        uint8_t r, g, b;
+        const char *label;
+        uint32_t age_ms;
+    } rows[bracelet::RxTracker::MAX_ZONES];
+};
+
 struct EngineSnapshot {  // for the OLED
     RadioState radio_state;
     const char *radio_name;
@@ -113,6 +132,12 @@ class Engine {
     // engine task between transmissions; false if the radio can't listen (off, not ready, no receiver).
     bool measure_rssi(int16_t &peak_dbm, int16_t &avg_dbm, uint32_t &freq_hz);
     EngineSnapshot snapshot();
+    void rx_snapshot(ReceiverSnapshot &out);
+    bool receiving() const { return this->rx_active_; }
+    uint8_t rx_zone_count() {
+        StateLock lock;
+        return this->tracker_.count();
+    }
     void reset_stats();
 
  private:
@@ -193,6 +218,38 @@ class Engine {
     uint8_t airtime_slot_{0};
     volatile int16_t lbt_last_rssi_{-127};  // strongest signal seen in the latest listen (dBm)
     volatile bool lbt_last_busy_{false};
+
+    // Receiver mode (AppConfig::receiver): the radio listens and drives pins::RADIO_DATA with the demodulated
+    // signal; an edge interrupt times it and the engine task decodes the frames. Nothing is transmitted.
+    void start_rx_(uint32_t freq);
+    void stop_rx_();
+    void poll_rx_(uint32_t now);
+    void rx_json_(JsonObject o, uint32_t now);
+    bool rx_active_{false};
+    uint32_t rx_freq_{0};
+    uint32_t rx_retry_ms_{0};
+    bool rx_failed_{false};
+    bracelet::FrameDecoder decoder_;
+    bracelet::RxTracker tracker_;
+    uint32_t rx_edges_{0};
+    uint32_t rx_storm_win_ms_{0}, rx_storm_edges_{0}, rx_storms_{0};
+    uint32_t rx_paused_until_{0};  // edge interrupt detached (noise storm) until then; 0 = attached
+    uint32_t rx_last_rssi_ms_{0};
+    int32_t rx_rssi_sum_{0};
+    int16_t rx_rssi_peak_win_{-127};
+    uint16_t rx_rssi_n_{0};
+    uint32_t rx_rssi_win_ms_{0};
+    int16_t rx_rssi_avg_{-127}, rx_rssi_peak_{-127};
+    struct RxLogEntry {
+        uint32_t ms;
+        uint8_t protocol;
+        uint8_t packet[bracelet::PACKET_LEN];
+        uint8_t copies;  // frames heard of this transmission
+        int16_t rssi_dbm;
+    };
+    static const uint8_t RX_LOG_SIZE = 24;
+    RxLogEntry rx_log_[RX_LOG_SIZE]{};
+    uint8_t rx_log_head_{0}, rx_log_count_{0};
 };
 
 extern Engine g_engine;

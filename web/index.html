@@ -108,6 +108,19 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
   <!-- DASHBOARD -->
   <section data-page="dashboard">
     <div class="note hide" id="d_fwNote"></div>
+    <div class="card hide" id="d_rxCard"><h2>Receiver &mdash; heard on air</h2>
+      <p class="dim small" style="margin-top:0">This controller is in <b>receiver mode</b>: it listens on 433&nbsp;MHz and shows what every bracelet group was last told, from any transmitter in range (this project, the vendor's DMX transmitter, a Flipper). It never transmits. Both bracelet protocols are decoded at once.</p>
+      <div class="grid">
+        <div><div class="big" id="d_rxUpd">–<span class="unit">commands</span></div><div id="d_rxState" class="small"></div></div>
+        <dl class="kv"><dt>Listening on</dt><dd id="d_rxFreq">–</dd><dt>Channel level</dt><dd id="d_rxLevel">–</dd>
+          <dt>Frames (good / bad)</dt><dd id="d_rxFrames">–</dd><dt>Last heard</dt><dd id="d_rxLast">–</dd></dl>
+      </div>
+      <h3 style="margin:14px 0 4px">Groups</h3>
+      <div class="scroll"><table class="tbl"><thead><tr><th>Protocol</th><th>Group</th><th>Showing</th><th>Commands</th><th>Signal</th><th>Last heard</th></tr></thead><tbody id="d_rxZones"></tbody></table></div>
+      <h3 style="margin:14px 0 4px">Latest transmissions</h3>
+      <div class="scroll"><table class="tbl"><thead><tr><th>When</th><th>To</th><th>Command</th><th>Packet</th><th>Copies</th><th>Signal</th></tr></thead><tbody id="d_rxLog"></tbody></table></div>
+      <div class="actions"><button id="d_rxClear">Clear</button><span class="dim small">Bracelets that were already lit before you started listening only show up once something changes their colour.</span></div>
+    </div>
     <div class="grid">
       <div class="card"><h2>Input (DDP)</h2>
         <div class="big" id="d_fps">–<span class="unit">fps</span></div>
@@ -123,6 +136,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
         <div class="small dim">share of the last 10 s spent transmitting</div>
         <label class="tog" style="margin-top:10px" title="Off: show data is still received and counted, but nothing is transmitted"><input type="checkbox" id="d_outSw" role="switch"><i></i><span><b>RF output</b> <span class="dim small" id="d_outState"></span></span></label>
         <label class="tog" title="Off: the radio chip is put to sleep to save power"><input type="checkbox" id="d_radioSw" role="switch"><i></i><span><b>Radio power</b> <span class="dim small" id="d_radioSwState"></span></span></label>
+        <label class="tog" title="On: listen on 433 MHz and show what the bracelets are told; nothing is transmitted"><input type="checkbox" id="d_rxSw" role="switch"><i></i><span><b>Receiver mode</b> <span class="dim small" id="d_rxSwState"></span></span></label>
         <div class="actions"><button class="danger" id="d_allOff" title="Send off to every bracelet in range">All off</button></div>
         <dl class="kv">
           <dt>Updates sent</dt><dd id="d_up">–</dd><dt>Frames sent</dt><dd id="d_tf">–</dd>
@@ -144,7 +158,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
           <dt>Free memory</dt><dd id="d_heap">–</dd><dt>Free flash</dt><dd id="d_flash">–</dd><dt>Last reset</dt><dd id="d_rst">–</dd>
         </dl></div>
     </div>
-    <div class="card"><h2>Zones &mdash; last received</h2>
+    <div class="card" id="d_zonesCard"><h2>Zones &mdash; last received</h2>
       <div class="scroll"><table class="tbl"><thead><tr><th>#</th><th>Zone</th><th>Channels</th><th>Colour</th><th></th><th>Sent packet</th><th>Updates</th><th>Last sent</th></tr></thead><tbody id="d_zones"></tbody></table></div>
       <div class="actions"><button id="resetStats">Reset counters</button><span class="dim small" id="d_timeoutNote"></span></div>
     </div>
@@ -152,7 +166,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="scroll"><table class="tbl"><thead><tr><th>Name</th><th>Address</th><th>IP</th><th>State</th><th>Last seen</th><th>Firmware</th><th></th></tr></thead><tbody id="d_peers"></tbody></table></div>
       <div class="actions"><button id="d_peersRefresh">Refresh</button><span class="dim small" id="d_alias"></span></div>
     </div>
-    <div class="card"><h2>Test mode</h2>
+    <div class="card" id="d_testCard"><h2>Test mode</h2>
       <p class="dim small" style="margin-top:0">Overrides DDP input for every enabled zone until switched off.</p>
       <div class="actions" style="margin-top:0"><div class="seg" id="testSeg"><button data-m="off">Off</button><button data-m="solid">Solid</button><button data-m="cycle">Cycle R/G/B/W</button></div>
       <input type="color" id="testColor" value="#ffffff"></div>
@@ -479,7 +493,8 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
   const d=S.device,n=S.network,e=S.engine,i=e.input,o=e.output,r=e.radio;
   $('zoneLabel').textContent=d.name;$('verLabel').textContent='v'+d.firmware;
   const [ic,it]=inputState(i),[rc,rt]=radioState(r);
-  $('pills').innerHTML=(o.enabled?'':pill('bad','RF output off'))+(d.update_rolled_back?pill('bad','update rolled back'):'')+pill(rc,r.name+' '+rt)+pill(ic,it)+pill(n.interface==='none'?'bad':n.interface==='ap'?'warn':'good',n.interface+' · '+n.ip);
+  const rx=e.receiver||{},rxOn=e.role==='receiver';
+  $('pills').innerHTML=(rxOn?pill(rx.active?'good':'warn','receiver mode'):o.enabled?'':pill('bad','RF output off'))+(d.update_rolled_back?pill('bad','update rolled back'):'')+pill(rc,r.name+' '+rt)+pill(ic,it)+pill(n.interface==='none'?'bad':n.interface==='ap'?'warn':'good',n.interface+' · '+n.ip);
   $('d_fps').innerHTML=i.fps+'<span class="unit">fps</span>';
   $('d_inState').innerHTML=`<span class="badge ${ic}">${it}</span> <span class="dim">${i.seen?(i.last_source==='e131'?'E1.31':'DDP')+' · last packet '+fmtAge(i.age_ms):''}</span>`;
   $('d_pk').textContent=`${fmtN(i.ddp_packets)} / ${fmtN(i.e131_packets)}`;$('d_fr').textContent=fmtN(i.frames);$('d_bad').textContent=fmtN(i.malformed);
@@ -489,7 +504,11 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
     `In xLights, open this controller and <b>untick "Keep Channel Numbers"</b> (DDP), or check the E1.31 universe / start channel.`;$('d_bytes').textContent=fmtBytes(i.bytes);$('d_src').textContent=i.source||'–';
   $('d_air').innerHTML=o.airtime_pct+'<span class="unit">% airtime</span>';
   $('d_up').textContent=fmtN(o.updates);$('d_tf').textContent=fmtN(o.frames);$('d_man').textContent=fmtN(o.manual);$('d_err').textContent=fmtN(o.errors);$('d_q').textContent=r.queue;$('d_sup').textContent=fmtN(o.suppressed);
-  const pw=r.power!==false;if(!swBusy){$('d_outSw').checked=o.enabled;$('d_radioSw').checked=pw}
+  const pw=r.power!==false;if(!swBusy){$('d_outSw').checked=o.enabled;$('d_radioSw').checked=pw;$('d_rxSw').checked=rxOn}
+  $('d_rxSwState').textContent=rxOn?(rx.active?'listening, nothing is transmitted':!rx.supported?'needs a CC1101':!pw?'radio is shut down':'starting…'):'off';
+  $('d_outSw').disabled=rxOn;$('d_allOff').disabled=rxOn;
+  ['d_zonesCard','d_testCard'].forEach(id=>$(id).classList.toggle('hide',rxOn));
+  $('d_rxCard').classList.toggle('hide',!rxOn);if(rxOn)renderRx(rx);
   $('d_outState').textContent=o.enabled?(pw?'on':'on, but the radio is shut down'):'off: show data is received, nothing is sent';
   $('d_radioSwState').textContent=pw?'on':'shut down: nothing is sent until it is switched on';
   $('d_radio').textContent=r.name;$('d_radioState').innerHTML=`<span class="badge ${rc}">${rt}</span>`;
@@ -653,9 +672,9 @@ ${models}${pal}
 Expect roughly 5-10 colour changes per second across all zones.`}
 
 // tools: raw packet
-const PRESETS=[['P0 red','0','00FFFF0F0100'],['P0 green','0','00FFFF0F0101'],['P0 blue','0','00FFFF0F0102'],['P0 off','0','00FFFF0F00AA'],['P0 fade in','0','00FFFF0F05AA'],['P0 fade out','0','00FFFF0F06AA'],['P0 effect C','0','D0FFFFFF5500'],['P1 red','1','55000FFFFF00FF'],['P1 green','1','5500FF0FFF00FF'],['P1 blue','1','5500FFFF0F00FF'],['P1 off','1','5500FFFFFF00FF']];
+const PRESETS=[['P0 red','0','00FFFF0F0100'],['P0 green','0','00FFFF0F0101'],['P0 blue','0','00FFFF0F0102'],['P0 off','0','00FFFF0F00AA'],['P0 fade in','0','00FFFF0F05AA'],['P0 fade out','0','00FFFF0F06AA'],['P0 effect C','0','D0FFFFFF5500'],['P1 red','1','550000FFFF00FF'],['P1 green','1','5500FF00FF00FF'],['P1 blue','1','5500FFFF0000FF'],['P1 off','1','5500FFFFFF00FF']];
 $('t_pre').innerHTML+=PRESETS.map((p,k)=>`<option value="${k}">${p[0]}</option>`).join('');
-function fixSum(p,b){if(p==0)b[6]=b.slice(0,6).reduce((a,c)=>a+c,0)&255;else b[5]=b[2]^b[3]^b[4]^0x5A;return b}
+function fixSum(p,b){if(p==0)b[6]=b.slice(0,6).reduce((a,c)=>a+c,0)&255;else b[5]=b[1]^b[2]^b[3]^b[4]^0x55;return b}
 function rawPrev(){const p=+$('t_p').value,b=bytes($('t_hex').value);if(b.length!==7){$('t_prev').textContent='needs 7 bytes';return null}
   if($('t_fix').checked)fixSum(p,b);$('t_prev').textContent='sends '+b.map(x=>hx(x)).join(' ');return b}
 ['t_p','t_hex','t_fix'].forEach(id=>$(id).addEventListener('input',rawPrev));
@@ -730,7 +749,7 @@ function rwTick(){const r=S.engine.radio,z=S.engine.zones[0];$('rw_hint').textCo
 
 function p0Words(b){if(b[0]===0xD0)return['–','effect C packet',''];const c=b[4],a=b[5];
   return[maskWords(b[1],b[2]),c===1?(P0NAME[a]||'colour '+a):c===0?'off':c===5?'fade in':c===6?'fade out':'command '+hx(c)+' '+hx(a),c===1?p0rgb(a):c===0?'#000000':'']}
-function p1Words(b){const l=x=>hx((15-(x>>4))*17),rgb='#'+l(b[2])+l(b[3])+l(b[4]);return[b[1]?'group '+b[1]:'every group',rgb==='#000000'?'off':rgb.toUpperCase(),rgb]}
+function p1Words(b){const l=x=>hx((~x)&255),rgb='#'+l(b[2])+l(b[3])+l(b[4]);return[b[1]?'group '+b[1]:'every group',rgb==='#000000'?'off':rgb.toUpperCase(),rgb]}
 async function toolsLive(){let t;try{t=await(await fetch('/api/tools')).json()}catch(e){return}
   $('tl_total').textContent=t.tx_total?`${fmtN(t.tx_total)} sent since boot.`:'';
   $('tl_rows').innerHTML=t.tx.length?t.tx.map(e=>{const b=bytes(e.pkt),[to,cmd,col]=e.p==0?p0Words(b):p1Words(b);
@@ -763,7 +782,7 @@ $('idn_go').onclick=()=>api('identify',{seconds:15}).then(()=>toast('Identifying
 $('idn_stop').onclick=()=>api('identify',{seconds:0});
 // tools: address probe
 const PAL=[[0,255,0,0],[1,0,255,0],[2,0,0,255],[3,255,0,128],[4,255,255,255],[5,255,255,0],[8,148,0,211],[9,255,128,0],[10,75,0,130],[11,0,255,255]];
-const p1c=v=>((15-Math.floor((15*v+127)/255))<<4)|15;
+const p1c=v=>(~v)&255;
 function nearest(r,g,b){let best=1e12,c=0;const mx=Math.max(r,g,b)||1;for(const e of PAL){const d=Math.min((r-e[1])**2+(g-e[2])**2+(b-e[3])**2,(r*255/mx-e[1])**2+(g*255/mx-e[2])**2+(b*255/mx-e[3])**2);if(d<best){best=d;c=e[0]}}return c}
 function buildPkt(p,a,rgb,off){return fixSum(p,p==0?[a[0],a[1],a[2],a[3],off?0:1,off?0xAA:nearest(...rgb),0]:[0x55,a[0],...(off?[0,0,0]:rgb).map(p1c),0,a[1]])}
 const FIELDS={0:[['m16','Mask bytes 1-2 (16 bits)',16],['b3','Byte 3',8],['b0','Byte 0',8]],1:[['b1','Group (byte 1)',8],['b6','Byte 6',8]]};
@@ -807,6 +826,30 @@ async function pollPeers(){try{const d=await api('discover');
   $('d_alias').innerHTML=d.running?'searching…':`Any controller: <span class="mono">http://${esc(d.alias)}/</span>${d.alias_claimed?' (this one)':''}`}catch(e){}}
 $('d_peersRefresh').onclick=async()=>{await api('discover',{});setTimeout(pollPeers,4000);toast('Searching for controllers…')};
 setInterval(()=>{if(location.hash===''||location.hash==='#dashboard')pollPeers()},5000);
+
+// receiver mode
+function rxWho(p,b){if(p==0)return p0Words(b)[0];return b[1]?'group '+b[1]:'every group'}
+function renderRx(x){
+  $('d_rxUpd').innerHTML=fmtN(x.updates)+'<span class="unit">commands</span>';
+  const st=!x.supported?['bad','needs a CC1101 (the SX1278 driver has no receive path yet)']:x.error?['bad','radio would not enter receive; retrying']:x.active?['good','listening']:['warn','starting'];
+  $('d_rxState').innerHTML=`<span class="badge ${st[0]}">${st[1]}</span>`;
+  $('d_rxFreq').textContent=mhz(x.freq)+' (protocols 0 and 1)';
+  $('d_rxLevel').textContent=x.active&&x.rssi_dbm>-127?`${x.rssi_dbm} dBm average, ${x.rssi_peak_dbm} dBm peak`:'–';
+  $('d_rxFrames').textContent=`${fmtN(x.frames)} / ${fmtN(x.bad)}`+(x.dropped?` · ${fmtN(x.dropped)} edges dropped`:'')+(x.noise_pauses?` · ${fmtN(x.noise_pauses)} noise pauses`:'');
+  $('d_rxLast').textContent=fmtAge(x.last_age_ms);
+  $('d_rxZones').innerHTML=x.zones.length?x.zones.map(z=>{const col='#'+z.rgb,what=z.label||col;
+    return `<tr><td>${z.p}</td><td>${z.group==='all'?'<b>every group</b>':esc(z.group)}</td><td class="nw"><span class="sw" style="background:${col}"></span> ${esc(what)}${z.label&&z.label!=='off'?` <span class="dim mono small">${col}</span>`:''}</td><td>${fmtN(z.updates)}</td><td class="dim nw">${z.rssi_dbm>-127?z.rssi_dbm+' dBm':'–'}</td><td class="dim nw">${fmtAge(z.age_ms)}</td></tr>`}).join(''):
+    '<tr><td colspan="6" class="dim">Nothing heard yet. Send something from a controller or the vendor transmitter nearby.</td></tr>';
+  $('d_rxLog').innerHTML=x.log.length?x.log.map(e=>{const b=bytes(e.pkt),[,cmd,col]=e.p==0?p0Words(b):p1Words(b);
+    return `<tr><td class="dim nw">${fmtAge(e.age_ms)}</td><td>P${e.p} · ${esc(rxWho(e.p,b))}</td><td class="nw">${col?`<span class="sw" style="background:${col}"></span> `:''}${esc(cmd)}</td><td class="mono nw">${b.map(v=>hx(v)).join(' ')}${e.checksum==='legacy'?' <span class="badge warn" title="Checksum as the Flipper app and older net2rf firmware build it">old checksum</span>':''}</td><td>×${e.n}</td><td class="dim nw">${e.rssi_dbm>-127?e.rssi_dbm+' dBm':'–'}</td></tr>`}).join(''):
+    '<tr><td colspan="6" class="dim">–</td></tr>'}
+$('d_rxSw').onchange=async e=>{const el=e.target,on=el.checked;swBusy=true;
+  try{if(!await ask(on?'Switch to receiver mode? This controller stops transmitting and only listens, until you switch it back.':
+      'Leave receiver mode? This controller goes back to transmitting what xLights sends.',on?'Listen':'Transmit')){el.checked=!on;return}
+    await api('config',{role:on?'receiver':'controller'});await loadConfig();
+    toast(on?'Receiver mode: listening, nothing is transmitted':'Receiver mode off: transmitting again')}
+  catch(err){el.checked=!on}finally{swBusy=false;poll()}};
+$('d_rxClear').onclick=()=>api('stats/reset',{}).then(()=>{toast('Cleared');poll()});
 
 // dashboard actions
 $('d_allOff').onclick=async()=>{

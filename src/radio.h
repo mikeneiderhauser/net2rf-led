@@ -30,6 +30,11 @@ class Radio {
     virtual bool listen_on() { return false; }
     virtual int16_t rssi_dbm() { return -127; }
     virtual void listen_off() {}
+    // Receiver mode: receive on the tuned frequency with the demodulated OOK signal on pins::RADIO_DATA (the
+    // radio drives the line, so OokSender::end() must have released it). rx_data_off() returns to idle.
+    virtual bool rx_supported() const { return false; }
+    virtual bool rx_data_on() { return false; }
+    virtual void rx_data_off() {}
     // Put the chip in its lowest-power state. init() brings it back.
     virtual void shutdown() {}
 };
@@ -40,6 +45,7 @@ Radio *create_radio(RadioType type);
 class OokSender {
  public:
     bool begin();  // (re)claims pins::RADIO_DATA for the RMT
+    void end();    // releases pins::RADIO_DATA (input, high impedance) so the radio can drive it
     // Send `repeats` back-to-back copies of the frame. Returns false on RMT error.
     bool send(uint8_t protocol, const uint8_t *packet, uint8_t repeats);
 

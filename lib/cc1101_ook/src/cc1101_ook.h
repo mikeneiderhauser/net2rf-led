@@ -65,6 +65,9 @@ class Cc1101Ook {
     // signal strength, then tx_off() to go back to IDLE.
     bool rx_on();
     int16_t rssi_dbm();
+    // Receiver: enter RX with the demodulated OOK data on GDO0 (the same line that carries TX data), so the
+    // caller can time its edges. The caller must not drive its end of the line meanwhile. tx_off() stops it.
+    bool rx_data_on();
     // Wiring check: drive GDO0 as a plain output (0 or 1), or -1 to release it (high impedance).
     // Only while idle; the caller reads its own end of the data line to confirm the connection.
     void gdo0_drive(int level);

@@ -31,7 +31,7 @@ a bracelet following an xLights sequence, and the web UI.
 | | |
 |---|---|
 | ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · group-mask addressing, the All Zones base layer and one packet per colour · bracelet fade in / fade out · xLights custom model, *Upload Output* and *Discover* · update check and install from GitHub releases · controller list and `net2rf.local` election (against simulated controllers) |
-| 🧪 **Built, not yet tested on hardware** | **LedGiftSupplier** bracelets (protocol 1, RGB + group codes) · **vendor DMX** input mode · E1.31 multicast · **Ra-02 / SX1278** radio · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
+| 🧪 **Built, not yet tested on hardware** | **Receiver mode** (decoder tested against the encoder with timing errors and noise) · **LedGiftSupplier** bracelets (protocol 1, full 8-bit RGB + group codes, matched to off-air captures of the vendor's transmitter) · **vendor DMX** input mode · E1.31 multicast · **Ra-02 / SX1278** radio · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
 | 🛠 **Coming soon** | A carrier board and enclosure |
 
 Full list of what's been tried: [docs/DEVICES.md](docs/DEVICES.md). What we know about the bracelets
@@ -63,6 +63,8 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
   `net2rf.local`. Optional listen-before-transmit keeps neighbouring controllers from talking over each other.
 - **Optional OLED and USER button:** IP and status at a glance; holding the button resets the network settings or
   the whole controller.
+- **Receiver mode:** one switch turns the controller into a listener that decodes both bracelet protocols from
+any transmitter in range and shows what every group was told, with signal strength, on the web UI and the OLED.
 - **JSON API:** for Home Assistant, Grafana or scripts.
 
 ## Hardware
@@ -122,7 +124,7 @@ welcome; [DEVICES.md](docs/DEVICES.md#reporting-a-device) lists what helps.
 
 ```bash
 pio run -e wt32-eth01                  # build firmware.bin and firmware.factory.bin
-pio test -e native                     # unit tests: packets, zone layering, input parsers, radio maths, discovery
+pio test -e native                     # unit tests: packets, receiver decoding, zone layering, input parsers, radio maths, discovery
 python3 tools/mock_server.py           # develop the web UI against a fake API at http://127.0.0.1:8765/
 python3 tools/ddp_test.py <ip> cycle   # send DDP without xLights
 python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the network
@@ -132,7 +134,7 @@ python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the netwo
 |---|---|
 | `src/` | The firmware: engine (zones, scheduling, RF), network, web server, OLED/button, peers, updater |
 | `web/index.html` | The web UI (gzipped into the firmware at build time) |
-| `lib/bracelet_protocol` | Bracelet packet encoder and DDP / E1.31 parsers (pure C++, unit tested) |
+| `lib/bracelet_protocol` | Bracelet packet encoder and decoder, receiver zone tracking, DDP / E1.31 parsers (pure C++, unit tested) |
 | `lib/cc1101_ook`, `lib/sx1278_ook` | Minimal radio drivers for OOK transmit and listen-before-talk |
 | `lib/net2rf_heartbeat`, `lib/net2rf_fpp` | Controller heartbeat and FPP discovery ping formats (unit tested) |
 | `lib/net2rf_wled` | The WLED config requests xLights' upload uses (unit tested) |

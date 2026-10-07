@@ -2,7 +2,8 @@
 
 Reverse engineered from the Flipper Zero `bracelet_led.fap` app ("App by RGB_Lights"), whose Setup screen switches between
 two targets: **Shenzen New Dody** (Tech Co.) and **LedGiftSupplier.com** (the app's default). Protocol 1 was then
-confirmed against the community *DMX Interactive Products* guide for the LedGiftSupplier DMX transmitter.
+confirmed against the community *DMX Interactive Products* guide for the LedGiftSupplier DMX transmitter, and its
+colour and checksum bytes corrected against RTL-SDR captures of that transmitter (see [Protocol 1](#protocol-1-rgb-with-group-codes)).
 Encoder and tests: [`lib/bracelet_protocol`](../lib/bracelet_protocol/).
 
 Both work with bracelets (2 × CR1632, 2 LEDs) and light sticks (3 × AAA, 5 LEDs). The LEDs are not individually
@@ -10,7 +11,7 @@ addressable: a device is one colour. Devices **latch**: they hold the last colou
 
 | | Protocol 0 (Shenzen New Dody) | Protocol 1 (LedGiftSupplier.com) |
 |---|---|---|
-| Tested with real devices | **Yes**, two bracelets (Banana Ball giveaway, board `SD-B15ST1K1`) driven from xLights | Not yet: encoding from the Flipper app and the vendor's DMX guide |
+| Tested with real devices | **Yes**, two bracelets (Banana Ball giveaway, board `SD-B15ST1K1`) driven from xLights | Not yet: encoding matches 61 off-air captures of the vendor's DMX transmitter |
 
 Device details and photos: [DEVICES.md](DEVICES.md).
 
@@ -51,8 +52,27 @@ share one channel ([RF.md](RF.md#multiple-controllers)).
 
 ## Protocol 1: RGB with group codes
 
-`55 GP RR GG BB CK A1`, where GP = group code and CK = RR ^ GG ^ BB ^ 0x5A.
-Each colour channel is `((15 - level) << 4) | 0x0F` with level 0-15 (so `0F` = full, `FF` = off): 16 levels per channel.
+`55 GP RR GG BB CK A1`, where GP = group code, each colour byte is the **inverted 8-bit DMX value** (`~v`: `00` =
+full, `FF` = off) and
+
+    CK = GP ^ RR ^ GG ^ BB ^ 0x55
+
+(on the packet bytes as sent; in DMX terms that is `0xAA ^ group ^ R ^ G ^ B`).
+
+This comes from RTL-SDR / Universal Radio Hacker captures of the vendor's DMX-to-RF transmitter, made by
+[CrispyPyro/Wireless_DMX_Receiver](https://github.com/CrispyPyro/Wireless_DMX_Receiver) (`docs/gflai-protocol.md`,
+MIT licence): 61 payloads across groups 0-83 and many colours, all predicted by the formula above. They are the
+unit test `test_p1_vendor_captures`. That project counts the pulses differently (an 11-pulse "preamble" is our
+`55` byte plus the top bit of the group byte, so it calls the group 7 bits wide), but the bits are the same.
+
+The Flipper app, and this firmware up to v0.0.5, sent 16 levels per channel (low nibble `F`) with
+CK = RR ^ GG ^ BB ^ 0x5A. That agrees with the vendor's checksum only in the high nibble, and only for groups 0-15, so
+it worked at best if the bracelets check just the high nibble. The firmware now sends exactly what the vendor's
+transmitter sends; its receiver mode still accepts both kinds (the log marks the old one).
+
+The same captures show the vendor's transmitter sending each payload twice per burst (~95 ms), and measure the sync
+as a long mark and a ~1000 µs gap rather than the app's 200 / 1600 µs. The receiver accepts both; the controller
+keeps the app's sync timing until a real bracelet says otherwise.
 
 The vendor's DMX transmitter maps a DMX universe straight onto this packet:
 
@@ -60,7 +80,7 @@ The vendor's DMX transmitter maps a DMX universe straight onto this packet:
 |---|---|---|
 | 1 | `55` | "boot code": must be **85** (0x55); the transmitter only sends while it is |
 | 2 | `GP` | **group code**: 0 = all groups; bracelets ship pre-assigned to a group (often 1) |
-| 3, 4, 5 | `RR GG BB` | colour, 0-255 (sent as 16 levels) |
+| 3, 4, 5 | `RR GG BB` | colour, 0-255 (sent as `~value`, full 8 bits) |
 
 Byte 6 (`A1`) has always been `FF`. The controller's *Vendor DMX transmitter* input mode uses exactly this
 5-channel layout, so sequences built for the vendor transmitter drive this controller unchanged.

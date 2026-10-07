@@ -6,9 +6,13 @@
 //
 // Protocol 0 (Shenzen New Dody Tech Co.) 433.889 MHz  packet: A0 A1 A2 A3 CMD ARG SUM  (SUM = byte sum of first 6)
 //                                                       default address: 00 FF FF 0F
-// Protocol 1 (LedGiftSupplier.com)       433.920 MHz  packet: 55 GP RR GG BB CK A1     (CK = RR^GG^BB^0x5A)
+// Protocol 1 (LedGiftSupplier.com)       433.920 MHz  packet: 55 GP RR GG BB CK A1
 //   55 = "boot code" (DMX ch1 = 85 on the vendor's DMX transmitter), GP = group code (ch2; 0 = all groups),
-//   RR GG BB = colour (ch3-5). A1 is 0xFF in every capture/app packet seen so far.
+//   RR GG BB = colour (ch3-5), each the inverted 8-bit DMX value (~v). CK = GP^RR^GG^BB^0x55.
+//   A1 is 0xFF in every capture/app packet seen so far.
+//   Colour and checksum match RTL-SDR captures of the vendor's DMX transmitter (CrispyPyro/Wireless_DMX_Receiver,
+//   docs/gflai-protocol.md). The Flipper app sends 16 levels (low nibble 0xF) and CK = RR^GG^BB^0x5A, which agrees
+//   with the vendor's checksum only in the high nibble and only for groups 0-15.
 //
 // Both protocols send a sync pulse followed by 56 bits (7 bytes) MSB first, pulse-width encoded.
 
@@ -59,7 +63,7 @@ inline uint8_t p0_checksum(const uint8_t *pkt) {
     return sum;
 }
 
-inline uint8_t p1_checksum(const uint8_t *pkt) { return pkt[2] ^ pkt[3] ^ pkt[4] ^ 0x5A; }
+inline uint8_t p1_checksum(const uint8_t *pkt) { return pkt[1] ^ pkt[2] ^ pkt[3] ^ pkt[4] ^ 0x55; }
 
 // Recompute the checksum byte of a packet in place.
 inline void fix_checksum(uint8_t protocol, uint8_t *pkt) {
@@ -150,11 +154,11 @@ inline void p0_merge(uint8_t *pkt, const uint8_t *other) {
     fix_checksum(0, pkt);
 }
 
-// 8-bit channel value -> protocol 1 byte: inverted 4-bit level in the high nibble, low nibble 0xF.
-inline uint8_t p1_channel(uint8_t v) {
-    uint8_t level = (15 * v + 127) / 255;
-    return (uint8_t) (((15 - level) << 4) | 0x0F);
-}
+// 8-bit channel value -> protocol 1 byte: the full DMX value, inverted (0xFF = off, 0x00 = full).
+inline uint8_t p1_channel(uint8_t v) { return (uint8_t) ~v; }
+
+// Protocol 1 byte -> 8-bit channel value (inverse of p1_channel).
+inline uint8_t p1_level(uint8_t byte) { return (uint8_t) ~byte; }
 
 // Nearest protocol 0 palette colour. Returns false when the colour is dark enough to mean "off".
 inline bool p0_nearest(uint8_t r, uint8_t g, uint8_t b, uint8_t off_threshold, uint8_t *code) {

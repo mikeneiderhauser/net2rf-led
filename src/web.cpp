@@ -243,7 +243,10 @@ static const char *reset_reason() {
 // Why a transmission was refused (409).
 static const char *tx_refused_reason() {
     StateLock lock;
-    return g_app.radio_off ? "radio is shut down" : !g_app.output_enabled ? "RF output is disabled" : "transmit queue full";
+    return g_app.receiver     ? "receiver mode: this controller only listens"
+           : g_app.radio_off  ? "radio is shut down"
+           : !g_app.output_enabled ? "RF output is disabled"
+                                   : "transmit queue full";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -412,6 +415,12 @@ static void handle_stats() {
     doc["input"] = full["input"];
     doc["output"] = full["output"];
     doc["test_mode"] = full["test"]["mode"];
+    doc["role"] = full["role"];
+    if (full["receiver"]["enabled"].as<bool>()) {
+        JsonObject rx = doc["receiver"].to<JsonObject>();
+        for (const char *k : {"active", "frames", "bad", "updates", "rssi_dbm", "last_age_ms"})
+            rx[k] = full["receiver"][k];
+    }
     JsonArray zones = doc["zones"].to<JsonArray>();
     {
         StateLock lock;

@@ -116,6 +116,17 @@ bool Cc1101Ook::rx_on() {
     return true;
 }
 
+bool Cc1101Ook::rx_data_on() {
+    this->strobe_(SIDLE);
+    this->write_(IOCFG0, GDO_SERIAL_DATA);  // in RX: asynchronous serial data out
+    this->strobe_(SRX);
+    if (!this->wait_state_(MARC_RX, 5)) {
+        this->tx_off();
+        return false;
+    }
+    return true;
+}
+
 int16_t Cc1101Ook::rssi_dbm() {
     uint8_t raw = this->read_status_(RSSI);
     int16_t v = raw >= 128 ? (int16_t) raw - 256 : (int16_t) raw;

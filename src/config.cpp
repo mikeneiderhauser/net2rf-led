@@ -105,6 +105,7 @@ void config_defaults_app(AppConfig &c) {
     c.update_check_hours = UPDATE_CHECK_DEFAULT_HOURS;
     c.base_layer = 1;  // new controllers only: saved settings keep the old behaviour until switched on
     c.display_sleep = 0;  // the default (10 minutes)
+    c.receiver = 0;
 }
 
 // AppConfig as saved by firmware before the listen-before-talk fields were appended.
@@ -113,6 +114,8 @@ static const size_t APP_V4_SIZE = (offsetof(AppConfig, lbt_enabled) + 3) & ~(siz
 static const size_t APP_V5_SIZE = (offsetof(AppConfig, update_repo) + 3) & ~(size_t) 3;
 // ... and before the automatic update check was appended.
 static const size_t APP_V6_SIZE = (offsetof(AppConfig, update_check_off) + 3) & ~(size_t) 3;
+// ... and before receiver mode was appended.
+static const size_t APP_V7_SIZE = (offsetof(AppConfig, receiver) + 3) & ~(size_t) 3;
 
 void config_defaults_net(NetConfig &c) {
     memset(&c, 0, sizeof(c));
@@ -130,11 +133,13 @@ void config_load() {
     p.begin(NVS_NS, true);
     size_t app_len = p.getBytesLength("app");
     bool app_ok = false;
-    if (app_len == sizeof(AppConfig) || app_len == APP_V6_SIZE || app_len == APP_V5_SIZE || app_len == APP_V4_SIZE) {
+    if (app_len == sizeof(AppConfig) || app_len == APP_V7_SIZE || app_len == APP_V6_SIZE || app_len == APP_V5_SIZE ||
+        app_len == APP_V4_SIZE) {
         config_defaults_app(g_app);  // fields missing from an older, shorter record keep their defaults
         app_ok = p.getBytes("app", &g_app, app_len) == app_len && g_app.magic == APP_MAGIC;
-        if (app_ok && app_len != sizeof(AppConfig)) {
+        if (app_ok && app_len != sizeof(AppConfig))
             log_i("Upgraded saved settings to the current layout");
+        if (app_ok && app_len <= offsetof(AppConfig, base_layer)) {
             g_app.base_layer = 0;  // an existing setup keeps sending exactly as before until this is switched on
         }
     }
@@ -291,6 +296,7 @@ template<typename T> static bool read_int(JsonObjectConst in, const char *key, l
 void app_to_json(const AppConfig &c, JsonObject o) {
     o["name"] = c.name;
     o["output_enabled"] = (bool) c.output_enabled;
+    o["role"] = c.receiver ? "receiver" : "controller";
 
     JsonObject br = o["bracelets"].to<JsonObject>();
     br["protocol"] = c.protocol;
@@ -344,6 +350,14 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
         copy_name(c.name, sizeof(c.name), in["name"]);
     if (!in["output_enabled"].isNull())
         c.output_enabled = in["output_enabled"].as<bool>();
+    if (in["role"].is<const char *>()) {
+        String role = in["role"].as<const char *>();
+        if (role != "receiver" && role != "controller") {
+            err = "role must be \"controller\" or \"receiver\"";
+            return false;
+        }
+        c.receiver = role == "receiver";
+    }
 
     JsonObjectConst br = in["bracelets"];
     if (!br.isNull()) {
