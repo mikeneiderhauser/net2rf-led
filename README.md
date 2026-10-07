@@ -46,6 +46,7 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
 
 - **Two bracelet families:** Shenzen New Dody (10-colour palette) and LedGiftSupplier.com (RGB, group codes), on
   one controller: each zone drives protocol 0, protocol 1 or both, and only the protocols in use go on air.
+  Wally's Lights' RF products use the LedGiftSupplier protocol too; some are on order for testing.
   Bracelets and light sticks both work the same way.
 - **Layered zones:** an All Zones layer under per-group zones, so a group keeps its own colour while everyone
   else follows the crowd-wide effect (protocol 0).

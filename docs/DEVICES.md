@@ -42,10 +42,20 @@ colour and checksum bytes matched to off-air captures of the vendor's transmitte
 group 0 = all. Not yet tested with a real device. This is the protocol the vendor's "DMX to RF transmitter" kits
 use.
 
+### 🧪 Wally's Lights RF products (protocol 1)
+
+Wally's Lights' RF range (hats, pucks, bracelets and light sticks, sold with a "DMX to RF" transmitter) uses
+**protocol 1**, the same protocol as the LedGiftSupplier devices above. A hat, pucks, bracelets and sticks are
+on order to test here; until they arrive, nothing from this range has been driven by this controller. Only the
+receiving products are on order, not the vendor's transmitter.
+
+To be checked when they arrive: that they follow the controller's protocol 1 packets, how their groups (the
+vendor's zones) map to group codes, and how they behave when idle.
+
 ### ❔ Other products
 
-RF pucks, wands, hats and the like (for example Wally's Lights' "DMX to RF" range, organised in zones 1–4) may use
-one of these two protocols or something else. Try *Tools → Which protocol is my device?* and report the result.
+Other RF pucks, wands, hats and the like may use one of these two protocols or something else. Try *Tools →
+Which protocol is my device?* and report the result.
 
 ## Controller hardware
 
