@@ -67,7 +67,11 @@ struct AppConfig {
     uint8_t base_layer;     // protocol 0: the all-groups zone is a base layer under the other zones
     uint8_t display_sleep;  // OLED sleep after this many minutes without a button press: 0 = default, 255 = never
     uint8_t receiver;       // 1 = receiver mode: listen on 433 MHz and show what the bracelets are told; never transmits
+    uint8_t rx_profile;     // receiver mode: RxProfile
 };
+// Receiver mode tuning (both radios): normal, near (gain capped: a transmitter within a few metres), wide band.
+enum RxProfile : uint8_t { RX_PROFILE_NORMAL = 0, RX_PROFILE_NEAR = 1, RX_PROFILE_WIDE = 2, NUM_RX_PROFILES };
+static const char *const RX_PROFILE_NAMES[NUM_RX_PROFILES] = {"normal", "near", "wide"};
 static const uint8_t DISPLAY_SLEEP_DEFAULT_MIN = 10;
 static const uint8_t DISPLAY_SLEEP_NEVER = 255;
 // Minutes until the OLED sleeps (0 = never).

@@ -20,6 +20,17 @@ static const int8_t MIN_DBM = 2;   // PA_BOOST range without the +20 dBm high-po
 static const int8_t MAX_DBM = 17;
 static const uint8_t CHIP_VERSION = 0x12;
 
+// Receiver profiles (receiver mode), matching the CC1101's: normal 166.7 kHz with AGC, near 166.7 kHz with the
+// LNA fixed 24 dB down (a transmitter within a few metres saturates the receiver otherwise), wide 250 kHz.
+enum RxProfile : uint8_t { RX_NORMAL = 0, RX_NEAR = 1, RX_WIDE = 2, NUM_RX_PROFILES };
+
+// Receiver bandwidth for RegRxBw (RxBwMant bits 4-3: 16 / 20 / 24, RxBwExp bits 2-0), FSK/OOK mode:
+// FXOSC / (mant * 2^(exp + 2)).
+inline uint32_t rx_bandwidth_hz(uint8_t reg_rx_bw) {
+    static const uint8_t MANT[] = {16, 20, 24, 24};
+    return FXOSC_HZ / ((uint32_t) MANT[(reg_rx_bw >> 3) & 3] << ((reg_rx_bw & 7) + 2));
+}
+
 // RegFrf (MSB:MID:LSB) for a carrier frequency: f_rf = FXOSC / 2^19 * Frf.
 inline uint32_t frf(uint32_t hz) { return (uint32_t) (((uint64_t) hz << 19) / FXOSC_HZ); }
 
@@ -60,6 +71,11 @@ class Sx1278Ook {
     bool rx_on();
     int16_t rssi_dbm();
     void rx_off();
+    // Receiver mode: continuous-mode RX with the demodulated OOK signal (bit synchroniser off) on DIO2, which
+    // is the TX data line, so the caller must have released its end. rx_data_off() goes back to STANDBY.
+    bool rx_data_on(uint8_t profile = sx1278_ook::RX_NORMAL);
+    void rx_data_off();
+    static uint32_t rx_bandwidth(uint8_t profile);
 
     uint8_t version() const { return version_; }  // 0 = not detected
 

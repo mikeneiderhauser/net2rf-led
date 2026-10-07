@@ -76,10 +76,15 @@ Parked for now (2026-10-04): not a priority. To sort out when it is:
 
 ## Protocol 1 / receiver mode
 
-- [ ] Try the vendor-matched protocol 1 encoding (full 8-bit colour, checksum with the group) on real LedGiftSupplier
-  bracelets, including a group above 15, and the old Flipper-style packet for comparison.
-- [ ] Scope the vendor transmitter's sync: the captures suggest a long mark and a ~1000 µs gap and two copies per
-  burst; we send the Flipper app's 200 / 1600 µs sync. Change it if bracelets care.
-- [ ] Receiver mode on hardware: decode range against a second controller and the vendor transmitter; check the
-  edge interrupt load when the channel is noisy (the `edges` / `dropped` counters in `/api/status`).
-- [ ] SX1278 receive path (continuous mode, DIO2 as data out) so receiver mode works with a Ra-02 too.
+- [ ] Try the vendor-matched protocol 1 encoding (full 8-bit colour, checksum with the group) on real protocol 1
+  devices (Wally's Lights hat, pucks, bracelets, sticks on order), including a group above 15, and the old
+  Flipper-style packet for comparison.
+- [ ] Sync timing: CrispyPyro's captures of the vendor transmitter suggest a long mark and a ~1000 µs gap and two
+  copies per burst; we send the Flipper app's 200 / 1600 µs sync. Try the vendor's only if devices ignore ours.
+- [ ] Receiver mode on hardware, CC1101 and Ra-02: decode range against a second controller; which tuning profile
+  works on the bench (*near* expected) and across the yard (*normal*); edge interrupt load on a noisy channel
+  (`edges` / `dropped` / `noise_pauses` in `/api/status`); whether the noise-floor filter drops real weak bursts.
+- [ ] SX1278 receive: confirm the AGC setting (`RegRxConfig` 0x08, gain picked when RX starts) holds up when a
+  transmitter comes and goes; otherwise fix the LNA gain or add an RSSI trigger.
+- [ ] Raw captures: check a real protocol 0 / protocol 1 burst against the bit guess, and an `.ook` export in
+  rtl_433.

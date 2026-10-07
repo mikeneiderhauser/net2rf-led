@@ -814,6 +814,27 @@ void begin() {
         g_engine.tools_json(doc.to<JsonObject>());
         send_json(200, doc);
     });
+    // Receiver mode raw capture: ?id=N -> {pulses: [+mark, -space, ...] (us), ...}; add &format=ook for rtl_433's
+    // pulse-data text (rtl_433 -r capture.ook -A).
+    s_server.on("/api/rx/capture", HTTP_GET, []() {
+        uint32_t id = (uint32_t) s_server.arg("id").toInt();
+        if (s_server.arg("format") == "ook") {
+            String text;
+            if (!g_engine.rx_capture_ook(id, text)) {
+                send_error(404, "no such capture");
+                return;
+            }
+            s_server.sendHeader("Content-Disposition", "attachment; filename=\"net2rf-capture-" + String(id) + ".ook\"");
+            s_server.send(200, "text/plain", text);
+            return;
+        }
+        JsonDocument doc;
+        if (!g_engine.rx_capture_json(id, doc.to<JsonObject>())) {
+            send_error(404, "no such capture");
+            return;
+        }
+        send_json(200, doc);
+    });
     s_server.on("/api/rssi", HTTP_GET, protect([]() {  // signal strength on the bracelet frequency, right now
         int16_t peak, avg;
         uint32_t freq;

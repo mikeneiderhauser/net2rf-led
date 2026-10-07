@@ -102,8 +102,17 @@ signal strength is shown per transmission), or as a stand-in bracelet while you 
 - The OLED shows a Receiver page and the heard groups, 4 per page (see [OLED](#oled)).
 - Nothing is transmitted while it is on: show input is still counted, and sends from the Tools page are refused.
   Switching it off sends the current colours again.
-- Needs a **CC1101**; no extra wiring, since its GDO0 line carries the received signal back on IO33. The SX1278
-  driver has no receive path yet.
+- Works with both radios and needs no extra wiring: the received signal comes back on the same data line that
+  carries the transmit signal (CC1101 GDO0, or SX1278 / Ra-02 DIO2).
+- **Tuning** (on the card): *normal* (162 kHz on the CC1101, 167 kHz on the SX1278) is the most sensitive.
+  *Near-field* caps the receiver's gain: use it when the transmitter is within a few metres, for example a second
+  controller on the same bench, since a strong signal overloads the receiver and frames stop decoding while the
+  signal level reads high. *Wide band* (325 / 250 kHz) is for transmitters that are well off frequency.
+- **Raw captures:** every burst of remote-control-like pulses that is louder than the noise floor is kept, whether
+  it decoded or not. The last 4 are kept, and undecoded ones are kept longest. *View* draws the waveform, groups
+  the mark and space widths, and, if the signal is pulse-width coded, reads its bits as hex: a quick way to see
+  what an unknown transmitter or remote sends. *.ook* downloads it in [rtl_433](https://github.com/merbanan/rtl_433)'s
+  pulse format; `rtl_433 -r capture.ook -A` runs rtl_433's pulse analyser on it.
 - Bracelets that were already lit before the receiver started only appear once something changes them.
 
 ## Front panel

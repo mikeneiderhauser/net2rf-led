@@ -112,13 +112,21 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <p class="dim small" style="margin-top:0">This controller is in <b>receiver mode</b>: it listens on 433&nbsp;MHz and shows what every bracelet group was last told, from any transmitter in range (this project, the vendor's DMX transmitter, a Flipper). It never transmits. Both bracelet protocols are decoded at once.</p>
       <div class="grid">
         <div><div class="big" id="d_rxUpd">–<span class="unit">commands</span></div><div id="d_rxState" class="small"></div></div>
-        <dl class="kv"><dt>Listening on</dt><dd id="d_rxFreq">–</dd><dt>Channel level</dt><dd id="d_rxLevel">–</dd>
+        <dl class="kv"><dt>Listening on</dt><dd id="d_rxFreq">–</dd>
+          <dt>Tuning</dt><dd><select id="d_rxProf" style="width:auto;padding:2px 6px" title="Near: gain capped, for a transmitter within a few metres (it overloads the receiver otherwise). Wide: for transmitters well off frequency."><option value="normal">normal</option><option value="near">near-field (transmitter close by)</option><option value="wide">wide band</option></select> <span class="dim small" id="d_rxBw"></span></dd>
+          <dt>Channel level</dt><dd id="d_rxLevel">–</dd>
           <dt>Frames (good / bad)</dt><dd id="d_rxFrames">–</dd><dt>Last heard</dt><dd id="d_rxLast">–</dd></dl>
       </div>
       <h3 style="margin:14px 0 4px">Groups</h3>
       <div class="scroll"><table class="tbl"><thead><tr><th>Protocol</th><th>Group</th><th>Showing</th><th>Commands</th><th>Signal</th><th>Last heard</th></tr></thead><tbody id="d_rxZones"></tbody></table></div>
       <h3 style="margin:14px 0 4px">Latest transmissions</h3>
       <div class="scroll"><table class="tbl"><thead><tr><th>When</th><th>To</th><th>Command</th><th>Packet</th><th>Copies</th><th>Signal</th></tr></thead><tbody id="d_rxLog"></tbody></table></div>
+      <h3 style="margin:14px 0 4px">Raw captures</h3>
+      <p class="dim small" style="margin:0 0 6px">Every burst of remote-control-like pulses louder than the noise floor, decoded or not (the last 4; ones that didn't decode are kept longest). Use them to see what an unknown transmitter or remote sends. <b>.ook</b> is <a href="https://github.com/merbanan/rtl_433" target="_blank" rel="noopener">rtl_433</a>'s pulse format: <span class="mono">rtl_433 -r file.ook -A</span> analyses it.</p>
+      <div class="scroll"><table class="tbl"><thead><tr><th>When</th><th>Pulses</th><th>Length</th><th>Signal</th><th>Decoded</th><th></th></tr></thead><tbody id="d_rxCaps"></tbody></table></div>
+      <div class="hide" id="d_rxView" style="margin-top:10px"><div class="small" id="d_rxViewHead"></div>
+        <div class="scroll" style="margin:6px 0;border:1px solid var(--rule);border-radius:8px;background:var(--field)"><svg id="d_rxWave" height="46" style="display:block;color:var(--accent)"></svg></div>
+        <pre id="d_rxViewInfo"></pre></div>
       <div class="actions"><button id="d_rxClear">Clear</button><span class="dim small">Bracelets that were already lit before you started listening only show up once something changes their colour.</span></div>
     </div>
     <div class="grid">
@@ -505,7 +513,7 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
   $('d_air').innerHTML=o.airtime_pct+'<span class="unit">% airtime</span>';
   $('d_up').textContent=fmtN(o.updates);$('d_tf').textContent=fmtN(o.frames);$('d_man').textContent=fmtN(o.manual);$('d_err').textContent=fmtN(o.errors);$('d_q').textContent=r.queue;$('d_sup').textContent=fmtN(o.suppressed);
   const pw=r.power!==false;if(!swBusy){$('d_outSw').checked=o.enabled;$('d_radioSw').checked=pw;$('d_rxSw').checked=rxOn}
-  $('d_rxSwState').textContent=rxOn?(rx.active?'listening, nothing is transmitted':!rx.supported?'needs a CC1101':!pw?'radio is shut down':'starting…'):'off';
+  $('d_rxSwState').textContent=rxOn?(rx.active?'listening, nothing is transmitted':!rx.supported?'this radio cannot receive':!pw?'radio is shut down':'starting…'):'off';
   $('d_outSw').disabled=rxOn;$('d_allOff').disabled=rxOn;
   ['d_zonesCard','d_testCard'].forEach(id=>$(id).classList.toggle('hide',rxOn));
   $('d_rxCard').classList.toggle('hide',!rxOn);if(rxOn)renderRx(rx);
@@ -832,9 +840,13 @@ setInterval(()=>{if(location.hash===''||location.hash==='#dashboard')pollPeers()
 function rxWho(p,b){if(p==0)return p0Words(b)[0];return b[1]?'group '+b[1]:'every group'}
 function renderRx(x){
   $('d_rxUpd').innerHTML=fmtN(x.updates)+'<span class="unit">commands</span>';
-  const st=!x.supported?['bad','needs a CC1101 (the SX1278 driver has no receive path yet)']:x.error?['bad','radio would not enter receive; retrying']:x.active?['good','listening']:['warn','starting'];
+  const st=!x.supported?['bad','this radio cannot receive']:x.error?['bad','radio would not enter receive; retrying']:x.active?['good','listening']:['warn','starting'];
   $('d_rxState').innerHTML=`<span class="badge ${st[0]}">${st[1]}</span>`;
   $('d_rxFreq').textContent=mhz(x.freq)+' (protocols 0 and 1)';
+  if(document.activeElement!==$('d_rxProf')&&x.profile)$('d_rxProf').value=x.profile;
+  $('d_rxBw').textContent=x.bandwidth?`${Math.round(x.bandwidth/1000)} kHz bandwidth`:'';
+  $('d_rxCaps').innerHTML=(x.captures||[]).length?x.captures.map(c=>`<tr><td class="dim nw">${fmtAge(c.age_ms)}</td><td>${fmtN(c.pulses)}${c.truncated?' <span class="badge warn" title="Longer bursts are cut at 1024 pulses">cut</span>':''}</td><td class="nw">${(c.us/1000).toFixed(1)} ms</td><td class="dim nw">${c.rssi_dbm>-127?c.rssi_dbm+' dBm':'–'}</td><td>${c.decoded?'<span class="badge good">yes</span>':'<span class="badge warn">no</span>'}</td><td class="nw"><button data-cap="${c.id}">View</button> <a href="/api/rx/capture?id=${c.id}&format=ook" download="net2rf-capture-${c.id}.ook">.ook</a></td></tr>`).join(''):
+    `<tr><td colspan="6" class="dim">None yet.${x.captures_quiet?` ${fmtN(x.captures_quiet)} noise bursts skipped.`:''}</td></tr>`;
   $('d_rxLevel').textContent=x.active&&x.rssi_dbm>-127?`${x.rssi_dbm} dBm average, ${x.rssi_peak_dbm} dBm peak`:'–';
   $('d_rxFrames').textContent=`${fmtN(x.frames)} / ${fmtN(x.bad)}`+(x.dropped?` · ${fmtN(x.dropped)} edges dropped`:'')+(x.noise_pauses?` · ${fmtN(x.noise_pauses)} noise pauses`:'');
   $('d_rxLast').textContent=fmtAge(x.last_age_ms);
@@ -850,7 +862,34 @@ $('d_rxSw').onchange=async e=>{const el=e.target,on=el.checked;swBusy=true;
     await api('config',{role:on?'receiver':'controller'});await loadConfig();
     toast(on?'Receiver mode: listening, nothing is transmitted':'Receiver mode off: transmitting again')}
   catch(err){el.checked=!on}finally{swBusy=false;poll()}};
-$('d_rxClear').onclick=()=>api('stats/reset',{}).then(()=>{toast('Cleared');poll()});
+$('d_rxClear').onclick=()=>api('stats/reset',{}).then(()=>{toast('Cleared');$('d_rxView').classList.add('hide');poll()});
+$('d_rxProf').onchange=async e=>{await api('config',{rx_profile:e.target.value});await loadConfig();toast('Receiver tuning: '+e.target.value);poll()};
+$('d_rxCaps').onclick=async e=>{const id=e.target.dataset&&e.target.dataset.cap;if(!id)return;
+  let c;try{c=await api('rx/capture?id='+id)}catch(err){return}showCapture(c)};
+// Pulse widths that are within ~25% (+30 us) of each other are one cluster: [{us, n}], by width.
+function clusters(v){const s=v.slice().sort((a,b)=>a-b),out=[];for(const x of s){const c=out[out.length-1];
+  if(c&&x<=c.max*1.25+30){c.sum+=x;c.n++;c.max=x}else out.push({sum:x,n:1,max:x})}return out.map(c=>({us:Math.round(c.sum/c.n),n:c.n}))}
+// Guess pulse-width coding from mark + space pairs: the two commonest mark widths are 0 (short) and 1 (long), and
+// a pair is a bit only if its space is also one of the two commonest. Any other pair (a sync, a gap) ends a row.
+// Rows of 8+ bits are shown as hex.
+function guessBits(p,mc,sc){const top=c=>c.slice().sort((a,b)=>b.n-a.n).slice(0,2).sort((a,b)=>a.us-b.us);
+  const m2=top(mc),s2=top(sc);if(m2.length<2)return null;
+  const near=(x,c)=>Math.abs(x-c.us)<=c.us*0.3+40,rows=[];let cur='';const flush=()=>{if(cur.length>=8)rows.push(cur);cur=''};
+  for(let i=0;i<p.length;i++){const v=p[i];if(v<=0)continue;const sp=i+1<p.length&&p[i+1]<0?-p[i+1]:null;
+    const bit=near(v,m2[0])?'0':m2[1]&&near(v,m2[1])?'1':null,spOk=sp!==null&&s2.some(c=>near(sp,c));  // a last mark with no space after it is left out
+    if(bit&&spOk)cur+=bit;else flush()}flush();
+  return{short:m2[0].us,long:m2[1].us,rows}}
+function bitsHex(b){let h='';for(let i=0;i+8<=b.length;i+=8)h+=hx(parseInt(b.slice(i,i+8),2))+' ';const r=b.length%8;return h+(r?`+${r} bits (${b.slice(-r)})`:'')}
+function showCapture(c){const p=c.pulses,W=$('d_rxWave'),scale=20;  // 20 us per pixel
+  let x=0,pts='2,40',y=40;for(const v of p){const ny=v>0?6:40;if(ny!==y){pts+=` ${x.toFixed(1)},${y} ${x.toFixed(1)},${ny}`;y=ny}x+=Math.abs(v)/scale}
+  pts+=` ${x.toFixed(1)},${y}`;W.setAttribute('width',Math.ceil(x)+4);W.innerHTML=`<polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.3"/>`;
+  const marks=p.filter(v=>v>0),spaces=p.filter(v=>v<0).map(v=>-v),mc=clusters(marks),sc=clusters(spaces),g=guessBits(p,mc,sc);
+  const fmtC=cs=>cs.map(c=>`~${c.us} µs ×${c.n}`).join(', ');
+  $('d_rxViewHead').innerHTML=`<b>Capture ${c.id}</b> · ${fmtN(p.length)} pulses · ${(c.us/1000).toFixed(1)} ms · ${c.rssi_dbm} dBm · ${c.decoded?'decoded as a bracelet frame':'<b>not decoded</b>'} · 1 px = ${scale} µs`;
+  $('d_rxViewInfo').textContent=`Marks (carrier on):  ${fmtC(mc)}\nSpaces (carrier off): ${fmtC(sc)}`+
+    (g?`\n\nPulse-width guess: mark ~${g.short} µs = 0, ~${g.long} µs = 1`+(g.rows.length?'\n'+g.rows.slice(0,12).map(r=>`  ${String(r.length).padStart(3)} bits: ${bitsHex(r)}`).join('\n'):'\n  (no run of 8+ bits)'):'\n\nOnly one mark width: not pulse-width coded (or just a carrier).')+
+    `\n\nPulses (µs, + mark / - space):\n`+p.slice(0,400).join(' ')+(p.length>400?' …':'');
+  $('d_rxView').classList.remove('hide')}
 
 // dashboard actions
 $('d_allOff').onclick=async()=>{

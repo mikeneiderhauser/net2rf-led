@@ -38,6 +38,7 @@ APP = {
     "name": "Front Yard",
     "output_enabled": True,
     "role": "controller",
+    "rx_profile": "normal",
     "bracelets": {"protocol": 0, "mode": "pixel", "color_order": "RGB", "base_layer": True},
     "radio": {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
@@ -95,6 +96,38 @@ def p0_scene():
     return [(rgbs[0], p0_packet(f"00{mask:04X}0F", rgbs[0]))] + out
 
 
+def p1_pulses(pkt_hex, copies=3):
+    """Protocol 1 frames as signed pulse widths (+ mark, - space, us), with a little timing jitter."""
+    out = []
+    for _ in range(copies):
+        out += [200, -1600]
+        for byte in bytes.fromhex(pkt_hex):
+            for bit in range(7, -1, -1):
+                one = byte >> bit & 1
+                out += [600 if one else 200, -(200 if one else 600)]
+    return [v + random.randint(-25, 25) * (1 if v > 0 else -1) for v in out]
+
+
+def ev1527_pulses(code=0xA5C3E1, copies=4):
+    """An EV1527-style 433 MHz remote (24 bits, 350 us unit): not a bracelet protocol."""
+    out = []
+    for _ in range(copies):
+        for bit in range(23, -1, -1):
+            one = code >> bit & 1
+            out += [1050 if one else 350, -(350 if one else 1050)]
+        out += [350, -10850]
+    return [v + random.randint(-30, 30) * (1 if v > 0 else -1) for v in out[:-1]]
+
+
+random.seed(3)
+CAPTURES = {
+    3: {"id": 3, "decoded": False, "truncated": False, "rssi_dbm": -66, "pulses": ev1527_pulses()},
+    2: {"id": 2, "decoded": True, "truncated": False, "rssi_dbm": -74, "pulses": p1_pulses("5501007FFFD4FF")},
+}
+for c in CAPTURES.values():
+    c["us"] = sum(abs(v) for v in c["pulses"])
+
+
 def receiver(up):
     """Receiver mode: a few groups heard on air, from both protocols."""
     t = int(up)
@@ -116,7 +149,12 @@ def receiver(up):
     return {"enabled": APP["role"] == "receiver", "active": APP["role"] == "receiver" and APP["radio"]["power"],
             "supported": APP["radio"]["type"] == "cc1101", "error": False, "freq": 433904500,
             "frames": 120 + t, "bad": 3, "updates": 31 + t // 3, "edges": 900000 + t * 4000, "dropped": 0,
-            "rssi_dbm": -96, "rssi_peak_dbm": -71, "last_age_ms": (t % 3) * 1000 + 120, "zones": zones, "log": log}
+            "rssi_dbm": -96, "rssi_peak_dbm": -71, "last_age_ms": (t % 3) * 1000 + 120, "zones": zones, "log": log,
+            "profile": APP["rx_profile"], "bandwidth": {"normal": 162500, "near": 162500, "wide": 325000}[APP["rx_profile"]],
+            "captures_quiet": 14,
+            "captures": [{"id": c["id"], "age_ms": 4000 if c["id"] == 3 else 9000, "pulses": len(c["pulses"]), "us": c["us"],
+                          "decoded": c["decoded"], "truncated": False, "rssi_dbm": c["rssi_dbm"]}
+                         for c in sorted(CAPTURES.values(), key=lambda c: -c["id"])]}
 
 
 def status():
@@ -189,6 +227,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, status())
         if path == "/api/config":
             return self.send(200, {"app": APP, "network": NET})
+        if path == "/api/rx/capture":
+            q = dict(kv.split("=", 1) for kv in (self.path.split("?") + [""])[1].split("&") if "=" in kv)
+            c = CAPTURES.get(int(q.get("id", 0)))
+            if not c:
+                return self.send(404, {"ok": False, "error": "no such capture"})
+            if q.get("format") == "ook":
+                p = c["pulses"]
+                lines = [f"{p[i]} {-p[i + 1] if i + 1 < len(p) else 10000}" for i in range(0, len(p), 2)]
+                text = ";pulse data\n;version 1\n;timescale 1us\n;freq1 433904500\n;ook %d pulses\n%s\n;end\n" % (
+                    len(lines), "\n".join(lines))
+                return self.send(200, text.encode(), "text/plain")
+            return self.send(200, dict(c, age_ms=4000, freq=433904500))
         if path == "/api/wifi/scan":
             return self.send(200, {"running": False, "networks": [{"ssid": "HomeNet", "rssi": -52, "secure": True},
                                                                    {"ssid": "Guest", "rssi": -71, "secure": False}]})
@@ -284,6 +334,8 @@ class Handler(BaseHTTPRequestHandler):
                 APP["name"] = body["name"]
             if "role" in body:
                 APP["role"] = body["role"]
+            if "rx_profile" in body:
+                APP["rx_profile"] = body["rx_profile"]
             for key in ("bracelets", "radio", "input", "update"):
                 if key in body:
                     if key == "radio" and body[key].get("type") != APP["radio"]["type"]:

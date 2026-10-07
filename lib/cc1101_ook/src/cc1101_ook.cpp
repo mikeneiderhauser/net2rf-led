@@ -5,7 +5,8 @@ namespace {
 // Command strobes
 constexpr uint8_t SRES = 0x30, SCAL = 0x33, SRX = 0x34, STX = 0x35, SIDLE = 0x36, SPWD = 0x39;
 // Configuration registers
-constexpr uint8_t IOCFG0 = 0x02, FREQ2 = 0x0D, PATABLE = 0x3E;
+constexpr uint8_t IOCFG0 = 0x02, FREQ2 = 0x0D, MDMCFG4 = 0x10, AGCCTRL2 = 0x1B, AGCCTRL1 = 0x1C, AGCCTRL0 = 0x1D,
+                  FREND1 = 0x21, PATABLE = 0x3E;
 // Status registers (read with the burst bit set)
 constexpr uint8_t PARTNUM = 0x30, VERSION = 0x31, RSSI = 0x34, MARCSTATE = 0x35;
 constexpr uint8_t MARC_IDLE = 0x01, MARC_RX = 0x0D, MARC_TX = 0x13;
@@ -47,6 +48,19 @@ constexpr uint8_t INIT_REGS[][2] = {
     {0x2E, 0x09},             // TEST0
 };
 }  // namespace
+
+// Receiver mode register sets (see cc1101_ook::RxProfile). MDMCFG4 keeps DRATE_E = 7 (unused in asynchronous
+// mode). FREND1 0xB6 is TI's RX front-end setting for channel filters above ~100 kHz.
+struct RxRegs {
+    uint8_t mdmcfg4, agcctrl2, agcctrl1, agcctrl0, frend1;
+};
+constexpr RxRegs RX_REGS[cc1101_ook::NUM_RX_PROFILES] = {
+    {0x97, 0x03, 0x00, 0x91, 0xB6},  // normal: 162 kHz; AGC: all gains, 33 dB target (DN022 OOK)
+    {0x97, 0xD3, 0x09, 0xF1, 0xB6},  // near: 162 kHz; top 3 DVGA steps and some LNA gain off, slower AGC
+    {0x57, 0x03, 0x00, 0x91, 0xB6},  // wide: 325 kHz
+};
+// The transmit set from INIT_REGS, put back when receiver mode ends.
+constexpr RxRegs TX_REGS = {0x87, 0x03, 0x00, 0x91, 0x56};
 
 bool Cc1101Ook::begin() {
     pinMode(this->cs_, OUTPUT);
@@ -116,8 +130,23 @@ bool Cc1101Ook::rx_on() {
     return true;
 }
 
-bool Cc1101Ook::rx_data_on() {
+void Cc1101Ook::write_rx_set_(uint8_t mdmcfg4, uint8_t agcctrl2, uint8_t agcctrl1, uint8_t agcctrl0, uint8_t frend1) {
+    this->write_(MDMCFG4, mdmcfg4);
+    this->write_(AGCCTRL2, agcctrl2);
+    this->write_(AGCCTRL1, agcctrl1);
+    this->write_(AGCCTRL0, agcctrl0);
+    this->write_(FREND1, frend1);
+}
+
+uint32_t Cc1101Ook::rx_bandwidth(uint8_t profile) {
+    uint8_t m = RX_REGS[profile < cc1101_ook::NUM_RX_PROFILES ? profile : 0].mdmcfg4;
+    return cc1101_ook::rx_bandwidth_hz(m >> 6, (m >> 4) & 3);
+}
+
+bool Cc1101Ook::rx_data_on(uint8_t profile) {
     this->strobe_(SIDLE);
+    const RxRegs &r = RX_REGS[profile < cc1101_ook::NUM_RX_PROFILES ? profile : 0];
+    this->write_rx_set_(r.mdmcfg4, r.agcctrl2, r.agcctrl1, r.agcctrl0, r.frend1);
     this->write_(IOCFG0, GDO_SERIAL_DATA);  // in RX: asynchronous serial data out
     this->strobe_(SRX);
     if (!this->wait_state_(MARC_RX, 5)) {
@@ -125,6 +154,11 @@ bool Cc1101Ook::rx_data_on() {
         return false;
     }
     return true;
+}
+
+void Cc1101Ook::rx_data_off() {
+    this->tx_off();
+    this->write_rx_set_(TX_REGS.mdmcfg4, TX_REGS.agcctrl2, TX_REGS.agcctrl1, TX_REGS.agcctrl0, TX_REGS.frend1);
 }
 
 int16_t Cc1101Ook::rssi_dbm() {

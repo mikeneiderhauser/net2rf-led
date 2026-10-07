@@ -34,6 +34,17 @@ void test_sx1278_pa_config(void) {
     TEST_ASSERT_EQUAL_HEX8(0xFF, sx1278_ook::pa_config(20));  // clamped
 }
 
+void test_rx_bandwidths(void) {
+    // CC1101 datasheet table 26 (26 MHz crystal): E=2 M=0 203 kHz, E=2 M=1 162 kHz, E=1 M=1 325 kHz
+    TEST_ASSERT_EQUAL_UINT32(203125, cc1101_ook::rx_bandwidth_hz(2, 0));
+    TEST_ASSERT_EQUAL_UINT32(162500, cc1101_ook::rx_bandwidth_hz(2, 1));
+    TEST_ASSERT_EQUAL_UINT32(325000, cc1101_ook::rx_bandwidth_hz(1, 1));
+    // SX127x datasheet table 40 (FSK/OOK): 0x11 = mant 24, exp 1 -> 166.7 kHz; 0x01 = mant 16, exp 1 -> 250 kHz
+    TEST_ASSERT_EQUAL_UINT32(166666, sx1278_ook::rx_bandwidth_hz(0x11));
+    TEST_ASSERT_EQUAL_UINT32(250000, sx1278_ook::rx_bandwidth_hz(0x01));
+    TEST_ASSERT_EQUAL_UINT32(125000, sx1278_ook::rx_bandwidth_hz(0x02));
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -43,5 +54,6 @@ int main(int, char **) {
     RUN_TEST(test_cc1101_pa_table);
     RUN_TEST(test_sx1278_frf);
     RUN_TEST(test_sx1278_pa_config);
+    RUN_TEST(test_rx_bandwidths);
     return UNITY_END();
 }

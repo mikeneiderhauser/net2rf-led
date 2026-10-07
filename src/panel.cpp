@@ -345,7 +345,7 @@ static void draw_receiver(bool list, uint8_t first, const EngineSnapshot &s) {
     static ReceiverSnapshot rx;  // large: keep it off the loop task's stack
     g_engine.rx_snapshot(rx);
     if (!list) {
-        String state = !rx.supported                           ? "needs a CC1101"
+        String state = !rx.supported                           ? "radio can't receive"
                        : s.radio_state == RadioState::OFF      ? "radio shut down"
                        : s.radio_state != RadioState::READY    ? "radio not ready"
                        : rx.active                             ? "listening"

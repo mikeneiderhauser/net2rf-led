@@ -64,8 +64,9 @@ class Cc1101Radio : public Radio {
     int16_t rssi_dbm() override { return this->chip_.rssi_dbm(); }
     void listen_off() override { this->chip_.tx_off(); }
     bool rx_supported() const override { return true; }
-    bool rx_data_on() override { return this->chip_.rx_data_on(); }
-    void rx_data_off() override { this->chip_.tx_off(); }
+    bool rx_data_on(uint8_t profile) override { return this->chip_.rx_data_on(profile); }
+    void rx_data_off() override { this->chip_.rx_data_off(); }
+    uint32_t rx_bandwidth(uint8_t profile) const override { return Cc1101Ook::rx_bandwidth(profile); }
     void shutdown() override { this->chip_.power_down(); }
 
  private:
@@ -120,6 +121,10 @@ class Sx1278Radio : public Radio {
     bool listen_on() override { return this->chip_.rx_on(); }
     int16_t rssi_dbm() override { return this->chip_.rssi_dbm(); }
     void listen_off() override { this->chip_.rx_off(); }
+    bool rx_supported() const override { return true; }
+    bool rx_data_on(uint8_t profile) override { return this->chip_.rx_data_on(profile); }
+    void rx_data_off() override { this->chip_.rx_data_off(); }
+    uint32_t rx_bandwidth(uint8_t profile) const override { return Sx1278Ook::rx_bandwidth(profile); }
     void shutdown() override { this->chip_.power_down(); }
 
  private:

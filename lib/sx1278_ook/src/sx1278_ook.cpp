@@ -4,14 +4,57 @@
 namespace {
 constexpr uint8_t REG_OP_MODE = 0x01, REG_FRF_MSB = 0x06, REG_PA_CONFIG = 0x09, REG_PA_RAMP = 0x0A, REG_OCP = 0x0B,
                   REG_RSSI_VALUE = 0x11, REG_OOK_PEAK = 0x14, REG_RX_TIMEOUT1 = 0x20, REG_PACKET_CONFIG2 = 0x31, REG_IMAGE_CAL = 0x3B, REG_IRQ_FLAGS1 = 0x3E,
-                  REG_DIO_MAPPING1 = 0x40, REG_DIO_MAPPING2 = 0x41, REG_VERSION = 0x42, REG_PA_DAC = 0x4D;
+                  REG_DIO_MAPPING1 = 0x40, REG_DIO_MAPPING2 = 0x41, REG_VERSION = 0x42, REG_PA_DAC = 0x4D,
+                  REG_LNA = 0x0C, REG_RX_CONFIG = 0x0D, REG_RX_BW = 0x12, REG_OOK_FIX = 0x15, REG_OOK_AVG = 0x16;
 // OpMode: FSK/OOK modem (LongRangeMode=0), OOK modulation, low-frequency band registers (<525 MHz)
 constexpr uint8_t OPMODE_BASE = 0x20 | 0x08;
 constexpr uint8_t MODE_SLEEP = 0x00, MODE_STDBY = 0x01, MODE_TX = 0x03, MODE_RX = 0x05;
 constexpr uint8_t PACKET_MODE = 0x40;      // RegPacketConfig2 DataMode
 constexpr uint8_t DIO2_TIMEOUT = 0x20;     // RegDioMapping1 DIO2 = TimeOut (packet mode): stays low, no timeout set
 constexpr uint8_t IRQ1_TX_READY = 0x20, IMAGE_CAL_START = 0x40, IMAGE_CAL_RUNNING = 0x20;
+constexpr uint8_t DIO2_DATA = 0x00;        // RegDioMapping1 DIO2 = Data (continuous mode)
+
+// Receiver mode per profile: RegRxBw, RegLna, RegRxConfig.
+struct RxRegs {
+    uint8_t rx_bw, lna, rx_config;
+};
+constexpr RxRegs RX_REGS[sx1278_ook::NUM_RX_PROFILES] = {
+    {0x11, 0x20, 0x08},  // normal: 166.7 kHz; AGC on (it picks the LNA gain when RX starts, i.e. G1 on a quiet channel)
+    {0x11, 0x80, 0x00},  // near: 166.7 kHz; AGC off, LNA fixed at G4 (-24 dB)
+    {0x01, 0x20, 0x08},  // wide: 250 kHz
+};
 }  // namespace
+
+uint32_t Sx1278Ook::rx_bandwidth(uint8_t profile) {
+    return sx1278_ook::rx_bandwidth_hz(RX_REGS[profile < sx1278_ook::NUM_RX_PROFILES ? profile : 0].rx_bw);
+}
+
+bool Sx1278Ook::rx_data_on(uint8_t profile) {
+    const RxRegs &r = RX_REGS[profile < sx1278_ook::NUM_RX_PROFILES ? profile : 0];
+    this->set_mode_(MODE_STDBY);
+    this->write_(REG_PACKET_CONFIG2, 0x00);  // continuous mode
+    this->write_(REG_OOK_PEAK, 0x08);        // bit synchroniser off (raw data out), peak threshold, 0.5 dB steps
+    this->write_(REG_OOK_FIX, 0x0C);         // peak mode floor: 6 dB
+    this->write_(REG_OOK_AVG, 0x12);         // threshold decays once per chip, the datasheet default
+    this->write_(REG_RX_BW, r.rx_bw);
+    this->write_(REG_LNA, r.lna);
+    this->write_(REG_RX_CONFIG, r.rx_config);
+    this->write_(REG_DIO_MAPPING1, DIO2_DATA);  // DIO2 becomes the data *output* in RX
+    this->set_mode_(MODE_RX);
+    delay(1);  // RX start-up and AGC settling
+    return (this->read_(REG_OP_MODE) & 0x07) == MODE_RX;
+}
+
+void Sx1278Ook::rx_data_off() {
+    this->set_mode_(MODE_STDBY);
+    this->write_(REG_PACKET_CONFIG2, 0x00);
+    this->write_(REG_DIO_MAPPING1, 0x00);  // DIO2 back to the TX data input
+    // Receiver settings back to their reset values, which listen before transmit was tuned with (the near profile's
+    // fixed low LNA gain would make it read 24 dB low).
+    this->write_(REG_RX_BW, 0x15);
+    this->write_(REG_LNA, 0x20);
+    this->write_(REG_RX_CONFIG, 0x0E);
+}
 
 bool Sx1278Ook::begin() {
     pinMode(this->cs_, OUTPUT);

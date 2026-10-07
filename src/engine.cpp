@@ -520,18 +520,20 @@ void Engine::run_() {
         // Receiver mode: listen instead of transmitting.
         bool want_rx;
         uint32_t rx_freq;
+        uint8_t rx_profile;
         {
             StateLock lock;
             want_rx = g_app.receiver;
+            rx_profile = g_app.rx_profile;
             rx_freq = (uint32_t) (((uint64_t) g_app.freq[0] + g_app.freq[1]) / 2);  // hears both protocols
         }
         want_rx = want_rx && this->radio_state_ == RadioState::READY && !this->suspended_ && this->radio_->rx_supported();
-        if (this->rx_active_ && (!want_rx || rx_freq != this->rx_freq_))
+        if (this->rx_active_ && (!want_rx || rx_freq != this->rx_freq_ || rx_profile != this->rx_profile_))
             this->stop_rx_();
         if (!want_rx)
             this->rx_failed_ = false;
         else if (!this->rx_active_ && (int32_t) (now - this->rx_retry_ms_) >= 0)
-            this->start_rx_(rx_freq);
+            this->start_rx_(rx_freq, rx_profile);
         if (this->rx_active_)
             this->poll_rx_(now);
 
@@ -719,6 +721,8 @@ void Engine::reset_stats() {
         zs.tx_count = 0;
     this->tracker_.clear();
     this->decoder_.reset_counts();
+    this->captures_.clear();
+    this->captures_quiet_ = 0;
     this->rx_edges_ = 0;
     this->rx_storms_ = 0;
     s_rx_dropped = 0;
@@ -942,9 +946,9 @@ EngineSnapshot Engine::snapshot() {
 // Receiver mode
 // ---------------------------------------------------------------------------------------------
 
-void Engine::start_rx_(uint32_t freq) {
+void Engine::start_rx_(uint32_t freq, uint8_t profile) {
     this->sender_.end();  // the radio drives the data line from here
-    bool ok = this->radio_->tune(freq, this->radio_->min_power()) && this->radio_->rx_data_on();
+    bool ok = this->radio_->tune(freq, this->radio_->min_power()) && this->radio_->rx_data_on(profile);
     this->tuned_ = false;  // the next transmission re-tunes
     if (!ok) {
         log_w("%s could not start receiving", this->radio_->name());
@@ -955,6 +959,9 @@ void Engine::start_rx_(uint32_t freq) {
         return;
     }
     this->decoder_.reset();
+    this->segmenter_.reset();  // (not by assignment: a temporary would put 2 KB on this task's stack)
+    this->burst_decoded_ = false;
+    this->burst_rssi_ = -127;
     s_rx_tail = s_rx_head;
     s_rx_last_us = esp_timer_get_time();
     attachInterrupt(pins::RADIO_DATA, rx_edge_isr, CHANGE);
@@ -964,8 +971,11 @@ void Engine::start_rx_(uint32_t freq) {
     this->rx_storm_win_ms_ = millis();
     this->rx_storm_edges_ = 0;
     this->rx_freq_ = freq;
+    this->rx_profile_ = profile;
     this->rx_rssi_win_ms_ = millis();
-    log_i("Receiver listening on %lu Hz", (unsigned long) freq);
+    log_i("Receiver listening on %lu Hz, %s profile (%lu kHz)", (unsigned long) freq,
+          RX_PROFILE_NAMES[profile < NUM_RX_PROFILES ? profile : 0],
+          (unsigned long) (this->radio_->rx_bandwidth(profile) / 1000));
 }
 
 void Engine::stop_rx_() {
@@ -1007,8 +1017,11 @@ void Engine::poll_rx_(uint32_t now) {
     while (tail != head) {
         uint32_t v = s_rx_ring[tail & (RX_RING - 1)];
         tail++;
+        if (this->segmenter_.push(v & 1, v >> 1))
+            this->store_burst_();
         if (!this->decoder_.push(v & 1, v >> 1, f))
             continue;
+        this->burst_decoded_ = true;
         // The transmitter usually sends the frame several times back to back, so the carrier is likely still
         // up: a fair reading of how strong this transmitter is here.
         int16_t rssi = this->radio_->rssi_dbm();
@@ -1034,6 +1047,16 @@ void Engine::poll_rx_(uint32_t now) {
     }
     s_rx_tail = tail;
 
+    if (this->segmenter_.open()) {
+        // A burst is coming in: track its strength, and end it if the line has gone quiet.
+        int16_t r = this->radio_->rssi_dbm();
+        if (r > this->burst_rssi_)
+            this->burst_rssi_ = r;
+        int64_t quiet = esp_timer_get_time() - s_rx_last_us;
+        if (s_rx_tail == s_rx_head && this->segmenter_.idle(quiet > 0x7FFFFFFF ? 0x7FFFFFFF : (uint32_t) quiet))
+            this->store_burst_();
+    }
+
     if (now - this->rx_last_rssi_ms_ >= RX_RSSI_EVERY_MS) {
         this->rx_last_rssi_ms_ = now;
         int16_t r = this->radio_->rssi_dbm();
@@ -1053,6 +1076,48 @@ void Engine::poll_rx_(uint32_t now) {
     }
 }
 
+void Engine::store_burst_() {
+    // A burst that never rose above the channel's noise floor is the receiver chattering on noise.
+    bool quiet = this->rx_rssi_avg_ > -127 && this->burst_rssi_ < this->rx_rssi_avg_ + 4;
+    {
+        StateLock lock;
+        if (quiet)
+            this->captures_quiet_++;
+        else
+            this->captures_.add(this->segmenter_, millis(), this->burst_decoded_, this->burst_rssi_);
+    }
+    this->burst_decoded_ = false;
+    this->burst_rssi_ = -127;
+}
+
+bool Engine::rx_capture_json(uint32_t id, JsonObject o) {
+    StateLock lock;
+    const bracelet::RawBurst *b = this->captures_.find(id);
+    if (!b)
+        return false;
+    o["id"] = b->id;
+    o["age_ms"] = millis() - b->end_ms;
+    o["freq"] = this->rx_freq_;
+    o["decoded"] = b->decoded;
+    o["truncated"] = b->truncated;
+    o["rssi_dbm"] = b->rssi_dbm;
+    o["us"] = b->total_us;
+    JsonArray p = o["pulses"].to<JsonArray>();  // + mark, - space, microseconds
+    for (uint16_t i = 0; i < b->count; i++)
+        p.add(b->pulses[i]);
+    return true;
+}
+
+bool Engine::rx_capture_ook(uint32_t id, String &out) {
+    StateLock lock;
+    const bracelet::RawBurst *b = this->captures_.find(id);
+    if (!b)
+        return false;
+    out.reserve(160 + b->count * 6);
+    bracelet::export_ook(*b, this->rx_freq_, [&](const char *t) { out += t; });
+    return true;
+}
+
 static String group_name(uint8_t group) {
     if (group == bracelet::RxTracker::ALL_GROUPS)
         return "all";
@@ -1066,6 +1131,8 @@ void Engine::rx_json_(JsonObject o, uint32_t now) {
     o["supported"] = this->radio_->rx_supported();
     o["error"] = this->rx_failed_;
     o["freq"] = this->rx_active_ ? this->rx_freq_ : (uint32_t) (((uint64_t) g_app.freq[0] + g_app.freq[1]) / 2);
+    o["profile"] = RX_PROFILE_NAMES[g_app.rx_profile < NUM_RX_PROFILES ? g_app.rx_profile : 0];
+    o["bandwidth"] = this->radio_->rx_bandwidth(g_app.rx_profile);
     o["frames"] = this->tracker_.frames();
     o["bad"] = this->decoder_.bad();
     o["updates"] = this->tracker_.updates();
@@ -1092,6 +1159,27 @@ void Engine::rx_json_(JsonObject o, uint32_t now) {
         j["updates"] = z.updates;
         j["age_ms"] = now - z.last_ms;
         j["rssi_dbm"] = z.rssi_dbm;
+    }
+    o["captures_quiet"] = this->captures_quiet_;
+    JsonArray caps = o["captures"].to<JsonArray>();  // newest first; pulses via /api/rx/capture?id=
+    for (uint8_t k = 0; k < this->captures_.size(); k++) {
+        const bracelet::RawBurst *newest = nullptr;
+        for (uint8_t i = 0; i < this->captures_.size(); i++) {
+            const bracelet::RawBurst &b = this->captures_.at(i);
+            uint32_t seen = k ? caps[k - 1]["id"].as<uint32_t>() : UINT32_MAX;
+            if (b.id < seen && (!newest || b.id > newest->id))
+                newest = &b;
+        }
+        if (!newest)
+            break;
+        JsonObject j = caps.add<JsonObject>();
+        j["id"] = newest->id;
+        j["age_ms"] = now - newest->end_ms;
+        j["pulses"] = newest->count;
+        j["us"] = newest->total_us;
+        j["decoded"] = newest->decoded;
+        j["truncated"] = newest->truncated;
+        j["rssi_dbm"] = newest->rssi_dbm;
     }
     JsonArray log = o["log"].to<JsonArray>();
     for (uint8_t k = 0; k < this->rx_log_count_; k++) {

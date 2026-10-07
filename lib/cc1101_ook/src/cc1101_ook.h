@@ -13,9 +13,24 @@
 
 namespace cc1101_ook {
 
+static const uint32_t XTAL_HZ = 26000000;
+
 // ---- Pure register math (no hardware, host-testable) ----
 
-static const uint32_t XTAL_HZ = 26000000;
+// Receiver profiles (receiver mode). All use the OOK AGC settings of TI DN022; they differ in bandwidth and gain.
+enum RxProfile : uint8_t {
+    RX_NORMAL = 0,  // 162 kHz: both bracelet frequencies plus crystal error, best sensitivity
+    RX_NEAR = 1,    // as normal with the LNA / DVGA gain capped: a transmitter within a few metres overloads the
+                    // OOK slicer otherwise (same caps as CrispyPyro/Wireless_DMX_Receiver's near-field mode)
+    RX_WIDE = 2,    // 325 kHz: for transmitters that are well off frequency
+    NUM_RX_PROFILES
+};
+
+// Receiver bandwidth for MDMCFG4's CHANBW_E / CHANBW_M: XTAL / (8 * (4 + M) * 2^E).
+inline uint32_t rx_bandwidth_hz(uint8_t chanbw_e, uint8_t chanbw_m) {
+    return XTAL_HZ / (8u * (4u + chanbw_m) * (1u << chanbw_e));
+}
+
 static const int8_t MIN_DBM = -30;
 static const int8_t MAX_DBM = 10;
 
@@ -67,7 +82,11 @@ class Cc1101Ook {
     int16_t rssi_dbm();
     // Receiver: enter RX with the demodulated OOK data on GDO0 (the same line that carries TX data), so the
     // caller can time its edges. The caller must not drive its end of the line meanwhile. tx_off() stops it.
-    bool rx_data_on();
+    bool rx_data_on(uint8_t profile = cc1101_ook::RX_NORMAL);
+    // Leave receiver mode: back to IDLE with the transmit register set.
+    void rx_data_off();
+    // Receiver bandwidth of a profile, Hz.
+    static uint32_t rx_bandwidth(uint8_t profile);
     // Wiring check: drive GDO0 as a plain output (0 or 1), or -1 to release it (high impedance).
     // Only while idle; the caller reads its own end of the data line to confirm the connection.
     void gdo0_drive(int level);
@@ -83,6 +102,7 @@ class Cc1101Ook {
     void write_burst_(uint8_t addr, const uint8_t *data, size_t len);
     uint8_t read_status_(uint8_t addr);
     bool wait_state_(uint8_t state, uint32_t timeout_ms);
+    void write_rx_set_(uint8_t mdmcfg4, uint8_t agcctrl2, uint8_t agcctrl1, uint8_t agcctrl0, uint8_t frend1);
 
     SPIClass &spi_;
     int cs_, miso_;

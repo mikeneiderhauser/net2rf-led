@@ -65,6 +65,7 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
   the whole controller.
 - **Receiver mode:** one switch turns the controller into a listener that decodes both bracelet protocols from
 any transmitter in range and shows what every group was told, with signal strength, on the web UI and the OLED.
+Raw captures of anything it can't decode, with a waveform view, bit guess and rtl_433 export.
 - **JSON API:** for Home Assistant, Grafana or scripts.
 
 ## Hardware

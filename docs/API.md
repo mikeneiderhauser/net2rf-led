@@ -117,6 +117,12 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
   (latest transmissions, newest first: `p`, `pkt`, `n` copies heard, `rssi_dbm`,
   and for protocol 1 `checksum`: `vendor` or `legacy`). `POST /api/stats/reset` clears it. Transmit requests return
   409 in receiver mode.
+- `rx_profile`: receiver tuning, `normal` (default), `near` (gain capped, for a transmitter within a few metres) or
+  `wide` (wider bandwidth). `engine.receiver.profile` and `.bandwidth` (Hz) report it.
+- Raw captures: `engine.receiver.captures` lists the stored bursts, newest first (`id`, `age_ms`, `pulses`, `us`
+  total length, `decoded`, `truncated` at 1024 pulses, `rssi_dbm` peak). `captures_quiet` counts bursts dropped
+  for being no louder than the noise floor. `GET /api/rx/capture?id=N` returns one: `pulses` is a list of
+  durations in µs, positive = carrier on, negative = off. Add `&format=ook` for rtl_433's pulse-data text.
 - `display.sleep_min`: minutes without a USER button press before the OLED switches off (default 10, 0 = never).
 - `update.repo`: GitHub repository (`owner/name`) whose releases the firmware update checks and installs.
   Default `mikeneiderhauser/net2rf-led`; `""` restores the default.

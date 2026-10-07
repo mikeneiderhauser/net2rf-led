@@ -106,6 +106,7 @@ void config_defaults_app(AppConfig &c) {
     c.base_layer = 1;  // new controllers only: saved settings keep the old behaviour until switched on
     c.display_sleep = 0;  // the default (10 minutes)
     c.receiver = 0;
+    c.rx_profile = RX_PROFILE_NORMAL;
 }
 
 // AppConfig as saved by firmware before the listen-before-talk fields were appended.
@@ -116,6 +117,8 @@ static const size_t APP_V5_SIZE = (offsetof(AppConfig, update_repo) + 3) & ~(siz
 static const size_t APP_V6_SIZE = (offsetof(AppConfig, update_check_off) + 3) & ~(size_t) 3;
 // ... and before receiver mode was appended.
 static const size_t APP_V7_SIZE = (offsetof(AppConfig, receiver) + 3) & ~(size_t) 3;
+// ... and before the receiver profile was appended.
+static const size_t APP_V8_SIZE = (offsetof(AppConfig, rx_profile) + 3) & ~(size_t) 3;
 
 void config_defaults_net(NetConfig &c) {
     memset(&c, 0, sizeof(c));
@@ -133,7 +136,7 @@ void config_load() {
     p.begin(NVS_NS, true);
     size_t app_len = p.getBytesLength("app");
     bool app_ok = false;
-    if (app_len == sizeof(AppConfig) || app_len == APP_V7_SIZE || app_len == APP_V6_SIZE || app_len == APP_V5_SIZE ||
+    if (app_len == sizeof(AppConfig) || app_len == APP_V8_SIZE || app_len == APP_V7_SIZE || app_len == APP_V6_SIZE || app_len == APP_V5_SIZE ||
         app_len == APP_V4_SIZE) {
         config_defaults_app(g_app);  // fields missing from an older, shorter record keep their defaults
         app_ok = p.getBytes("app", &g_app, app_len) == app_len && g_app.magic == APP_MAGIC;
@@ -297,6 +300,7 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     o["name"] = c.name;
     o["output_enabled"] = (bool) c.output_enabled;
     o["role"] = c.receiver ? "receiver" : "controller";
+    o["rx_profile"] = RX_PROFILE_NAMES[c.rx_profile < NUM_RX_PROFILES ? c.rx_profile : 0];
 
     JsonObject br = o["bracelets"].to<JsonObject>();
     br["protocol"] = c.protocol;
@@ -357,6 +361,20 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
             return false;
         }
         c.receiver = role == "receiver";
+    }
+    if (in["rx_profile"].is<const char *>()) {
+        const char *p = in["rx_profile"];
+        bool found = false;
+        for (uint8_t i = 0; i < NUM_RX_PROFILES; i++) {
+            if (strcmp(p, RX_PROFILE_NAMES[i]) == 0) {
+                c.rx_profile = i;
+                found = true;
+            }
+        }
+        if (!found) {
+            err = "rx_profile must be \"normal\", \"near\" or \"wide\"";
+            return false;
+        }
     }
 
     JsonObjectConst br = in["bracelets"];

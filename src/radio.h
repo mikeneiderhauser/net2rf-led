@@ -32,9 +32,17 @@ class Radio {
     virtual void listen_off() {}
     // Receiver mode: receive on the tuned frequency with the demodulated OOK signal on pins::RADIO_DATA (the
     // radio drives the line, so OokSender::end() must have released it). rx_data_off() returns to idle.
+    // `profile` is an RxProfile (normal / near / wide); rx_bandwidth() is its receiver bandwidth in Hz.
     virtual bool rx_supported() const { return false; }
-    virtual bool rx_data_on() { return false; }
+    virtual bool rx_data_on(uint8_t profile) {
+        (void) profile;
+        return false;
+    }
     virtual void rx_data_off() {}
+    virtual uint32_t rx_bandwidth(uint8_t profile) const {
+        (void) profile;
+        return 0;
+    }
     // Put the chip in its lowest-power state. init() brings it back.
     virtual void shutdown() {}
 };

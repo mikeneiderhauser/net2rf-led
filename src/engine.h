@@ -6,6 +6,7 @@
 
 #include "bracelet_protocol.h"
 #include "bracelet_rx.h"
+#include "pulse_capture.h"
 #include "config.h"
 #include "radio.h"
 
@@ -134,6 +135,9 @@ class Engine {
     EngineSnapshot snapshot();
     void rx_snapshot(ReceiverSnapshot &out);
     bool receiving() const { return this->rx_active_; }
+    // Receiver mode raw capture: one stored burst, as JSON pulses or as rtl_433 pulse data. False if unknown.
+    bool rx_capture_json(uint32_t id, JsonObject out);
+    bool rx_capture_ook(uint32_t id, String &out);
     uint8_t rx_zone_count() {
         StateLock lock;
         return this->tracker_.count();
@@ -221,16 +225,25 @@ class Engine {
 
     // Receiver mode (AppConfig::receiver): the radio listens and drives pins::RADIO_DATA with the demodulated
     // signal; an edge interrupt times it and the engine task decodes the frames. Nothing is transmitted.
-    void start_rx_(uint32_t freq);
+    void start_rx_(uint32_t freq, uint8_t profile);
     void stop_rx_();
     void poll_rx_(uint32_t now);
+    void store_burst_();
     void rx_json_(JsonObject o, uint32_t now);
     bool rx_active_{false};
     uint32_t rx_freq_{0};
+    uint8_t rx_profile_{0};
     uint32_t rx_retry_ms_{0};
     bool rx_failed_{false};
     bracelet::FrameDecoder decoder_;
     bracelet::RxTracker tracker_;
+    // Raw capture: bursts of plausible pulses, kept whether or not they decoded (undecoded ones are kept longest).
+    static const uint8_t RX_CAPTURES = 4;
+    bracelet::BurstSegmenter segmenter_;
+    bracelet::BurstStore<RX_CAPTURES> captures_;
+    bool burst_decoded_{false};
+    int16_t burst_rssi_{-127};
+    uint32_t captures_quiet_{0};  // bursts dropped because the channel was no louder than its noise floor
     uint32_t rx_edges_{0};
     uint32_t rx_storm_win_ms_{0}, rx_storm_edges_{0}, rx_storms_{0};
     uint32_t rx_paused_until_{0};  // edge interrupt detached (noise storm) until then; 0 = attached

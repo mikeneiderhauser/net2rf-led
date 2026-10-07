@@ -8,6 +8,9 @@
 
 #include "bracelet_protocol.h"
 #include "bracelet_rx.h"
+#include "pulse_capture.h"
+
+#include <string>
 
 using namespace bracelet;
 
@@ -222,6 +225,98 @@ void test_tracker_full(void) {
     TEST_ASSERT_EQUAL_UINT32(40, t.updates());
 }
 
+// Collects bursts from a pulse stream the way the engine does.
+struct CaptureSink {
+    BurstSegmenter seg;
+    BurstStore<3> store;
+    std::vector<uint16_t> counts;
+    uint32_t now{0};
+    void push(uint8_t level, uint32_t us) {
+        if (this->seg.push(level, us)) {
+            this->counts.push_back(this->seg.count());
+            this->store.add(this->seg, ++this->now, false, -60);
+        }
+    }
+    void mark(uint32_t us) { this->push(1, us); }
+    void space(uint32_t us) { this->push(0, us); }
+};
+
+void test_capture_bursts(void) {
+    srand(7);
+    CaptureSink c;
+    for (int i = 0; i < 3000; i++)  // empty channel: glitches, far shorter than any remote's pulse
+        c.push(i & 1, 5 + rand() % 50);
+    TEST_ASSERT_EQUAL(0, c.counts.size());
+
+    uint8_t pkt[PACKET_LEN];
+    const uint8_t g1[2] = {1, 0xFF};
+    build(1, g1, 255, 0, 0, pkt);
+    for (int i = 0; i < 3; i++)
+        encode_frame(1, pkt, c);
+    c.push(0, 30000);  // the gap after the transmission ends it
+    TEST_ASSERT_EQUAL(1, c.counts.size());
+    TEST_ASSERT_EQUAL_UINT16(3 * 114, c.counts[0]);  // every mark and space of the three frames
+    const RawBurst &b = c.store.at(0);
+    TEST_ASSERT_EQUAL_INT16(200, b.pulses[0]);    // sync mark
+    TEST_ASSERT_EQUAL_INT16(-1600, b.pulses[1]);  // sync space
+    TEST_ASSERT_FALSE(b.truncated);
+
+    // a burst that just stops (no closing edge): idle() ends it
+    BurstSegmenter s;
+    for (int i = 0; i < 40; i++)
+        s.push(i & 1 ? 0 : 1, 400);
+    TEST_ASSERT_TRUE(s.open());
+    TEST_ASSERT_FALSE(s.idle(2000));
+    TEST_ASSERT_TRUE(s.idle(9000));
+    TEST_ASSERT_EQUAL_UINT16(40, s.count());
+    TEST_ASSERT_EQUAL_UINT32(16000, s.total_us());
+
+    // too short to be a signal: dropped
+    BurstSegmenter t;
+    for (int i = 0; i < 10; i++)
+        TEST_ASSERT_FALSE(t.push(i & 1 ? 0 : 1, 400));
+    TEST_ASSERT_FALSE(t.push(0, 20000));
+}
+
+void test_capture_truncation_and_store(void) {
+    BurstSegmenter s;
+    for (int i = 0; i < 1500; i++)
+        s.push(i & 1 ? 0 : 1, 300);
+    TEST_ASSERT_TRUE(s.push(0, 20000));
+    TEST_ASSERT_EQUAL_UINT16(BurstSegmenter::MAX_PULSES, s.count());
+    TEST_ASSERT_TRUE(s.truncated());
+
+    BurstStore<3> st;
+    st.add(s, 1, true, -50);    // id 1, decoded
+    st.add(s, 2, false, -50);   // id 2
+    st.add(s, 3, true, -50);    // id 3, decoded
+    st.add(s, 4, false, -50);   // full: replaces the oldest decoded (id 1)
+    TEST_ASSERT_NULL(st.find(1));
+    TEST_ASSERT_NOT_NULL(st.find(2));
+    st.add(s, 5, false, -50);   // replaces id 3, the remaining decoded one
+    TEST_ASSERT_NULL(st.find(3));
+    st.add(s, 6, false, -50);   // none decoded: the oldest (id 2)
+    TEST_ASSERT_NULL(st.find(2));
+    TEST_ASSERT_EQUAL_UINT8(3, st.size());
+}
+
+void test_capture_export(void) {
+    BurstSegmenter s;
+    const int32_t d[] = {200, -1600, 600, -200, 200, -600};
+    for (int r = 0; r < 6; r++)
+        for (int32_t v : d)
+            s.push(v > 0, (uint32_t) (v > 0 ? v : -v));
+    s.push(1, 600);  // ends on a mark
+    TEST_ASSERT_TRUE(s.idle(50000));
+    BurstStore<1> st;
+    const RawBurst &b = st.add(s, 1, false, -70);
+    std::string out;
+    uint16_t n = export_ook(b, 433904500, [&](const char *t) { out += t; });
+    TEST_ASSERT_EQUAL_UINT16(19, n);
+    TEST_ASSERT_TRUE(out.rfind(";pulse data\n;version 1\n;timescale 1us\n;freq1 433904500\n;ook 19 pulses\n200 1600\n600 200\n", 0) == 0);
+    TEST_ASSERT_TRUE(out.find("\n600 10000\n;end\n") != std::string::npos);  // the last mark gets a closing gap
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -235,5 +330,8 @@ int main(int, char **) {
     RUN_TEST(test_tracker_p1);
     RUN_TEST(test_tracker_p0);
     RUN_TEST(test_tracker_full);
+    RUN_TEST(test_capture_bursts);
+    RUN_TEST(test_capture_truncation_and_store);
+    RUN_TEST(test_capture_export);
     return UNITY_END();
 }
