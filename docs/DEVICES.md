@@ -52,6 +52,7 @@ one of these two protocols or something else. Try *Tools → Which protocol is m
 | Part | Status | Notes |
 |---|---|---|
 | WT32-ETH01 (ESP32 + LAN8720) | ✅ | Ethernet and Wi-Fi both used. Not the WT32-ETH01-EVO (different chip and pinout). |
+| Seeed XIAO ESP32-S3 | 🧪 | Wi-Fi only; own build (`xiao-esp32s3`), wiring in [ASSEMBLY.md, part C](ASSEMBLY.md#c-xiao-esp32-s3). |
 | CC1101 433 MHz module, blue 2×4 header + SMA (AOICRIE, see [parts](ASSEMBLY.md#parts)) | ✅ | Reports chip version `0x14`; data-line self-test passes; drives the Banana Ball bracelet. |
 | Ai-Thinker Ra-02 (SX1278) on a breakout | 🧪 | Driver written to the datasheet; never run. |
 | SSD1306 0.96" I²C OLED | ✅ | Including detection of swapped SDA/SCL. |

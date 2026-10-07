@@ -1,4 +1,5 @@
 #include "updater.h"
+#include "pins.h"
 
 #include <Update.h>
 #include <esp_crt_bundle.h>
@@ -251,6 +252,10 @@ bool start(const String &repo, const String &tag, const String &asset, String &e
     if (!valid_name(tag.c_str(), sizeof(s_tag) - 1) || !valid_name(asset.c_str(), 80) || !asset.endsWith(".bin") ||
         asset.indexOf("factory") >= 0) {
         err = "invalid release tag or file name";
+        return false;
+    }
+    if (!asset_for_this_board(asset.c_str())) {
+        err = "that file is firmware for another board (this is a " NET2RF_BOARD_NAME ")";
         return false;
     }
     int n = snprintf(s_url, sizeof(s_url), "https://github.com/%s/releases/download/%s/%s", repo.c_str(), tag.c_str(),

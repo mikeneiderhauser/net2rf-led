@@ -9,8 +9,10 @@ def merge_factory(source, target, env):
     app = os.path.join(build_dir, "firmware.bin")
     out = os.path.join(build_dir, "firmware.factory.bin")
     chip = env.BoardConfig().get("build.mcu", "esp32")
+    # The ESP32's ROM loads the bootloader from 0x1000; the S3 / C3 / C6 families from 0x0.
+    boot_off = "0x1000" if chip == "esp32" else "0x0"
     images = [(hex(int(off, 0)), img) for img, off in [
-        (os.path.join(build_dir, "bootloader.bin"), "0x1000"),
+        (os.path.join(build_dir, "bootloader.bin"), boot_off),
         (os.path.join(build_dir, "partitions.bin"), "0x8000"),
     ]]
     boot_app0 = os.path.join(env.PioPlatform().get_package_dir("framework-arduinoespressif32"),

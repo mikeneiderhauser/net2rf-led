@@ -14,6 +14,7 @@
 #include "net.h"
 #include "ota_guard.h"
 #include "panel.h"
+#include "pins.h"
 #include "updater.h"
 #include "web_ui.h"
 
@@ -273,6 +274,8 @@ static void handle_status() {
     dev["firmware_bytes"] = fw_bytes;
     dev["firmware_slot_bytes"] = slot_bytes;
     dev["chip"] = ESP.getChipModel();
+    dev["board"] = NET2RF_BOARD_ID;  // release assets are per board
+    dev["board_name"] = NET2RF_BOARD_NAME;
     dev["chip_rev"] = ESP.getChipRevision();
     dev["reset_reason"] = reset_reason();
     dev["display"] = panel::display_present();

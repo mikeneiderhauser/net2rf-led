@@ -2,7 +2,7 @@
 
 #include <DNSServer.h>
 #include <ESPmDNS.h>
-#include <ETH.h>
+#include <ETH.h>  // also on boards without Ethernet (always down there): keeps the status code shared
 #include <WiFi.h>
 #include <mdns.h>
 
@@ -205,6 +205,7 @@ void begin() {
     WiFi.persistent(false);
     WiFi.mode(WIFI_OFF);
 
+#if NET2RF_HAS_ETHERNET
     if (g_net.eth_enabled) {
         s_eth_started = ETH.begin(ETH_PHY_LAN8720, pins::ETH_ADDR, pins::ETH_MDC_PIN, pins::ETH_MDIO_PIN,
                                   pins::ETH_POWER_PIN, ETH_CLOCK_GPIO0_IN);
@@ -213,6 +214,7 @@ void begin() {
         else
             log_e("Ethernet init failed");
     }
+#endif
     if (g_net.ap_mode == AP_ALWAYS)
         start_ap();
     if (!s_eth_started)
@@ -344,7 +346,8 @@ void status_json(JsonObject o) {
     o["hostname"] = g_net.hostname;
     o["dhcp"] = (bool) g_net.dhcp;
     JsonObject eth = o["ethernet"].to<JsonObject>();
-    eth["enabled"] = (bool) g_net.eth_enabled;
+    eth["present"] = (bool) NET2RF_HAS_ETHERNET;  // the board has an Ethernet port
+    eth["enabled"] = (bool) g_net.eth_enabled && NET2RF_HAS_ETHERNET;
     eth["link"] = (bool) s_eth_link;
     if (s_eth_started) {
         eth["mac"] = ETH.macAddress();

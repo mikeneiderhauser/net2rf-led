@@ -245,7 +245,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
     <div class="card"><h2>Settings</h2>
       <div class="form">
         <label>Hostname<input id="n_host" maxlength="32"><span class="hint">also reachable as &lt;hostname&gt;.local</span></label>
-        <label class="inline"><input type="checkbox" id="n_eth"> Use Ethernet</label>
+        <label class="inline" id="n_ethWrap"><input type="checkbox" id="n_eth"> Use Ethernet</label>
       </div>
       <h2 style="margin-top:18px">Wi-Fi</h2>
       <div class="form">
@@ -385,7 +385,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       </div>
       <div class="actions"><button class="primary" id="o_dispSave">Apply</button><button id="o_wake">Wake display</button><button id="o_scan">Scan I²C bus</button></div>
       <pre class="hide" id="o_scanOut" style="margin-top:10px"></pre>
-      <p class="dim small">Wiring: SDA → IO5 (pin labelled <span class="mono">RXD</span>), SCL → IO17 (<span class="mono">TXD</span>), VCC → 3V3, GND → GND. The controller keeps looking at 0x3C and 0x3D every 5&nbsp;s, so a fixed connection comes alive without a reboot.</p>
+      <p class="dim small">Wiring: <span id="o_wiring">SDA → IO5 (pin labelled <span class="mono">RXD</span>), SCL → IO17 (<span class="mono">TXD</span>)</span>, VCC → 3V3, GND → GND. The controller keeps looking at 0x3C and 0x3D every 5&nbsp;s, so a fixed connection comes alive without a reboot.</p>
     </div>
     <div class="card"><h2>Admin password</h2>
       <p class="small" style="margin-top:0" id="a_state"></p>
@@ -608,7 +608,8 @@ function fillNetwork(){const n=C.network;$('n_host').value=n.hostname;$('n_eth')
 function staticUi(){$('n_static').classList.toggle('hide',$('n_dhcp').checked)}
 $('n_dhcp').onchange=staticUi;
 function renderNetStatus(){if(!S)return;const n=S.network,rows=[['Active',n.interface],['IP address',n.ip],['Hostname',n.hostname+'.local']];
-  rows.push(['Ethernet',n.ethernet.enabled?(n.ethernet.link?`link up, ${n.ethernet.speed} Mbps${n.ethernet.full_duplex?' full duplex':''}`:'no link'):'disabled']);
+  $('n_ethWrap').classList.toggle('hide',n.ethernet.present===false);
+  if(n.ethernet.present!==false)rows.push(['Ethernet',n.ethernet.enabled?(n.ethernet.link?`link up, ${n.ethernet.speed} Mbps${n.ethernet.full_duplex?' full duplex':''}`:'no link'):'disabled']);
   rows.push(['Wi-Fi',n.wifi.ssid?(n.wifi.connected?`${esc(n.wifi.ssid)} (${n.wifi.rssi} dBm)`:(n.wifi.error?`<span style="color:var(--bad)">can't join ${esc(n.wifi.ssid)}: ${esc(n.wifi.error)}</span>${n.wifi.paused?' (retries paused while the setup AP is in use)':''}`:n.wifi.active?'connecting to '+esc(n.wifi.ssid):'standby (Ethernet in use)')):'not configured']);
   rows.push(['Access point',n.ap.active?`${esc(n.ap.ssid)} · ${n.ap.ip} · ${n.ap.clients} connected`:'off']);
   if(n.ethernet.mac)rows.push(['Ethernet MAC',n.ethernet.mac]);rows.push(['Wi-Fi MAC',n.wifi.mac]);kv($('n_status'),rows)}
@@ -618,7 +619,7 @@ $('n_scan').onclick=async ev=>{ev.preventDefault();await api('wifi/scan',{});toa
 $('n_save').onclick=async()=>{const body={hostname:$('n_host').value,eth_enabled:$('n_eth').checked,wifi_ssid:$('n_ssid').value,dhcp:$('n_dhcp').checked,
     ip:$('n_ip').value,subnet:$('n_mask').value,gateway:$('n_gw').value,dns:$('n_dns').value,ap_mode:$('n_ap').value};
   if($('n_pass').value)body.wifi_pass=$('n_pass').value;if($('n_appass').value)body.ap_pass=$('n_appass').value;
-  if(!body.wifi_ssid&&!body.eth_enabled&&!await ask('Ethernet is disabled and no Wi-Fi network is set: only the setup access point will be reachable. Continue?'))return;
+  if(!body.wifi_ssid&&!(body.eth_enabled&&S&&S.network.ethernet.present!==false)&&!await ask((S&&S.network.ethernet.present===false?'This board has no Ethernet':'Ethernet is disabled')+' and no Wi-Fi network is set: only the setup access point will be reachable. Continue?'))return;
   if(!await ask('Save network settings and reboot?','Save & reboot'))return;
   const onAp=S&&S.network.interface==='ap';
   await api('network',body);
@@ -876,6 +877,7 @@ $('a_set').onclick=async()=>{const a=$('a_pw1').value,b=$('a_pw2').value;
 $('a_clear').onclick=async()=>{if(!await ask('Remove the admin password? Anyone on the network will be able to change settings.'))return;
   await api('auth',{password:''});toast('Admin password removed');poll()};
 function displayUi(){const di=S.device.display_info;if(!di)return;
+  if(di.sda_pin!==undefined&&S.device.board!=='wt32-eth01')$('o_wiring').textContent=`SDA → IO${di.sda_pin}, SCL → IO${di.scl_pin}`;
   $('o_state').innerHTML=di.present?`<span class="badge good">${di.type.toUpperCase()} at ${di.address}</span>`+(di.pins_swapped?' <span class="badge warn">SDA/SCL wired swapped (working anyway)</span>':''):'<span class="badge warn">No display found</span> <span class="dim">(looking at 0x3C / 0x3D every 5 s)</span>';
   if(di.present&&di.asleep)$('o_state').innerHTML+=' <span class="badge">asleep</span>';
   $('o_sleepHint').textContent=(di.button?'without a USER button press; the next press wakes it. ':'no USER button fitted: wake it here. ')+'It also wakes after a reboot, when the network address changes and when the radio fails. 0 = never';
@@ -887,14 +889,17 @@ $('o_dispSave').onclick=async()=>{const di=S.device.display_info||{},body={sleep
   await api('display',body);toast(retype?'Display settings saved; re-detecting…':'Display settings saved');setTimeout(poll,1500)};
 $('o_scan').onclick=async()=>{const r=await api('i2c/scan');const out=$('o_scanOut');out.classList.remove('hide');
   out.textContent=(r.devices.length?'Devices found: '+r.devices.join(', '):'No I2C devices answered.')+
-    `\nSDA (IO5) idle: ${r.sda_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+
-    `\nSCL (IO17) idle: ${r.scl_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+
+    `\nSDA (IO${r.sda_pin}) idle: ${r.sda_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+
+    `\nSCL (IO${r.scl_pin}) idle: ${r.scl_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+
     `\nScanned with ${r.orientation}`+
     (r.devices.length&&!r.devices.some(a=>a==='0x3C'||a==='0x3D')?'\nA device answered, but not at 0x3C/0x3D: is it a display?':'')};
 const GH_URL='https://github.com/mikeneiderhauser/net2rf-led';
+// Release files are per board: the WT32-ETH01's carry no board tag, every other board's do (see src/pins.h).
+const OTHER_BOARD_TAGS=['-xiao-esp32s3-'];
+function forBoard(name){const b=(S&&S.device.board)||'wt32-eth01';return b==='wt32-eth01'?!OTHER_BOARD_TAGS.some(t=>name.includes(t)):name.includes('-'+b+'-')}
 function sysInfo(){authUi();displayUi();ghFill();ghJob();fwNotice();const d=S.device;
   const upd=d.update_pending?'<span class="badge warn">new update, confirming…</span>':d.update_rolled_back?'<span class="badge bad">last update failed and was rolled back</span>':'<span class="badge good">confirmed</span>';
-  kv($('s_info'),[['Version',d.firmware],['Project',`<a href="${GH_URL}" target="_blank" rel="noopener">github.com/mikeneiderhauser/net2rf-led</a><br><span class="small"><a href="${GH_URL}#documentation" target="_blank" rel="noopener">docs</a> · <a href="${GH_URL}/releases" target="_blank" rel="noopener">releases</a> · <a href="${GH_URL}/issues" target="_blank" rel="noopener">report a problem</a> · GPL-3.0</span>`],['Update state',upd],['Built',d.built],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',heapFree(d,true)],['Free flash',flashFree(d,true)],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`${d.display_info.type.toUpperCase()} at ${d.display_info.address}`:'none']])}
+  kv($('s_info'),[['Version',d.firmware],['Project',`<a href="${GH_URL}" target="_blank" rel="noopener">github.com/mikeneiderhauser/net2rf-led</a><br><span class="small"><a href="${GH_URL}#documentation" target="_blank" rel="noopener">docs</a> · <a href="${GH_URL}/releases" target="_blank" rel="noopener">releases</a> · <a href="${GH_URL}/issues" target="_blank" rel="noopener">report a problem</a> · GPL-3.0</span>`],['Update state',upd],['Built',d.built],['Board',esc(d.board_name||'WT32-ETH01')],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',heapFree(d,true)],['Free flash',flashFree(d,true)],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`${d.display_info.type.toUpperCase()} at ${d.display_info.address}`:'none']])}
 $('s_file').onchange=()=>{$('s_upload').disabled=!$('s_file').files.length};
 $('s_upload').onclick=async()=>{const f=$('s_file').files[0];if(!f)return;if(!await ask(`Flash ${f.name} (${fmtBytes(f.size)})?`))return;
   try{await api('config')}catch(e){return}  // log in first so the upload isn't sent twice
@@ -921,7 +926,7 @@ $('s_ghCheck').onclick=async()=>{const repo=C&&C.app.update?C.app.update.repo:''
   let r;try{r=await fetch(`https://api.github.com/repos/${repo}/releases/latest`,{headers:{Accept:'application/vnd.github+json'}})}
   catch(e){msg.textContent='Could not reach GitHub from this browser.';return}
   if(!r.ok){msg.textContent=r.status===404?`No releases found for ${repo}.`:r.status===403?'GitHub is rate-limiting this network; try again later.':'GitHub answered '+r.status+'.';return}
-  const rel=await r.json(),asset=(rel.assets||[]).find(a=>/\.bin$/.test(a.name)&&!/factory/.test(a.name)),cur=S.device.firmware,c=verCmp(rel.tag_name,cur);
+  const rel=await r.json(),asset=(rel.assets||[]).find(a=>/\.bin$/.test(a.name)&&!/factory/.test(a.name)&&forBoard(a.name)),cur=S.device.firmware,c=verCmp(rel.tag_name,cur);
   const links=` <a href="${esc(rel.html_url)}" target="_blank" rel="noopener">release notes</a>`+(asset?` · <a href="${esc(asset.browser_download_url)}" rel="noopener">download .bin</a>`:'');
   if(!asset){msg.innerHTML=`${esc(rel.tag_name)} has no firmware .bin attached.`+links;return}
   msg.innerHTML=(c>0?`<span class="badge warn">${esc(rel.tag_name)} available</span> running ${esc(cur)}.`:

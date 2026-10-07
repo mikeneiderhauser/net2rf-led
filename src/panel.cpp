@@ -73,7 +73,7 @@ static uint8_t num_pages() {
 }
 static uint32_t s_last_draw = 0, s_last_auto_page = 0;
 
-// Button state. The button is only "armed" if GPIO39 reads released (pulled up) at boot, so an
+// Button state. The button is only "armed" if its pin reads released (pulled up) at boot, so an
 // unfitted, floating input can never trigger a reset.
 static bool s_button_armed = false;
 static bool s_pressed = false;
@@ -165,6 +165,7 @@ static void probe_display() {
         s_oled->clear();
         s_oled->drawString(0, 0, "Net2RF LED");
         s_oled->drawString(0, 14, "v" FW_VERSION);
+    s_oled->drawString(0, 28, NET2RF_BOARD_NAME);
         s_oled->display();
         s_last_draw = millis();  // leave the splash up briefly
         log_i("OLED (%s) at 0x%02X%s", s_display_type == DISPLAY_SH1106 ? "SH1106" : "SSD1306", addr,
@@ -240,12 +241,15 @@ void i2c_scan_json(JsonObject o) {
     // With the bus idle both lines should read high (pull-ups). Low = short, missing pull-up, or wiring.
     o["sda_high"] = digitalRead(pins::I2C_SDA) == HIGH;
     o["scl_high"] = digitalRead(pins::I2C_SCL) == HIGH;
-    o["orientation"] = s_pins_swapped ? "swapped (SDA=IO17, SCL=IO5)" : "normal (SDA=IO5, SCL=IO17)";
+    int sda = s_pins_swapped ? pins::I2C_SCL : pins::I2C_SDA, scl = s_pins_swapped ? pins::I2C_SDA : pins::I2C_SCL;
+    o["orientation"] = String(s_pins_swapped ? "swapped" : "normal") + " (SDA=IO" + sda + ", SCL=IO" + scl + ")";
+    o["sda_pin"] = pins::I2C_SDA;
+    o["scl_pin"] = pins::I2C_SCL;
 }
 
 void begin() {
     pinMode(pins::STATUS_LED, OUTPUT);
-    digitalWrite(pins::STATUS_LED, LOW);
+    digitalWrite(pins::STATUS_LED, pins::STATUS_LED_ACTIVE_LOW ? HIGH : LOW);
 
     pinMode(pins::USER_BUTTON, INPUT);  // input-only pin, external pull-up required
     bool high = true;
@@ -474,7 +478,7 @@ static void update_led(uint32_t now) {
         on = (now % 1000) < 100 || ((now % 1000) > 200 && (now % 1000) < 300);  // double blink: AP mode
     else
         on = (now % 2000) < 80;  // heartbeat
-    digitalWrite(pins::STATUS_LED, on);
+    digitalWrite(pins::STATUS_LED, on != pins::STATUS_LED_ACTIVE_LOW);
 }
 
 void loop() {

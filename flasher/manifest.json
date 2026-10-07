@@ -6,6 +6,10 @@
     {
       "chipFamily": "ESP32",
       "parts": [{ "path": "firmware.factory.bin", "offset": 0 }]
+    },
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [{ "path": "firmware-xiao-esp32s3.factory.bin", "offset": 0 }]
     }
   ]
 }

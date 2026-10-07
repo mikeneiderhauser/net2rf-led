@@ -44,13 +44,16 @@ jobs:
         run: pio test -e native
 
       - name: Build firmware
-        run: pio run -e wt32-eth01
+        run: pio run -e wt32-eth01 -e xiao-esp32s3
 
       - name: Collect binaries
         run: |
           mkdir -p dist
           cp .pio/build/wt32-eth01/firmware.bin "dist/net2rf-led-${FW_VERSION}.bin"
           cp .pio/build/wt32-eth01/firmware.factory.bin "dist/net2rf-led-${FW_VERSION}.factory.bin"
+          # Other boards carry their board name (the controller's updater picks its own: src/pins.h)
+          cp .pio/build/xiao-esp32s3/firmware.bin "dist/net2rf-led-xiao-esp32s3-${FW_VERSION}.bin"
+          cp .pio/build/xiao-esp32s3/firmware.factory.bin "dist/net2rf-led-xiao-esp32s3-${FW_VERSION}.factory.bin"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -63,6 +66,7 @@ jobs:
           mkdir -p site
           cp flasher/index.html site/
           cp .pio/build/wt32-eth01/firmware.factory.bin site/
+          cp .pio/build/xiao-esp32s3/firmware.factory.bin site/firmware-xiao-esp32s3.factory.bin
           sed "s/__VERSION__/${FW_VERSION}/" flasher/manifest.json > site/manifest.json
           sed -i "s|__RELEASES_URL__|https://github.com/${GITHUB_REPOSITORY}/releases/latest|" site/index.html
 
@@ -79,9 +83,12 @@ jobs:
           generate_release_notes: true
           body: |
             **New install:** use the browser flasher (Chrome/Edge) at https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-            or `python3 -m esptool --chip esp32 write-flash 0x0 net2rf-led-${{ env.FW_VERSION }}.factory.bin`.
+            or `python3 -m esptool --chip esp32 write-flash 0x0 net2rf-led-${{ env.FW_VERSION }}.factory.bin`
+            (XIAO ESP32-S3: `--chip esp32s3 write-flash 0x0 net2rf-led-xiao-esp32s3-${{ env.FW_VERSION }}.factory.bin`).
 
-            **Update:** upload `net2rf-led-${{ env.FW_VERSION }}.bin` in the controller's web UI (System → Update firmware).
+            **Update:** the controller's *System → Update firmware → From GitHub releases* picks the right file for its
+            board. To upload by hand: `net2rf-led-${{ env.FW_VERSION }}.bin` for a WT32-ETH01,
+            `net2rf-led-xiao-esp32s3-${{ env.FW_VERSION }}.bin` for a XIAO ESP32-S3.
 
   pages:
     # Pages needs a public repo (or a paid plan) and Settings → Pages → Source: GitHub Actions.
