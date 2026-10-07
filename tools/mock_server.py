@@ -39,7 +39,7 @@ APP = {
     "output_enabled": True,
     "role": "controller",
     "rx_profile": "normal",
-    "bracelets": {"protocol": 0, "mode": "pixel", "color_order": "RGB", "base_layer": True},
+    "devices": {"protocol": 0, "mode": "pixel", "color_order": "RGB", "base_layer": True},
     "radio": {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
               "lbt_enabled": True, "lbt_threshold_dbm": -75, "power": True},
@@ -83,7 +83,7 @@ def p0_scene():
     own = ["FF0000", "000000", "0000FF", "00FF00", "000000"]
     zs = APP["zones"]
     rgbs = [own[i] if i < len(own) else "000000" for i in range(len(zs))]
-    if not APP["bracelets"].get("base_layer") or not zs or zs[0]["addr_p0"][2:6] != "FFFF":
+    if not APP["devices"].get("base_layer") or not zs or zs[0]["addr_p0"][2:6] != "FFFF":
         return [(rgb, p0_packet(z["addr_p0"], rgb)) for z, rgb in zip(zs, rgbs)]
     mask = 0xFFFF
     out = []
@@ -109,7 +109,7 @@ def p1_pulses(pkt_hex, copies=3):
 
 
 def ev1527_pulses(code=0xA5C3E1, copies=4):
-    """An EV1527-style 433 MHz remote (24 bits, 350 us unit): not a bracelet protocol."""
+    """An EV1527-style 433 MHz remote (24 bits, 350 us unit): not a device protocol."""
     out = []
     for _ in range(copies):
         for bit in range(23, -1, -1):
@@ -129,11 +129,11 @@ for c in CAPTURES.values():
 
 
 def app_view():
-    """APP as the firmware reports it: bracelets.protocols / per_zone derived from the zones."""
+    """APP as the firmware reports it: devices.protocols / per_zone derived from the zones."""
     sets = [tuple(z["protocols"]) for z in APP["zones"]]
     every = sorted({p for s in sets for p in s})
-    br = dict(APP["bracelets"], protocols=list(sets[0]) if len(set(sets)) == 1 else every, per_zone=len(set(sets)) > 1)
-    return dict(APP, bracelets=br)
+    br = dict(APP["devices"], protocols=list(sets[0]) if len(set(sets)) == 1 else every, per_zone=len(set(sets)) > 1)
+    return dict(APP, devices=br)
 
 
 def receiver(up):
@@ -177,7 +177,7 @@ def status():
         packets = [{"p": p, "pkt": scene[i][1] if p == 0 else p1_packet(cfg["addr_p1"], rgb)} for p in cfg["protocols"]]
         z = {"rgb": rgb, "fx": 0, "packets": packets, "packet": packets[0]["pkt"] if packets else "",
              "tx": 120 + i, "tx_age_ms": random.randint(50, 900)}
-        if APP["bracelets"]["mode"] == "vendor":
+        if APP["devices"]["mode"] == "vendor":
             z.update(gated=(i == 1), group=i)
         zones.append(z)
     return {
@@ -345,21 +345,21 @@ class Handler(BaseHTTPRequestHandler):
                 APP["role"] = body["role"]
             if "rx_profile" in body:
                 APP["rx_profile"] = body["rx_profile"]
-            for key in ("bracelets", "radio", "input", "update"):
+            for key in ("devices", "radio", "input", "update"):
                 if key in body:
                     if key == "radio" and body[key].get("type") != APP["radio"]["type"]:
                         reboot = True
                     APP[key].update(body[key])
             if "zones" in body:
-                w = 4 if APP["bracelets"]["mode"] == "dmx" else 3
+                w = 4 if APP["devices"]["mode"] == "dmx" else 3
                 APP["zones"] = [dict(z, start=APP["input"]["start_channel"] + k * w) for k, z in enumerate(body["zones"])]
-            protocols = body.get("bracelets", {}).pop("protocols", None)  # every zone; not stored on its own
-            APP["bracelets"].pop("protocols", None)
-            APP["bracelets"].pop("per_zone", None)
+            protocols = body.get("devices", {}).pop("protocols", None)  # every zone; not stored on its own
+            APP["devices"].pop("protocols", None)
+            APP["devices"].pop("per_zone", None)
             if protocols:
                 for z in APP["zones"]:
                     z["protocols"] = protocols
-                APP["bracelets"]["protocol"] = 1 if protocols == [1] else 0
+                APP["devices"]["protocol"] = 1 if protocols == [1] else 0
         elif path == "/api/network":
             NET.update({k: v for k, v in body.items() if k not in ("wifi_pass", "ap_pass")})
             reboot = True

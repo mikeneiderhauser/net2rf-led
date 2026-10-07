@@ -9,7 +9,7 @@ namespace updater {
 bool valid_repo(const char *) { return true; }
 }  // namespace updater
 
-using namespace bracelet;
+using namespace rfproto;
 
 // Saves `c` as the firmware would, as it was laid out before zones had their own protocols: the zone's protocols and
 // p1_addr bytes were spare (zero), and `addr` held the address in the controller's one protocol.
@@ -88,17 +88,17 @@ void test_json_controller_wide(void) {
     AppConfig c;
     config_defaults_app(c);
     String err;
-    TEST_ASSERT_TRUE(apply(c, R"({"bracelets":{"protocols":[0,1]}})", err));
+    TEST_ASSERT_TRUE(apply(c, R"({"devices":{"protocols":[0,1]}})", err));
     for (const ZoneConfig &z : c.zones)
         TEST_ASSERT_EQUAL_UINT8(ALL_PROTOCOLS, z.protocols);
     JsonDocument out;
     app_to_json(c, out.to<JsonObject>());
-    TEST_ASSERT_EQUAL(2, out["bracelets"]["protocols"].size());
-    TEST_ASSERT_FALSE(out["bracelets"]["per_zone"].as<bool>());
+    TEST_ASSERT_EQUAL(2, out["devices"]["protocols"].size());
+    TEST_ASSERT_FALSE(out["devices"]["per_zone"].as<bool>());
     TEST_ASSERT_EQUAL_STRING("0004000F", out["zones"][2]["addr_p0"]);
     TEST_ASSERT_EQUAL_STRING("02FF", out["zones"][2]["addr_p1"]);
 
-    TEST_ASSERT_TRUE(apply(c, R"({"bracelets":{"protocols":[1]}})", err));
+    TEST_ASSERT_TRUE(apply(c, R"({"devices":{"protocols":[1]}})", err));
     TEST_ASSERT_EQUAL_UINT8(1, c.protocol);  // the default follows
     TEST_ASSERT_EQUAL_UINT8(PROTOCOL_BIT[1], zones_common_protocols(c));
 }
@@ -119,8 +119,8 @@ void test_json_per_zone(void) {
     TEST_ASSERT_EQUAL_HEX8(0x08, c.zones[2].addr[1]);
     JsonDocument out;
     app_to_json(c, out.to<JsonObject>());
-    TEST_ASSERT_TRUE(out["bracelets"]["per_zone"].as<bool>());
-    TEST_ASSERT_EQUAL(2, out["bracelets"]["protocols"].size());  // between them: 0 and 1
+    TEST_ASSERT_TRUE(out["devices"]["per_zone"].as<bool>());
+    TEST_ASSERT_EQUAL(2, out["devices"]["protocols"].size());  // between them: 0 and 1
     TEST_ASSERT_EQUAL(1, out["zones"][1]["protocols"][0].as<int>());
 
     // A zone added later starts on what the zones share; here they differ, so on the default protocol.
@@ -135,7 +135,7 @@ void test_json_older_clients(void) {
     config_defaults_app(c);
     String err;
     // An older client switches the controller's protocol: every zone follows, both addresses stay.
-    TEST_ASSERT_TRUE(apply(c, R"({"bracelets":{"protocol":1}})", err));
+    TEST_ASSERT_TRUE(apply(c, R"({"devices":{"protocol":1}})", err));
     TEST_ASSERT_EQUAL_UINT8(PROTOCOL_BIT[1], zones_common_protocols(c));
     TEST_ASSERT_EQUAL_HEX8(0x04, c.zones[2].addr[1]);
     // ... and imports zones with one "addr" in that protocol.
@@ -155,7 +155,7 @@ void test_export_import_roundtrip(void) {
     c.zones[1].p1_addr[0] = 9;
     JsonDocument exported;
     app_to_json(c, exported.to<JsonObject>());
-    exported["bracelets"]["protocol"] = 1;
+    exported["devices"]["protocol"] = 1;
     AppConfig other;
     config_defaults_app(other);
     String err;
@@ -167,7 +167,7 @@ void test_export_import_roundtrip(void) {
 
     // A uniform setup round-trips too.
     config_defaults_app(c);
-    TEST_ASSERT_TRUE(apply(c, R"({"bracelets":{"protocols":[0,1]}})", err));
+    TEST_ASSERT_TRUE(apply(c, R"({"devices":{"protocols":[0,1]}})", err));
     JsonDocument e2;
     app_to_json(c, e2.to<JsonObject>());
     config_defaults_app(other);
@@ -179,13 +179,13 @@ void test_json_errors(void) {
     AppConfig c;
     config_defaults_app(c);
     String err;
-    TEST_ASSERT_FALSE(apply(c, R"({"bracelets":{"protocols":[]}})", err));
-    TEST_ASSERT_FALSE(apply(c, R"({"bracelets":{"protocols":[2]}})", err));
+    TEST_ASSERT_FALSE(apply(c, R"({"devices":{"protocols":[]}})", err));
+    TEST_ASSERT_FALSE(apply(c, R"({"devices":{"protocols":[2]}})", err));
     TEST_ASSERT_FALSE(apply(c, R"({"zones":[{"protocols":[0],"addr_p1":"123"}]})", err));
     // Vendor mode drives protocol 1 only: every enabled zone needs it.
-    TEST_ASSERT_FALSE(apply(c, R"({"bracelets":{"mode":"vendor"}})", err));
+    TEST_ASSERT_FALSE(apply(c, R"({"devices":{"mode":"vendor"}})", err));
     TEST_ASSERT_TRUE(err.find("vendor") != std::string::npos);
-    TEST_ASSERT_TRUE(apply(c, R"({"bracelets":{"mode":"vendor","protocols":[0,1]}})", err));
+    TEST_ASSERT_TRUE(apply(c, R"({"devices":{"mode":"vendor","protocols":[0,1]}})", err));
 }
 
 void setUp(void) {}

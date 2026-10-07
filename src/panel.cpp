@@ -38,8 +38,8 @@ struct Page {
     uint8_t first;  // index into the list of enabled zones (PAGE_ZONES)
 };
 static const uint8_t ZONES_PER_PAGE = 4;
-static const uint8_t MAX_PAGES = 2 + (bracelet::RxTracker::MAX_ZONES + ZONES_PER_PAGE - 1) / ZONES_PER_PAGE;
-static_assert(bracelet::RxTracker::MAX_ZONES >= MAX_ZONES, "MAX_PAGES must cover the controller's zone pages too");
+static const uint8_t MAX_PAGES = 2 + (rfproto::RxTracker::MAX_ZONES + ZONES_PER_PAGE - 1) / ZONES_PER_PAGE;
+static_assert(rfproto::RxTracker::MAX_ZONES >= MAX_ZONES, "MAX_PAGES must cover the controller's zone pages too");
 
 static uint8_t build_pages(Page *pages) {
     uint8_t enabled = 0;
@@ -362,14 +362,14 @@ static void draw_receiver(bool list, uint8_t first, const EngineSnapshot &s) {
     }
     if (rx.count == 0) {
         s_oled->drawString(0, 14, "Listening...");
-        s_oled->drawString(0, 26, "no bracelet commands yet");
+        s_oled->drawString(0, 26, "nothing heard yet");
         return;
     }
     for (uint8_t i = first, row = 0; i < rx.count && row < ZONES_PER_PAGE; i++, row++) {
         const ReceiverSnapshot::Row &z = rx.rows[i];
         uint8_t y = 14 + row * 12;
         String name = String("P") + z.protocol + " " +
-                      (z.group == bracelet::RxTracker::ALL_GROUPS ? String("All") : String("G" + String(z.group)));
+                      (z.group == rfproto::RxTracker::ALL_GROUPS ? String("All") : String("G" + String(z.group)));
         char hex[7];
         snprintf(hex, sizeof(hex), "%02X%02X%02X", z.r, z.g, z.b);
         String what = (z.label ? String(z.label) : String(hex)) + " " + age_string(z.age_ms);

@@ -10,7 +10,7 @@
 #include "../../src/engine.cpp"
 #undef private
 
-using namespace bracelet;
+using namespace rfproto;
 
 // ---- what engine.cpp needs from the rest of the firmware ----
 AppConfig g_app;

@@ -73,7 +73,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
   "name": "Front Yard",
   "output_enabled": true,
   "role": "controller",
-  "bracelets": {"protocols": [0, 1], "per_zone": true, "protocol": 0, "mode": "pixel", "color_order": "RGB"},
+  "devices": {"protocols": [0, 1], "per_zone": true, "protocol": 0, "mode": "pixel", "color_order": "RGB"},
   "input":     {"ddp_enabled": true, "ddp_port": 4048, "e131_enabled": false, "e131_universe": 1,
                 "e131_multicast": true, "start_channel": 1, "timeout_s": 300},
   "radio":     {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000,
@@ -93,17 +93,17 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
   protocol 1 (an FX channel effect becomes "off" for fade out, and the plain colour otherwise, on protocol 1,
   which has no effects). Broadcasts (All off, input-timeout blanking, test colours) go only to protocols some
   enabled zone uses.
-- `bracelets.protocols` (write): sets every zone at once. Read: what every zone uses, or, with `per_zone: true`,
-  what the zones use between them. `bracelets.protocol` is the default protocol (new zones when they differ, the
+- `devices.protocols` (write): sets every zone at once. Read: what every zone uses, or, with `per_zone: true`,
+  what the zones use between them. `devices.protocol` is the default protocol (new zones when they differ, the
   channel meter); an older client that changes it switches every zone to that protocol. Zones always keep an
   address in both protocols, so nothing has to be re-entered when a zone changes protocol.
-- `bracelets.base_layer` (protocol 0): the zone addressed to every group (mask `FFFF`) is a base layer. A zone
+- `devices.base_layer` (protocol 0): the zone addressed to every group (mask `FFFF`) is a base layer. A zone
   whose colour is not black is cut out of that zone's address ("everyone except"), so base changes don't
   reach it; a black zone follows the base and gets no packet of its own while the base's broadcast covers
   it. Zones that change to the same command at the same moment are sent as one packet with their masks
   combined. Default `true` for new settings, `false` for settings saved by older firmware. In `/api/status` the
   base zone's `packet` shows the address actually used (e.g. `00FBFF0F` with group 2 cut out).
-- `bracelets.mode`: `pixel` (3 channels per zone: R G B in `color_order`), `dmx` (4: R, G, B, FX) or `vendor`
+- `devices.mode`: `pixel` (3 channels per zone: R G B in `color_order`), `dmx` (4: R, G, B, FX) or `vendor`
   (5: boot code, group, R, G, B, the LedGiftSupplier DMX transmitter's layout). Vendor mode drives protocol 1 only,
   so every enabled zone must use protocol 1 (a zone also on protocol 0 sends only protocol 1). A zone only transmits
   while its first channel is 85, and the group comes from its second channel.
@@ -147,7 +147,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 - `radio.lbt_enabled` (listen before transmit, off by default): before each update the radio listens for 2.5 ms
   and only transmits if the strongest signal stayed below `lbt_threshold_dbm` (-120..-30, default -75).
   Otherwise it backs off a random 3-15 ms and listens again, for at most 250 ms, then sends anyway. Set the
-  threshold about 10 dB above the quiet reading shown on *Bracelets & Radio* (`radio.lbt.last_rssi_dbm` in
+  threshold about 10 dB above the quiet reading shown on *Devices & Radio* (`radio.lbt.last_rssi_dbm` in
   `/api/status`). See [RF.md](RF.md#multiple-controllers).
 - `input.timeout_s`: blank the bracelets after this long without input. 0 = hold the last colour. On protocol 1 the
   blank is one broadcast "off" to every group (so it also reaches bracelets in groups no zone uses).

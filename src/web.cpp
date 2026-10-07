@@ -469,12 +469,12 @@ static void handle_send() {
     String act = doc["action"] | "color";
     uint8_t rgb[3] = {0, 0, 0};
     parse_hex(doc["rgb"] | "000000", rgb, 3);
-    bracelet::Action action = act == "off"   ? bracelet::ACTION_OFF
-                              : act == "fxa" ? bracelet::ACTION_FX_A
-                              : act == "fxb" ? bracelet::ACTION_FX_B
-                              : act == "fxc" ? bracelet::ACTION_FX_C
-                                             : bracelet::ACTION_COLOR;
-    bool ok = zone < 0 && action == bracelet::ACTION_OFF ? g_engine.all_off()
+    rfproto::Action action = act == "off"   ? rfproto::ACTION_OFF
+                              : act == "fxa" ? rfproto::ACTION_FX_A
+                              : act == "fxb" ? rfproto::ACTION_FX_B
+                              : act == "fxc" ? rfproto::ACTION_FX_C
+                                             : rfproto::ACTION_COLOR;
+    bool ok = zone < 0 && action == rfproto::ACTION_OFF ? g_engine.all_off()
                                                          : g_engine.send_zone(zone, action, rgb[0], rgb[1], rgb[2]);
     if (!ok) {
         send_error(409, tx_refused_reason());
@@ -495,8 +495,8 @@ static void handle_raw() {
     JsonDocument doc;
     if (!parse_body(doc))
         return;
-    uint8_t pkt[bracelet::PACKET_LEN];
-    if (!parse_hex(doc["hex"] | "", pkt, bracelet::PACKET_LEN)) {
+    uint8_t pkt[rfproto::PACKET_LEN];
+    if (!parse_hex(doc["hex"] | "", pkt, rfproto::PACKET_LEN)) {
         send_error(400, "hex must be 7 bytes");
         return;
     }
@@ -729,7 +729,7 @@ static void handle_wled_get_cfg() {
 }
 
 // xLights "Upload Output" / "Upload Input": the zone count follows the pixels on port 1, plus the input
-// protocol. Colour order, bracelet protocol and zone addresses are not xLights' to set and stay as they are.
+// protocol. Colour order, device protocol and zone addresses are not xLights' to set and stay as they are.
 static void handle_wled_post_cfg() {
     JsonDocument doc;
     if (!parse_body(doc))
@@ -842,7 +842,7 @@ void begin() {
         }
         send_json(200, doc);
     });
-    s_server.on("/api/rssi", HTTP_GET, protect([]() {  // signal strength on the bracelet frequency, right now
+    s_server.on("/api/rssi", HTTP_GET, protect([]() {  // signal strength on the device frequency, right now
         int16_t peak, avg;
         uint32_t freq;
         if (!g_engine.measure_rssi(peak, avg, freq)) {

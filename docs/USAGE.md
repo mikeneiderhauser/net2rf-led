@@ -47,7 +47,7 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 |---|---|
 | **Dashboard** | Input rate and packet counters, RF airtime and counters, radio status, device info with free memory and flash; a notice when newer firmware is available; the last colour sent to each zone; other controllers on the network with their live state; **Test mode** (off, solid colour, or cycle R/G/B/W); the **RF output** and **Radio power** switches, and **All off** |
 | **Zones** | Add, name, enable and address zones; choose whether All Zones is a base layer under the others; send a colour, off, a fade in or a fade out to one zone; **Zone walk** lights one zone at a time so you can see which bracelets belong where |
-| **Bracelets & Radio** | Controller name, bracelet protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
+| **Devices & Radio** | Controller name, bracelet protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
 | **Network** | Current connection and the settings above |
 | **Tools** | Testing and diagnostics, described [below](#tools) |
 | **System** | Firmware info (version, free memory, free flash) and **Update firmware** (from GitHub releases or a file); an **Advanced** section with the flash partition breakdown; OLED display type and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
@@ -225,6 +225,6 @@ at `net2rf.local`. Controllers in radio range of each other share the 433 MHz ch
 | Forgot the admin password | Hold USER 5 s (network reset) |
 | Everything is wrong | Hold USER 15 s (factory reset), or *System → Factory reset* |
 | A firmware update misbehaves | It rolls back by itself; otherwise flash the `.factory.bin` over serial ([ASSEMBLY.md](ASSEMBLY.md#flashing)) |
-| Radio *not detected* | Check the radio's wiring and 3.3 V, and that the right module is selected under *Bracelets & Radio* |
+| Radio *not detected* | Check the radio's wiring and 3.3 V, and that the right module is selected under *Devices & Radio* |
 | Radio *data line fault* | The CC1101's GDO0 isn't reaching IO33: check that wire |
 | Bracelets don't react | Press their button (they may be asleep), check they're on the right protocol and group, move closer, raise TX power |

@@ -1,4 +1,4 @@
-// Host tests for bracelet_protocol.h: protocol 0 against packets decoded from the Flipper Zero bracelet_led.fap app,
+// Host tests for rf_protocol.h: protocol 0 against packets decoded from the Flipper Zero bracelet_led.fap app,
 // protocol 1 against off-air captures of the vendor's DMX transmitter.
 // Run: pio test -e native
 #include <unity.h>
@@ -6,9 +6,9 @@
 #include <vector>
 #include <cstring>
 
-#include "bracelet_protocol.h"
+#include "rf_protocol.h"
 
-using namespace bracelet;
+using namespace rfproto;
 
 static const uint8_t ADDR_P0[4] = {0x00, 0xFF, 0xFF, 0x0F};
 static const uint8_t ADDR_P1[2] = {0x00, 0xFF};

@@ -20,7 +20,7 @@
 #include <cstddef>
 #include <cstring>
 
-namespace bracelet {
+namespace rfproto {
 
 static const uint8_t PACKET_LEN = 7;
 static const uint8_t NUM_PROTOCOLS = 2;
@@ -37,7 +37,7 @@ enum Action : uint8_t {
     ACTION_OFF,
     ACTION_FX_A,       // protocol 0: fade in to the last colour (CMD 05 AA)
     ACTION_FX_B,       // protocol 0: fade out to black (CMD 06 AA)
-    ACTION_FX_C,       // protocol 0: from the Flipper app (D0 FF FF FF 55 00 packet); no reaction on tested bracelets
+    ACTION_FX_C,       // protocol 0: from the Flipper app (D0 FF FF FF 55 00 packet); no reaction on tested devices
 };
 
 struct PaletteEntry {
@@ -93,7 +93,7 @@ inline bool addresses_overlap(uint8_t protocol, const uint8_t *a, const uint8_t 
 
 // Protocol 0 "base layer": the zone addressed to every group (mask FFFF) is the base, and the other zones sit on
 // top of it. A zone showing its own colour is cut out of the base zone's address, so base changes never reach
-// its bracelets; a zone that is off (black), or wants the very colour the base shows, follows the base
+// its devices; a zone that is off (black), or wants the very colour the base shows, follows the base
 // instead and needs no packet of its own while the base's broadcast covers it. This works because the address is a group mask: "everyone except groups 2 and 5"
 // is one packet.
 //
@@ -232,7 +232,7 @@ static const uint8_t PROTOCOL_BIT[NUM_PROTOCOLS] = {1, 2};
 static const uint8_t ALL_PROTOCOLS = 3;
 inline bool has_protocol(uint8_t set, uint8_t protocol) { return set & PROTOCOL_BIT[protocol & 1]; }
 
-// Protocol 1 has no built-in effects. For a zone on both protocols, an effect meant for its protocol 0 bracelets
+// Protocol 1 has no built-in effects. For a zone on both protocols, an effect meant for its protocol 0 devices
 // becomes the closest protocol 1 command: fade out -> off; fade in and effect C -> keep showing the colour.
 inline Action p1_action(Action a) {
     if (a == ACTION_FX_B)
@@ -300,4 +300,4 @@ template<typename Sink> void encode_frame(uint8_t protocol, const uint8_t *pkt, 
     }
 }
 
-}  // namespace bracelet
+}  // namespace rfproto

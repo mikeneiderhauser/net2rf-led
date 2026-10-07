@@ -1,6 +1,6 @@
 #pragma once
 
-// Receive side of the bracelet protocols (no Arduino deps, host-testable): turns the demodulated OOK
+// Receive side of the device protocols (no Arduino deps, host-testable): turns the demodulated OOK
 // signal (a stream of mark/space durations) back into packets, and keeps track of what every group was
 // last told to show. Used by the controller's receiver mode.
 //
@@ -10,9 +10,9 @@
 #include <cstdint>
 #include <cstring>
 
-#include "bracelet_protocol.h"
+#include "rf_protocol.h"
 
-namespace bracelet {
+namespace rfproto {
 
 // Protocol 1 checksum as the vendor's DMX transmitter sends it (see p1_checksum), or as the Flipper app and
 // net2rf firmware before the fix sent it (RR^GG^BB^0x5A, no group). Both kinds of packet are accepted.
@@ -169,7 +169,7 @@ class FrameDecoder {
 struct RxCommand {
     uint8_t r{0}, g{0}, b{0};
     const char *label{nullptr};  // protocol 0 colour or effect name; nullptr = plain RGB (protocol 1)
-    bool keep_colour{false};     // fade in: the bracelet goes back to the colour it last showed
+    bool keep_colour{false};     // fade in: the device goes back to the colour it last showed
 };
 
 inline const char *p0_colour_name(uint8_t code, uint8_t *r, uint8_t *g, uint8_t *b) {
@@ -333,4 +333,4 @@ class RxTracker {
     bool have_last_{false};
 };
 
-}  // namespace bracelet
+}  // namespace rfproto

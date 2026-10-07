@@ -3,13 +3,13 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-#include "bracelet_protocol.h"
+#include "rf_protocol.h"
 
 // Persistent settings (NVS). Network settings are stored separately so a network reset
 // (button hold) can recover a device without losing the zone configuration.
 //
 // Model: one controller runs ONE input mode (pixel, DMX or vendor). Zones are the addressable units: each has a
-// name, the bracelet protocols it drives (0, 1 or both) with an address in each, and DDP channels assigned in order
+// name, the device protocols it drives (0, 1 or both) with an address in each, and DDP channels assigned in order
 // from the controller's start channel (pixel: 3 per zone, DMX: 4, vendor: 5). Only the protocols a zone is set to
 // are transmitted; a zone on both sends each change twice, protocol 0 then protocol 1.
 
@@ -28,31 +28,31 @@ const char *radio_type_name(uint8_t type);
 struct ZoneConfig {
     uint8_t enabled;
     uint8_t addr[4];     // protocol 0 address: packet bytes 0-3
-    uint8_t protocols;   // bracelet::PROTOCOL_BIT set: 1 = protocol 0, 2 = protocol 1, 3 = both. 0 only in settings
+    uint8_t protocols;   // rfproto::PROTOCOL_BIT set: 1 = protocol 0, 2 = protocol 1, 3 = both. 0 only in settings
                          // saved before zones had their own protocols (config_load() migrates them).
     uint8_t p1_addr[2];  // protocol 1 address: packet byte 1 (group code) and byte 6
     char name[24];
 };
-inline bool zone_uses(const ZoneConfig &z, uint8_t protocol) { return bracelet::has_protocol(z.protocols, protocol); }
+inline bool zone_uses(const ZoneConfig &z, uint8_t protocol) { return rfproto::has_protocol(z.protocols, protocol); }
 // The zone's address in `protocol`, in build_packet()'s layout.
 inline const uint8_t *zone_addr(const ZoneConfig &z, uint8_t protocol) { return protocol ? z.p1_addr : z.addr; }
 
 struct AppConfig {
     uint32_t magic;
     char name[24];         // controller name, e.g. "Front Yard"
-    // Bracelets / input mapping
+    // Devices / input mapping
     uint8_t protocol;      // default protocol (new zones, channel meter): 0 = Shenzen New Dody (433.889, 10-colour
                            // palette), 1 = LedGiftSupplier (433.920, RGB). Each zone has its own: ZoneConfig::protocols.
     uint8_t mode;          // InputMode
-    uint8_t color_order;   // bracelet::ColorOrder (pixel mode)
+    uint8_t color_order;   // rfproto::ColorOrder (pixel mode)
     uint8_t num_zones;
     uint16_t start_channel;    // 1-based DDP channel of zone 1
     uint16_t ddp_port;      // E1.31 always uses UDP 5568
-    uint16_t input_timeout_s;  // blank bracelets after this long without DDP (0 = hold forever)
+    uint16_t input_timeout_s;  // blank devices after this long without DDP (0 = hold forever)
     // Radio / output
     uint8_t radio_type;  // RadioType (change requires reboot)
     int8_t tx_power;     // dBm, clamped to the radio's range
-    uint32_t freq[bracelet::NUM_PROTOCOLS];
+    uint32_t freq[rfproto::NUM_PROTOCOLS];
     uint8_t repeats;        // frames per update
     uint8_t off_threshold;  // protocol 0: max(R,G,B) below this = off
     uint16_t refresh_ms;    // resend unchanged state (0 = never)
@@ -73,7 +73,7 @@ struct AppConfig {
     uint16_t update_check_hours;  // how often the automatic check runs
     uint8_t base_layer;     // protocol 0: the all-groups zone is a base layer under the other zones
     uint8_t display_sleep;  // OLED sleep after this many minutes without a button press: 0 = default, 255 = never
-    uint8_t receiver;       // 1 = receiver mode: listen on 433 MHz and show what the bracelets are told; never transmits
+    uint8_t receiver;       // 1 = receiver mode: listen on 433 MHz and show what the devices are told; never transmits
     uint8_t rx_profile;     // receiver mode: RxProfile
 };
 // Receiver mode tuning (both radios): normal, near (gain capped: a transmitter within a few metres), wide band.

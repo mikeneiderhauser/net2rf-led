@@ -138,7 +138,7 @@ python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the netwo
 |---|---|
 | `src/` | The firmware: engine (zones, scheduling, RF), network, web server, OLED/button, peers, updater |
 | `web/index.html` | The web UI (gzipped into the firmware at build time) |
-| `lib/bracelet_protocol` | Bracelet packet encoder and decoder, receiver zone tracking, DDP / E1.31 parsers (pure C++, unit tested) |
+| `lib/net2rf_protocol` | Bracelet packet encoder and decoder, receiver zone tracking, DDP / E1.31 parsers (pure C++, unit tested) |
 | `lib/cc1101_ook`, `lib/sx1278_ook` | Minimal radio drivers for OOK transmit and listen-before-talk |
 | `lib/net2rf_heartbeat`, `lib/net2rf_fpp` | Controller heartbeat and FPP discovery ping formats (unit tested) |
 | `lib/net2rf_wled` | The WLED config requests xLights' upload uses (unit tested) |

@@ -19,7 +19,7 @@ static const uint32_t XTAL_HZ = 26000000;
 
 // Receiver profiles (receiver mode). All use the OOK AGC settings of TI DN022; they differ in bandwidth and gain.
 enum RxProfile : uint8_t {
-    RX_NORMAL = 0,  // 162 kHz: both bracelet frequencies plus crystal error, best sensitivity
+    RX_NORMAL = 0,  // 162 kHz: both device frequencies plus crystal error, best sensitivity
     RX_NEAR = 1,    // as normal with the LNA / DVGA gain capped: a transmitter within a few metres overloads the
                     // OOK slicer otherwise (same caps as CrispyPyro/Wireless_DMX_Receiver's near-field mode)
     RX_WIDE = 2,    // 325 kHz: for transmitters that are well off frequency

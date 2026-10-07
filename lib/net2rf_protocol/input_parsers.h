@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace bracelet {
+namespace rfproto {
 
 enum class ParseResult { OK, MALFORMED, IGNORED };
 
@@ -67,4 +67,4 @@ inline ParseResult parse_e131(const uint8_t *buf, size_t len, uint16_t universe,
     return ParseResult::OK;
 }
 
-}  // namespace bracelet
+}  // namespace rfproto

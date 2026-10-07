@@ -92,7 +92,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
   <nav id="nav">
     <a href="#dashboard">Dashboard</a>
     <a href="#zones">Zones</a>
-    <a href="#output">Bracelets &amp; Radio</a>
+    <a href="#output">Devices &amp; Radio</a>
     <a href="#network">Network</a>
     <a href="#tools">Tools</a>
     <a href="#system">System</a>
@@ -109,7 +109,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
   <section data-page="dashboard">
     <div class="note hide" id="d_fwNote"></div>
     <div class="card hide" id="d_rxCard"><h2>Receiver &mdash; heard on air</h2>
-      <p class="dim small" style="margin-top:0">This controller is in <b>receiver mode</b>: it listens on 433&nbsp;MHz and shows what every bracelet group was last told, from any transmitter in range (this project, the vendor's DMX transmitter, a Flipper). It never transmits. Both bracelet protocols are decoded at once.</p>
+      <p class="dim small" style="margin-top:0">This controller is in <b>receiver mode</b>: it listens on 433&nbsp;MHz and shows what every device group was last told, from any transmitter in range (this project, the vendor's DMX transmitter, a Flipper). It never transmits. Both device protocols are decoded at once.</p>
       <div class="grid">
         <div><div class="big" id="d_rxUpd">–<span class="unit">commands</span></div><div id="d_rxState" class="small"></div></div>
         <dl class="kv"><dt>Listening on</dt><dd id="d_rxFreq">–</dd>
@@ -127,7 +127,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="hide" id="d_rxView" style="margin-top:10px"><div class="small" id="d_rxViewHead"></div>
         <div class="scroll" style="margin:6px 0;border:1px solid var(--rule);border-radius:8px;background:var(--field)"><svg id="d_rxWave" height="46" style="display:block;color:var(--accent)"></svg></div>
         <pre id="d_rxViewInfo"></pre></div>
-      <div class="actions"><button id="d_rxClear">Clear</button><span class="dim small">Bracelets that were already lit before you started listening only show up once something changes their colour.</span></div>
+      <div class="actions"><button id="d_rxClear">Clear</button><span class="dim small">Devices that were already lit before you started listening only show up once something changes their colour.</span></div>
     </div>
     <div class="grid">
       <div class="card"><h2>Input (DDP)</h2>
@@ -144,8 +144,8 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
         <div class="small dim">share of the last 10 s spent transmitting</div>
         <label class="tog" style="margin-top:10px" title="Off: show data is still received and counted, but nothing is transmitted"><input type="checkbox" id="d_outSw" role="switch"><i></i><span><b>RF output</b> <span class="dim small" id="d_outState"></span></span></label>
         <label class="tog" title="Off: the radio chip is put to sleep to save power"><input type="checkbox" id="d_radioSw" role="switch"><i></i><span><b>Radio power</b> <span class="dim small" id="d_radioSwState"></span></span></label>
-        <label class="tog" title="On: listen on 433 MHz and show what the bracelets are told; nothing is transmitted"><input type="checkbox" id="d_rxSw" role="switch"><i></i><span><b>Receiver mode</b> <span class="dim small" id="d_rxSwState"></span></span></label>
-        <div class="actions"><button class="danger" id="d_allOff" title="Send off to every bracelet in range">All off</button></div>
+        <label class="tog" title="On: listen on 433 MHz and show what the devices are told; nothing is transmitted"><input type="checkbox" id="d_rxSw" role="switch"><i></i><span><b>Receiver mode</b> <span class="dim small" id="d_rxSwState"></span></span></label>
+        <div class="actions"><button class="danger" id="d_allOff" title="Send off to every device in range">All off</button></div>
         <dl class="kv">
           <dt>Updates sent</dt><dd id="d_up">–</dd><dt>Frames sent</dt><dd id="d_tf">–</dd>
           <dt>Manual / test</dt><dd id="d_man">–</dd><dt>Errors</dt><dd id="d_err">–</dd>
@@ -184,7 +184,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
   <!-- ZONES -->
   <section data-page="zones" class="hide">
     <div class="card"><h2>Zones</h2>
-      <p class="dim small" style="margin-top:0">Each zone is one set of bracelets that share an address. Zones take consecutive DDP channels from the start channel (<span id="z_widthNote"></span>). Disabling a zone keeps the channel layout.</p>
+      <p class="dim small" style="margin-top:0">Each zone is one set of devices that share an address. Zones take consecutive DDP channels from the start channel (<span id="z_widthNote"></span>). Disabling a zone keeps the channel layout.</p>
       <div class="scroll"><table class="tbl"><thead><tr><th>#</th><th>On</th><th>Name</th><th>Protocols</th><th title="Protocol 0: 4 bytes, group mask in bytes 1-2">Protocol 0 address</th><th title="Protocol 1: group code, 0 = every group">Protocol 1 group</th><th>Channels</th><th>Test</th></tr></thead><tbody id="z_rows"></tbody></table></div>
       <div class="small dim" id="z_protoNote" style="margin:6px 0"></div>
       <div class="note hide" id="z_mixNote"></div>
@@ -193,7 +193,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="actions"><button id="z_add">+ Add zone</button><button id="z_del">&minus; Remove last</button><span style="flex:1"></span><button class="primary" id="z_save">Save zones</button></div>
     </div>
     <div class="card"><h2>Zone walk</h2>
-      <p class="dim small" style="margin-top:0">Lights one saved zone at a time so you can see which bracelets belong to which zone. Wake the bracelets first (press their button). Pause xLights while walking, or its input will overwrite the colours. Unsaved zone edits are not used: save first.</p>
+      <p class="dim small" style="margin-top:0">Lights one saved zone at a time so you can see which devices belong to which zone. Wake the devices first (press their button). Pause xLights while walking, or its input will overwrite the colours. Unsaved zone edits are not used: save first.</p>
       <div class="form">
         <label>Colour<input id="w_col" type="color" value="#ffffff"></label>
         <label>Step time (ms)<input id="w_dwell" type="number" value="3000" min="500"></label>
@@ -206,11 +206,11 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
 
   <!-- ZONE & OUTPUT -->
   <section data-page="output" class="hide">
-    <div class="card"><h2>Bracelets</h2>
-      <p class="dim small" style="margin-top:0">One controller runs one input mode. It can drive both kinds of bracelet: pick the protocols here, or per zone. Only the protocols in use are transmitted.</p>
+    <div class="card"><h2>Devices</h2>
+      <p class="dim small" style="margin-top:0">One controller runs one input mode. It can drive both kinds of device: pick the protocols here, or per zone. Only the protocols in use are transmitted.</p>
       <div class="form">
         <label>Controller name<input id="b_name" maxlength="23"></label>
-        <label>Bracelet protocols<select id="b_proto"><option value="0">Protocol 0 only &middot; Shenzen New Dody (433.889, 10 colours)</option><option value="1">Protocol 1 only &middot; LedGiftSupplier.com (433.920, RGB)</option><option value="both">Both &middot; every change sent on each (twice the airtime)</option><option value="zone">Per zone (set on the Zones page)</option></select><span class="hint" id="b_protoHint">only these are transmitted; every zone keeps an address in both</span></label>
+        <label>Device protocols<select id="b_proto"><option value="0">Protocol 0 only &middot; Shenzen New Dody (433.889, 10 colours)</option><option value="1">Protocol 1 only &middot; LedGiftSupplier.com (433.920, RGB)</option><option value="both">Both &middot; every change sent on each (twice the airtime)</option><option value="zone">Per zone (set on the Zones page)</option></select><span class="hint" id="b_protoHint">only these are transmitted; every zone keeps an address in both</span></label>
         <label>Input mode<select id="b_mode"><option value="pixel">Pixel (R, G, B)</option><option value="dmx">DMX (R, G, B, FX)</option><option value="vendor">Vendor DMX transmitter (85, group, R, G, B)</option></select><span class="hint" id="b_modeHint">3 or 4 DDP channels per zone</span></label>
         <label id="b_orderWrap">Colour order<select id="b_order"><option>RGB</option><option>RBG</option><option>GRB</option><option>GBR</option><option>BRG</option><option>BGR</option></select><span class="hint">match the xLights model's string type</span></label>
       </div></div>
@@ -221,7 +221,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
         <label class="rf">Protocol 0 frequency (Hz)<input id="r_f0" type="number"></label>
         <label class="rf">Protocol 1 frequency (Hz)<input id="r_f1" type="number"></label>
         <label>Frames per update<input id="r_rep" type="number" min="1" max="10"><span class="hint">each frame is ~47 ms on air</span></label>
-        <label>Refresh unchanged (ms)<input id="r_ref" type="number" min="0" max="60000"><span class="hint">0 = only on change (recommended: bracelets hold their colour)</span></label>
+        <label>Refresh unchanged (ms)<input id="r_ref" type="number" min="0" max="60000"><span class="hint">0 = only on change (recommended: devices hold their colour)</span></label>
         <label>TX jitter (ms)<input id="r_jit" type="number" min="0" max="200"><span class="hint">random delay; helps when zones overlap</span></label>
         <label>Protocol 0 off threshold<input id="r_thr" type="number" min="0" max="255"></label>
         <label class="inline"><input type="checkbox" id="r_lbt"> Listen before transmit
@@ -229,7 +229,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
         <label>Busy above (dBm)<input id="r_lbtThr" type="number" min="-120" max="-30">
           <span class="hint" id="r_lbtHint">set it ~10 dB above the quiet reading</span></label>
       </div>
-      <div class="note">Strong 433&nbsp;MHz signals can stop some <b>car key fobs</b> working nearby. Use the lowest TX power that reaches your audience, keep refresh at 0, and don't keep the bracelets busy all show long.</div>
+      <div class="note">Strong 433&nbsp;MHz signals can stop some <b>car key fobs</b> working nearby. Use the lowest TX power that reaches your audience, keep refresh at 0, and don't keep the devices busy all show long.</div>
     </div>
     <div class="card"><h2>Input</h2>
       <div class="form">
@@ -285,12 +285,12 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
   <!-- TOOLS -->
   <section data-page="tools" class="hide">
     <div class="card"><h2>Which protocol is my device?</h2>
-      <p class="dim small" style="margin-top:0">Switch the bracelet, stick or puck on, <b>press its button</b> so it listens, and hold it near the antenna. This alternates between the two bracelet protocols, each broadcast to all groups:
+      <p class="dim small" style="margin-top:0">Switch the device on, <b>press its button</b> so it listens, and hold it near the antenna. This alternates between the two device protocols, each broadcast to all groups:
         <b style="color:#e53935">red</b> = protocol 0 (Shenzen New Dody), <b style="color:#43a047">green</b> = protocol 1 (LedGiftSupplier.com).</p>
       <div class="actions" style="margin-top:0"><button class="primary" id="id_start">Start test</button><button id="id_stop">Stop</button>
         <span class="small" id="id_now"></span></div>
       <div class="actions"><span class="small dim">Device showed:</span><button id="id_p0">Red → use protocol 0</button><button id="id_p1">Green → use protocol 1</button></div>
-      <p class="dim small">Nothing at all? Check the bracelet's power switch and battery, bring it closer, raise TX power, and confirm the radio shows <i>ready</i> on the dashboard.
+      <p class="dim small">Nothing at all? Check the device's power switch and battery, bring it closer, raise TX power, and confirm the radio shows <i>ready</i> on the dashboard.
         If it only reacts to protocol 1 once you pick a group, use the Address probe below on <i>Group (byte 1)</i> in sweep mode.</p>
     </div>
     <div class="card"><h2>Send raw packet</h2>
@@ -304,7 +304,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="actions"><button class="primary" id="t_send">Send</button><span class="mono small dim" id="t_prev"></span></div>
     </div>
     <div class="card"><h2>Address probe</h2>
-      <p class="dim small" style="margin-top:0">Steps through candidate address values while you watch the bracelets. Mark the steps where a bracelet reacts, then enter that value as a zone address.</p>
+      <p class="dim small" style="margin-top:0">Steps through candidate address values while you watch the devices. Mark the steps where a device reacts, then enter that value as a zone address.</p>
       <div class="form">
         <label>Protocol<select id="p_p"><option value="0">0</option><option value="1" selected>1</option></select></label>
         <label>Base address<input id="p_base" class="mono"></label>
@@ -316,7 +316,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
         <label>Step time (ms)<input id="p_dwell" type="number" value="1500" min="300"></label>
         <label class="inline"><input type="checkbox" id="p_off" checked> Send off between steps</label>
       </div>
-      <div class="actions"><button class="primary" id="p_start">Start</button><button id="p_pause">Pause</button><button id="p_prev">&larr; Back</button><button id="p_next">Next &rarr;</button><button id="p_stop">Stop</button><button id="p_mark">&#9733; Bracelet reacted</button></div>
+      <div class="actions"><button class="primary" id="p_start">Start</button><button id="p_pause">Pause</button><button id="p_prev">&larr; Back</button><button id="p_next">Next &rarr;</button><button id="p_stop">Stop</button><button id="p_mark">&#9733; Device reacted</button></div>
       <div style="margin-top:12px"><span class="dim small">Current address</span> <span class="big mono" id="p_cur">&mdash;</span> <b id="p_grp"></b> <span class="dim small" id="p_step"></span></div>
       <div class="mono small" id="p_log" style="margin-top:6px"></div>
     </div>
@@ -346,7 +346,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="scroll"><table class="tbl"><thead><tr><th>When</th><th>To</th><th>Command</th><th>Packet</th><th></th></tr></thead><tbody id="tl_rows"></tbody></table></div>
     </div>
     <div class="card"><h2>Channel meter</h2>
-      <p class="dim small" style="margin-top:0">Signal strength on the bracelet frequency, measured between transmissions. Use it to spot other transmitters and to pick the listen-before-transmit threshold (about 10&nbsp;dB above the quiet level).</p>
+      <p class="dim small" style="margin-top:0">Signal strength on the device frequency, measured between transmissions. Use it to spot other transmitters and to pick the listen-before-transmit threshold (about 10&nbsp;dB above the quiet level).</p>
       <div class="actions" style="margin-top:0"><button class="primary" id="cm_start">Start</button><button id="cm_stop">Stop</button><span class="big" id="cm_now">–</span><span class="dim small">dBm peak</span></div>
       <div class="util" id="cm_bar" style="height:14px"><i style="width:0"></i></div>
       <div class="small dim" id="cm_info"></div>
@@ -430,7 +430,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-const PAGES={dashboard:'Dashboard',zones:'Zones',output:'Bracelets & Radio',network:'Network',tools:'Tools',system:'System'};
+const PAGES={dashboard:'Dashboard',zones:'Zones',output:'Devices & Radio',network:'Network',tools:'Tools',system:'System'};
 const ORDERS=['RGB','RBG','GRB','GBR','BRG','BGR'];
 const PROTOS=['0 · Shenzen New Dody · 433.889','1 · LedGiftSupplier · 433.920'];
 let S=null,C=null;
@@ -527,9 +527,9 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
     $('d_f0').textContent=mhz(a.freq_p0);$('d_f1').textContent=mhz(a.freq_p1)}
   $('d_ip').textContent=n.ip;$('d_iface').innerHTML=`<span class="dim">${n.interface}${n.ethernet.link&&n.interface==='ethernet'?' · '+n.ethernet.speed+' Mbps':''}${n.wifi.connected&&n.interface==='wifi'?' · '+n.wifi.rssi+' dBm':''} · ${n.hostname}.local</span>`;
   $('d_upt').textContent=fmtUp(d.uptime_s);$('d_fw').textContent=d.firmware;$('d_heap').innerHTML=heapFree(d);$('d_flash').innerHTML=flashFree(d);$('d_rst').textContent=d.reset_reason;
-  $('d_timeoutNote').textContent=i.timeout_s?`Bracelets blank after ${i.timeout_s>=60?Math.round(i.timeout_s/60)+' min':i.timeout_s+' s'} without input.`:'Bracelets hold the last colour when input stops.';
+  $('d_timeoutNote').textContent=i.timeout_s?`Devices blank after ${i.timeout_s>=60?Math.round(i.timeout_s/60)+' min':i.timeout_s+' s'} without input.`:'Devices hold the last colour when input stops.';
   // live zones
-  const w=C?({dmx:4,vendor:5}[C.app.bracelets.mode]||3):3;
+  const w=C?({dmx:4,vendor:5}[C.app.devices.mode]||3):3;
   const rows=e.zones.map((g,k)=>{const cfg=C&&C.app.zones[k];if(!cfg)return'';
     return `<tr class="${cfg.enabled?'':'dim'}"><td class="dim">${k+1}</td><td class="nw">${esc(cfg.name)}</td><td class="dim nw">${cfg.start}-${cfg.start+w-1}</td><td class="nw"><span class="sw" style="background:#${g.rgb}"></span> <span class="mono">#${g.rgb}</span></td><td class="small dim nw">${w===4?'fx '+g.fx:w===5?(g.gated?'<span class="badge warn">held: ch1 ≠ 85</span>':'group '+g.group):''}</td><td class="mono nw">${(g.packets&&g.packets.length?g.packets:g.packet?[{p:'',pkt:g.packet}]:[]).map(e=>(g.packets&&g.packets.length>1?`<span class="dim">P${e.p}</span> `:'')+e.pkt.match(/../g).join(' ')).join('<br>')||'–'}</td><td>${fmtN(g.tx)}</td><td class="dim">${fmtAge(g.tx_age_ms)}</td></tr>`}).join('');
   $('d_zones').innerHTML=rows;
@@ -538,26 +538,26 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
 }
 
 // ---------- config ----------
-async function loadConfig(){C=await api('config');if(perZoneWanted)C.app.bracelets.per_zone=true;fillOutput();fillNetwork();if(!zonesDirty)renderZones()}
+async function loadConfig(){C=await api('config');if(perZoneWanted)C.app.devices.per_zone=true;fillOutput();fillNetwork();if(!zonesDirty)renderZones()}
 
 // zones editor
 let zonesDirty=false,perZoneWanted=false;  // "Per zone" picked while every zone still has the same protocols
 // A zone's protocols ([0], [1] or [0, 1]) and its address in each: protocol 0 = 4 bytes (group mask in bytes 1-2),
 // protocol 1 = group code (byte 1; 0 = all groups) + byte 6 (kept as-is, normally FF).
-const zprot=z=>z.protocols&&z.protocols.length?z.protocols:[C.app.bracelets.protocol];
+const zprot=z=>z.protocols&&z.protocols.length?z.protocols:[C.app.devices.protocol];
 const zuses=(z,p)=>zprot(z).includes(p);
 const protoName=ps=>ps.length>1?'0 + 1':String(ps[0]);
 const defAddr=(p,k)=>{if(!k||k>15)return p==0?'00FFFF0F':'00FF';return p==0?'00'+hx(1<<k&255)+hx(1<<k>>8)+'0F':hx(k)+'FF'};
-const perZone=()=>!!C.app.bracelets.per_zone;
-function zoneWidth(){return {dmx:4,vendor:5}[C.app.bracelets.mode]||3}
-function zoneAddrText(z){return zprot(z).map(p=>p==0?'P0 '+z.addr_p0:'P1 '+(C.app.bracelets.mode==='vendor'?'group from input':z.addr_p1)).join(' · ')}
+const perZone=()=>!!C.app.devices.per_zone;
+function zoneWidth(){return {dmx:4,vendor:5}[C.app.devices.mode]||3}
+function zoneAddrText(z){return zprot(z).map(p=>p==0?'P0 '+z.addr_p0:'P1 '+(C.app.devices.mode==='vendor'?'group from input':z.addr_p1)).join(' · ')}
 function protoCell(z){const v=zprot(z).length>1?'both':String(zprot(z)[0]);
   if(!perZone())return `<span class="dim">${protoName(zprot(z))}</span><input type="hidden" data-f="proto" value="${v}">`;
   return `<select data-f="proto" class="w70">${[['0','0'],['1','1'],['both','0 + 1']].map(([k,t])=>`<option value="${k}" ${k===v?'selected':''}>${t}</option>`).join('')}</select>`}
-function p0Cell(z){const on=zuses(z,0)&&C.app.bracelets.mode!=='vendor';
+function p0Cell(z){const on=zuses(z,0)&&C.app.devices.mode!=='vendor';
   return `<input data-f="addr_p0" class="mono w90" maxlength="8" value="${z.addr_p0}" style="${on?'':'opacity:.4'}" title="${on?'':'kept, not used: this zone is not on protocol 0'}">`}
 function p1Cell(z,start){const grp=parseInt(z.addr_p1.slice(0,2),16)||0,b6=z.addr_p1.slice(2,4)||'FF',on=zuses(z,1);
-  if(C.app.bracelets.mode==='vendor')return `<input type="hidden" data-f="group" value="${grp}"><input type="hidden" data-f="b6" value="${b6}"><span class="dim small nw">from channel ${start+1}</span>`;
+  if(C.app.devices.mode==='vendor')return `<input type="hidden" data-f="group" value="${grp}"><input type="hidden" data-f="b6" value="${b6}"><span class="dim small nw">from channel ${start+1}</span>`;
   return `<span class="nw" style="${on?'':'opacity:.4'}" title="${on?'':'kept, not used: this zone is not on protocol 1'}"><input data-f="group" type="number" class="w70" min="0" max="255" value="${grp}"> <span class="dim small">${grp==0?'all groups':''}</span></span><input type="hidden" data-f="b6" value="${b6}">`}
 function zoneRow(z,k){const w=zoneWidth(),start=C.app.input.start_channel+k*w;
   return `<td class="dim">${k+1}</td><td><input type="checkbox" data-f="enabled" ${z.enabled?'checked':''}></td>
@@ -565,12 +565,12 @@ function zoneRow(z,k){const w=zoneWidth(),start=C.app.input.start_channel+k*w;
   <td>${protoCell(z)}</td><td>${p0Cell(z)}</td><td>${p1Cell(z,start)}</td>
   <td class="dim">${start}-${start+w-1}</td>
   <td style="white-space:nowrap"><input type="color" class="tc" value="#ff0000"> <button class="ts">Send</button> <button class="to">Off</button>
-   <select class="tfx ${zuses(z,0)&&C.app.bracelets.mode!=='vendor'?'':'hide'}" title="Built-in effects: protocol 0 only"><option value="">FX…</option><option value="fxa">Fade in</option><option value="fxb">Fade out</option><option value="fxc">Effect C (untested)</option></select></td>`}
-function renderZones(){const zs=C.app.zones,p0=C.app.bracelets.mode!=='vendor'&&zs.some(z=>zuses(z,0));
-  $('z_layer').checked=p0&&!!C.app.bracelets.base_layer;$('z_layer').disabled=!p0;
+   <select class="tfx ${zuses(z,0)&&C.app.devices.mode!=='vendor'?'':'hide'}" title="Built-in effects: protocol 0 only"><option value="">FX…</option><option value="fxa">Fade in</option><option value="fxb">Fade out</option><option value="fxc">Effect C (untested)</option></select></td>`}
+function renderZones(){const zs=C.app.zones,p0=C.app.devices.mode!=='vendor'&&zs.some(z=>zuses(z,0));
+  $('z_layer').checked=p0&&!!C.app.devices.base_layer;$('z_layer').disabled=!p0;
   $('z_layerHint').textContent=p0?'Protocol 0 zones: a zone showing its own colour is left alone when the all-groups zone changes or goes black. A black zone follows the all-groups zone, so you cannot hold one zone dark while it is lit. Off: every zone is sent independently, and the all-groups zone overrides the others.':'Protocol 0 only: protocol 1 addresses one group or all of them, so it cannot leave groups out.';
   $('z_protoNote').textContent=perZone()?'Each zone sends only on its own protocols; a zone on 0 + 1 sends every change twice, protocol 0 then protocol 1.':
-    `Every zone uses protocol ${protoName(zprot(zs[0]||{}))}: change it under Bracelets & Radio, or pick "Per zone" there to mix protocols. Addresses in a protocol a zone doesn't use are kept (greyed).`;
+    `Every zone uses protocol ${protoName(zprot(zs[0]||{}))}: change it under Devices & Radio, or pick "Per zone" there to mix protocols. Addresses in a protocol a zone doesn't use are kept (greyed).`;
   const tb=$('z_rows');tb.innerHTML='';zs.forEach((z,k)=>{const tr=tb.insertRow();tr.innerHTML=zoneRow(z,k);bindZone(tr,k)});
   mixCheck();
   $('z_widthNote').textContent={3:'3 channels each: R, G, B',4:'4 channels each: R, G, B, FX',5:'5 channels each: boot code (85 = transmit), group, R, G, B'}[zoneWidth()]}
@@ -584,27 +584,27 @@ function bindZone(tr,k){tr.querySelectorAll('[data-f]').forEach(el=>el.addEventL
   tr.querySelector('.to').onclick=()=>api('send',{zone:k,action:'off'});
   tr.querySelector('.tfx').onchange=ev=>{if(ev.target.value)api('send',{zone:k,action:ev.target.value});ev.target.value=''}}
 // Warn when a protocol 1 "all groups" zone is mixed with specific groups: its changes override every group.
-function mixCheck(){const b=C.app.bracelets,note=$('z_mixNote');
+function mixCheck(){const b=C.app.devices,note=$('z_mixNote');
   if(b.mode==='vendor'){note.classList.add('hide');return}
   const zs=[...$('z_rows').rows].map((tr,k)=>({k,z:readZone(tr)})).filter(x=>x.z.enabled&&x.z.protocols.includes(1));
   const all=zs.filter(x=>x.z.addr_p1.slice(0,2)==='00'),some=zs.filter(x=>x.z.addr_p1.slice(0,2)!=='00');
   note.classList.toggle('hide',!(all.length&&some.length));
-  if(all.length&&some.length)note.innerHTML=`Protocol 1: zone ${all.map(x=>x.k+1).join(', ')} is <b>all groups</b>: whenever its colour changes, every protocol 1 bracelet follows it, including the bracelets in zone ${some.map(x=>x.k+1).join(', ')}. Use it as a deliberate "everyone" layer, or give it a specific group.`}
+  if(all.length&&some.length)note.innerHTML=`Protocol 1: zone ${all.map(x=>x.k+1).join(', ')} is <b>all groups</b>: whenever its colour changes, every protocol 1 device follows it, including the devices in zone ${some.map(x=>x.k+1).join(', ')}. Use it as a deliberate "everyone" layer, or give it a specific group.`}
 function collectZones(){return[...$('z_rows').rows].map(readZone)}
 $('z_add').onclick=()=>{const zs=collectZones();if(zs.length>=16)return toast('16 zones maximum');const k=zs.length;
-  const prev=zs[k-1],protocols=prev?prev.protocols:[C.app.bracelets.protocol];
+  const prev=zs[k-1],protocols=prev?prev.protocols:[C.app.devices.protocol];
   zs.push({enabled:true,name:k?'Zone '+k:'All Zones',protocols,addr_p0:defAddr(0,k),addr_p1:defAddr(1,k)});C.app.zones=zs;zonesDirty=true;renderZones()};
 $('z_del').onclick=()=>{const zs=collectZones();if(zs.length<=1)return;zs.pop();C.app.zones=zs;zonesDirty=true;renderZones()};
 $('z_layer').onchange=()=>{zonesDirty=true};
 $('z_save').onclick=async()=>{const zs=collectZones();
   for(const [k,z] of zs.entries())if(z.addr_p0.length!==8)return toast(`Zone ${k+1}: a protocol 0 address is 4 bytes (8 hex digits)`,4000);
-  if(C.app.bracelets.mode==='vendor'&&zs.some(z=>z.enabled&&!z.protocols.includes(1)))return toast('Vendor mode drives protocol 1 only: every enabled zone needs protocol 1',4500);
-  const j=await api('config',{zones:zs,bracelets:{base_layer:$('z_layer').checked}});zonesDirty=false;afterSave(j,'Zones');await loadConfig()};
+  if(C.app.devices.mode==='vendor'&&zs.some(z=>z.enabled&&!z.protocols.includes(1)))return toast('Vendor mode drives protocol 1 only: every enabled zone needs protocol 1',4500);
+  const j=await api('config',{zones:zs,devices:{base_layer:$('z_layer').checked}});zonesDirty=false;afterSave(j,'Zones');await loadConfig()};
 
-// bracelets & radio
+// devices & radio
 // The controller-wide protocol choice: one protocol, both, or set per zone.
 function protoSel(b){return b.per_zone?'zone':b.protocols.length>1?'both':String(b.protocols[0])}
-function fillOutput(){const a=C.app;$('b_name').value=a.name;$('b_proto').value=protoSel(a.bracelets);$('b_mode').value=a.bracelets.mode;$('b_order').value=a.bracelets.color_order;$('i_start').value=a.input.start_channel;modeUi();
+function fillOutput(){const a=C.app;$('b_name').value=a.name;$('b_proto').value=protoSel(a.devices);$('b_mode').value=a.devices.mode;$('b_order').value=a.devices.color_order;$('i_start').value=a.input.start_channel;modeUi();
   $('i_ddp').checked=a.input.ddp_enabled;$('i_e131').checked=a.input.e131_enabled;$('i_univ').value=a.input.e131_universe;$('i_mcast').checked=a.input.e131_multicast;
   $('r_type').value=a.radio.type;$('r_power').value=a.radio.tx_power;$('r_f0').value=a.radio.freq_p0;$('r_f1').value=a.radio.freq_p1;
   $('r_rep').value=a.radio.repeats;$('r_ref').value=a.radio.refresh_ms;$('r_jit').value=a.radio.tx_jitter_ms;$('r_thr').value=a.radio.off_threshold;
@@ -621,11 +621,11 @@ function protoHint(){$('b_protoHint').textContent={0:'protocol 1 is never transm
 $('b_proto').onchange=protoHint;
 $('o_save').onclick=async()=>{const t=$('r_type').value,[lo,hi]=POWER[t];
   if(t!==C.app.radio.type&&!await ask('Changing the radio module reboots the controller. Continue?'))return;
-  const pv=$('b_proto').value,bracelets={mode:$('b_mode').value,color_order:$('b_order').value};
-  if(pv!=='zone')bracelets.protocols=pv==='both'?[0,1]:[+pv];
+  const pv=$('b_proto').value,devices={mode:$('b_mode').value,color_order:$('b_order').value};
+  if(pv!=='zone')devices.protocols=pv==='both'?[0,1]:[+pv];
   perZoneWanted=pv==='zone';
-  if(pv==='zone'&&!C.app.bracelets.per_zone)toast('Per zone: set each zone\'s protocols on the Zones page',4000);
-  const body={name:$('b_name').value,bracelets,
+  if(pv==='zone'&&!C.app.devices.per_zone)toast('Per zone: set each zone\'s protocols on the Zones page',4000);
+  const body={name:$('b_name').value,devices,
     radio:{type:t,tx_power:Math.max(lo,Math.min(hi,+$('r_power').value||0)),freq_p0:+$('r_f0').value,freq_p1:+$('r_f1').value,repeats:+$('r_rep').value,refresh_ms:+$('r_ref').value,tx_jitter_ms:+$('r_jit').value,off_threshold:+$('r_thr').value,
       lbt_enabled:$('r_lbt').checked,lbt_threshold_dbm:Math.max(-120,Math.min(-30,+$('r_lbtThr').value||-75))},
     input:{ddp_enabled:$('i_ddp').checked,ddp_port:+$('i_port').value,e131_enabled:$('i_e131').checked,e131_universe:+$('i_univ').value,e131_multicast:$('i_mcast').checked,start_channel:+$('i_start').value,timeout_s:+$('i_to').value}};
@@ -664,17 +664,17 @@ $('n_save').onclick=async()=>{const body={hostname:$('n_host').value,eth_enabled
   toast('Saved. Rebooting…',6000);setTimeout(()=>{location.href=addr},8000)};
 
 // tools: xLights helper
-function xlights(){if(!C||!S)return;const a=C.app,w={dmx:4,vendor:5}[a.bracelets.mode]||3,n=a.zones.length,first=a.input.start_channel,last=first+n*w-1;
-  const pal=a.zones.some(z=>zuses(z,0))&&a.bracelets.mode!=='vendor'?'\nProtocol 0 bracelets have 10 colours; other colours snap to the nearest.':'';
+function xlights(){if(!C||!S)return;const a=C.app,w={dmx:4,vendor:5}[a.devices.mode]||3,n=a.zones.length,first=a.input.start_channel,last=first+n*w-1;
+  const pal=a.zones.some(z=>zuses(z,0))&&a.devices.mode!=='vendor'?'\nProtocol 0 devices have 10 colours; other colours snap to the nearest.':'';
   let models;
   if(w===3){models=`Option A: one model for the whole controller
   Ready-made: import Net2RF_All_plus_4.xmodel or Net2RF_All_plus_15.xmodel (tools/xlights in the repo), or build:
-  Single Line, 1 string x ${n} node${n>1?'s':''}, String Type "${a.bracelets.color_order} Nodes", start channel ${first}
+  Single Line, 1 string x ${n} node${n>1?'s':''}, String Type "${a.devices.color_order} Nodes", start channel ${first}
   (node 1 = ${esc(a.zones[0].name)}${n>1?', node 2 = '+esc(a.zones[1].name):''}${n>2?', ...':''})
 
 Option B: one model per zone
 `+
-    a.zones.map((z,k)=>`  "${z.name}": Single Line, 1 node, "${a.bracelets.color_order} Nodes", start channel ${first+k*3}`).join('\n')+
+    a.zones.map((z,k)=>`  "${z.name}": Single Line, 1 node, "${a.devices.color_order} Nodes", start channel ${first+k*3}`).join('\n')+
     `
 
 Either way, add the model(s) to an existing model group (e.g. your floods)
@@ -685,7 +685,7 @@ and they follow whatever effect it plays.`}
     `
 
 Same layout as the LedGiftSupplier DMX transmitter: sequences made for it work unchanged.
-Tip: set channel 1 to 0 between bracelet moments to stop transmitting (car key fobs).`}
+Tip: set channel 1 to 0 between the moments you use the devices to stop transmitting (car key fobs).`}
   else{models=a.zones.map((z,k)=>`  "${z.name}": DmxFloodlight, start channel ${first+k*4}  (R=1 G=2 B=3, FX = channel ${first+k*4+3})`).join('\n')+
     `
 
@@ -713,7 +713,7 @@ function rawPrev(){const p=+$('t_p').value,b=bytes($('t_hex').value);if(b.length
 $('t_pre').onchange=ev=>{const p=PRESETS[ev.target.value];if(!p)return;$('t_p').value=p[1];$('t_hex').value=(p[2]+'00').slice(0,14);rawPrev()};
 $('t_send').onclick=()=>{const b=rawPrev();if(b)api('raw',{protocol:+$('t_p').value,hex:b.map(x=>hx(x)).join(''),repeats:+$('t_rep').value,fix:false}).then(()=>toast('Sent'))};
 
-// tools: identify bracelet type (alternates protocol 0 red / protocol 1 green, default broadcast addresses)
+// tools: identify device type (alternates protocol 0 red / protocol 1 green, default broadcast addresses)
 let ID={timer:null,step:0};
 async function idStep(){const p=ID.step%2,A0=[0x00,0xFF,0xFF,0x0F],A1=[0x00,0xFF];
   const send=(proto,pk)=>api('raw',{protocol:proto,hex:pk.map(x=>hx(x)).join(''),repeats:4,fix:false});
@@ -725,9 +725,9 @@ async function idStep(){const p=ID.step%2,A0=[0x00,0xFF,0xFF,0x0F],A1=[0x00,0xFF
 function idStop(){clearInterval(ID.timer);ID.timer=null;if(ID.step)$('id_now').textContent='Stopped';}
 $('id_start').onclick=()=>{idStop();ID.step=0;idStep();ID.timer=setInterval(idStep,2500)};
 $('id_stop').onclick=idStop;
-async function idUse(proto){idStop();const b=C.app.bracelets;if(!b.per_zone&&b.protocols.length===1&&b.protocols[0]===proto)return toast('Already using protocol '+proto);
-  if(!await ask(`Switch every zone to protocol ${proto} only (${proto?'LedGiftSupplier.com':'Shenzen New Dody'})? Zone addresses are kept. To use both protocols, pick "Both" or "Per zone" under Bracelets & Radio instead.`))return;
-  const body={bracelets:{protocols:[proto]}};if(proto===0&&C.app.bracelets.mode==='vendor')body.bracelets.mode='pixel';
+async function idUse(proto){idStop();const b=C.app.devices;if(!b.per_zone&&b.protocols.length===1&&b.protocols[0]===proto)return toast('Already using protocol '+proto);
+  if(!await ask(`Switch every zone to protocol ${proto} only (${proto?'LedGiftSupplier.com':'Shenzen New Dody'})? Zone addresses are kept. To use both protocols, pick "Both" or "Per zone" under Devices & Radio instead.`))return;
+  const body={devices:{protocols:[proto]}};if(proto===0&&C.app.devices.mode==='vendor')body.devices.mode='pixel';
   const j=await api('config',body);afterSave(j,'Protocol');await loadConfig()}
 $('id_p0').onclick=()=>idUse(0);$('id_p1').onclick=()=>idUse(1);
 
@@ -818,7 +818,7 @@ const p1c=v=>(~v)&255;
 function nearest(r,g,b){let best=1e12,c=0;const mx=Math.max(r,g,b)||1;for(const e of PAL){const d=Math.min((r-e[1])**2+(g-e[2])**2+(b-e[3])**2,(r*255/mx-e[1])**2+(g*255/mx-e[2])**2+(b*255/mx-e[3])**2);if(d<best){best=d;c=e[0]}}return c}
 function buildPkt(p,a,rgb,off){return fixSum(p,p==0?[a[0],a[1],a[2],a[3],off?0:1,off?0xAA:nearest(...rgb),0]:[0x55,a[0],...(off?[0,0,0]:rgb).map(p1c),0,a[1]])}
 const FIELDS={0:[['m16','Mask bytes 1-2 (16 bits)',16],['b3','Byte 3',8],['b0','Byte 0',8]],1:[['b1','Group (byte 1)',8],['b6','Byte 6',8]]};
-// which bracelet group(s) an address reaches: protocol 0 = one bit per group (byte 1 = groups 0-7, byte 2 = 8-15), protocol 1 = group code (0 = all)
+// which device group(s) an address reaches: protocol 0 = one bit per group (byte 1 = groups 0-7, byte 2 = 8-15), protocol 1 = group code (0 = all)
 function addrGroups(p,a){if(p==1)return a[0]?`group ${a[0]}`:'all groups';const m=a[1]|a[2]<<8,b=[];for(let k=0;k<16;k++)if(m>>k&1)b.push(k);
   return m===0xFFFF?'all groups':!b.length?'no group':(b.length>1?'groups ':'group ')+b.join(', ')}
 let P={list:[],i:0,timer:null,paused:false,marks:[],cur:null};
@@ -839,7 +839,7 @@ $('p_stop').onclick=()=>{clearInterval(P.timer);P.timer=null;P.paused=false;$('p
 $('p_prev').onclick=()=>{P.paused=true;$('p_pause').textContent='Resume';P.i=Math.max(0,P.i-2);probeStep();P.i++};
 $('p_next').onclick=()=>{P.paused=true;$('p_pause').textContent='Resume';P.i=Math.min(P.list.length-1,P.i);probeStep();P.i++};
 $('p_mark').onclick=()=>{const c=P.cur;if(!c)return;const t=`${c.label} = ${c.grp} (protocol ${c.p})`;if(!P.marks.includes(t))P.marks.push(t);
-  $('p_log').innerHTML='<b>Bracelet reacted to:</b><br>'+P.marks.map(esc).join('<br>')+'<br><span class="dim">Enter the address as a zone on the Zones page.</span>'};
+  $('p_log').innerHTML='<b>Device reacted to:</b><br>'+P.marks.map(esc).join('<br>')+'<br><span class="dim">Enter the address as a zone on the Zones page.</span>'};
 
 // controllers on the network
 // Other controllers: live state from their UDP heartbeat, presence from mDNS.
@@ -908,7 +908,7 @@ function showCapture(c){const p=c.pulses,W=$('d_rxWave'),scale=20;  // 20 us per
   pts+=` ${x.toFixed(1)},${y}`;W.setAttribute('width',Math.ceil(x)+4);W.innerHTML=`<polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.3"/>`;
   const marks=p.filter(v=>v>0),spaces=p.filter(v=>v<0).map(v=>-v),mc=clusters(marks),sc=clusters(spaces),g=guessBits(p,mc,sc);
   const fmtC=cs=>cs.map(c=>`~${c.us} µs ×${c.n}`).join(', ');
-  $('d_rxViewHead').innerHTML=`<b>Capture ${c.id}</b> · ${fmtN(p.length)} pulses · ${(c.us/1000).toFixed(1)} ms · ${c.rssi_dbm} dBm · ${c.decoded?'decoded as a bracelet frame':'<b>not decoded</b>'} · 1 px = ${scale} µs`;
+  $('d_rxViewHead').innerHTML=`<b>Capture ${c.id}</b> · ${fmtN(p.length)} pulses · ${(c.us/1000).toFixed(1)} ms · ${c.rssi_dbm} dBm · ${c.decoded?'decoded as a device frame':'<b>not decoded</b>'} · 1 px = ${scale} µs`;
   $('d_rxViewInfo').textContent=`Marks (carrier on):  ${fmtC(mc)}\nSpaces (carrier off): ${fmtC(sc)}`+
     (g?`\n\nPulse-width guess: mark ~${g.short} µs = 0, ~${g.long} µs = 1`+(g.rows.length?'\n'+g.rows.slice(0,12).map(r=>`  ${String(r.length).padStart(3)} bits: ${bitsHex(r)}`).join('\n'):'\n  (no run of 8+ bits)'):'\n\nOnly one mark width: not pulse-width coded (or just a carrier).')+
     `\n\nPulses (µs, + mark / - space):\n`+p.slice(0,400).join(' ')+(p.length>400?' …':'');
@@ -917,7 +917,7 @@ function showCapture(c){const p=c.pulses,W=$('d_rxWave'),scale=20;  // 20 us per
 // dashboard actions
 $('d_allOff').onclick=async()=>{
   await api('all-off',{});poll();
-  toast('Off sent to every zone (protocol 1: one packet to every group). Bracelets stay off until xLights changes a colour.',4500)};
+  toast('Off sent to every zone (protocol 1: one packet to every group). Devices stay off until xLights changes a colour.',4500)};
 // The switches follow the controller's state; while one is being changed (confirmation open, request in
 // flight) the 1 s poll must not flip it back.
 let swBusy=false;
@@ -1007,11 +1007,11 @@ $('s_import').onchange=()=>{$('s_importBtn').disabled=!$('s_import').files.lengt
 $('s_importBtn').onclick=async()=>{let cfg;try{cfg=JSON.parse(await $('s_import').files[0].text())}catch(e){return toast('Not a valid JSON file',3000)}
   cfg.include_network=$('s_impNet').checked;if(!await ask('Import these settings and reboot?'))return;const j=await api('import',cfg);afterSave(j,'Settings')};
 $('s_reboot').onclick=async()=>{if(await ask('Reboot the controller?')){await api('reboot',{});toast('Rebooting…',5000);setTimeout(()=>location.reload(),7000)}};
-$('s_factory').onclick=async()=>{if(await ask('Erase ALL settings (zones, bracelets, radio, network) and reboot?')&&await ask('Really? Network settings go back to DHCP.','Erase everything')){await api('factory-reset',{});toast('Factory reset. Rebooting…',6000)}};
+$('s_factory').onclick=async()=>{if(await ask('Erase ALL settings (zones, devices, radio, network) and reboot?')&&await ask('Really? Network settings go back to DHCP.','Erase everything')){await api('factory-reset',{});toast('Factory reset. Rebooting…',6000)}};
 
 // boot
 show(location.hash.slice(1));
-(async()=>{pollPeers();try{await loadConfig();$('p_p').value=C.app.bracelets.protocol;$('t_p').value=C.app.bracelets.protocol;$('g_proto').value=C.app.bracelets.protocol}catch(e){}probeFields();rawPrev();await poll();setInterval(poll,1000)})();
+(async()=>{pollPeers();try{await loadConfig();$('p_p').value=C.app.devices.protocol;$('t_p').value=C.app.devices.protocol;$('g_proto').value=C.app.devices.protocol}catch(e){}probeFields();rawPrev();await poll();setInterval(poll,1000)})();
 </script>
 </body>
 </html>

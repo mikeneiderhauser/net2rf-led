@@ -4,7 +4,7 @@ Reverse engineered from the Flipper Zero `bracelet_led.fap` app ("App by RGB_Lig
 two targets: **Shenzen New Dody** (Tech Co.) and **LedGiftSupplier.com** (the app's default). Protocol 1 was then
 confirmed against the community *DMX Interactive Products* guide for the LedGiftSupplier DMX transmitter, and its
 colour and checksum bytes corrected against RTL-SDR captures of that transmitter (see [Protocol 1](#protocol-1-rgb-with-group-codes)).
-Encoder and tests: [`lib/bracelet_protocol`](../lib/bracelet_protocol/).
+Encoder and tests: [`lib/net2rf_protocol`](../lib/net2rf_protocol/).
 
 Both work with bracelets (2 × CR1632, 2 LEDs) and light sticks (3 × AAA, 5 LEDs). The LEDs are not individually
 addressable: a device is one colour. Devices **latch**: they hold the last colour received until told otherwise.

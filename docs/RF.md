@@ -22,7 +22,7 @@ update keeps its old colour until the next change.
 - **One transmitter per area (recommended).** A single controller drives up to 16 zones and queues every update
   itself, so it never collides with itself. Add a second controller only for an area out of RF range of the first,
   or for a second bracelet protocol you can't run alongside it.
-- **Listen before transmit (optional, *Bracelets & Radio*).** When controllers do overlap, each one listens for a
+- **Listen before transmit (optional, *Devices & Radio*).** When controllers do overlap, each one listens for a
   clear channel before every update (2.5 ms), backs off a few ms if it hears another transmitter, and sends anyway
   after 250 ms. It needs no setup between controllers and also avoids key fobs and other 433 MHz traffic. It only
   helps when the controllers can hear each other, which is usually true since they're closer together than the

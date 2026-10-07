@@ -1,4 +1,4 @@
-// Host tests for bracelet_rx.h: frames encoded by bracelet_protocol.h decode back to the same packets, with
+// Host tests for rf_rx.h: frames encoded by rf_protocol.h decode back to the same packets, with
 // realistic timing errors and noise, and the zone tracker keeps the right colour per group.
 // Run: pio test -e native
 #include <unity.h>
@@ -6,13 +6,13 @@
 #include <cstdlib>
 #include <vector>
 
-#include "bracelet_protocol.h"
-#include "bracelet_rx.h"
+#include "rf_protocol.h"
+#include "rf_rx.h"
 #include "pulse_capture.h"
 
 #include <string>
 
-using namespace bracelet;
+using namespace rfproto;
 
 // Feeds encode_frame() output straight into a decoder, optionally stretching marks (the receiver's slicer
 // does that) and adding random timing jitter.

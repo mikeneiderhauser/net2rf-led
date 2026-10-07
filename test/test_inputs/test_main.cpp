@@ -9,7 +9,7 @@
 
 #include "input_parsers.h"
 
-using namespace bracelet;
+using namespace rfproto;
 
 static std::vector<uint8_t> from_hex(const std::string &hex) {
     std::vector<uint8_t> out;

@@ -4,8 +4,8 @@
 #include <ArduinoJson.h>
 #include <deque>
 
-#include "bracelet_protocol.h"
-#include "bracelet_rx.h"
+#include "rf_protocol.h"
+#include "rf_rx.h"
 #include "pulse_capture.h"
 #include "config.h"
 #include "radio.h"
@@ -26,10 +26,10 @@ enum class TestMode : uint8_t { OFF, SOLID, CYCLE };
 
 const char *radio_state_name(RadioState s);
 
-// One zone's packet in one protocol: what the bracelets should show (want) and what was last sent (sent).
+// One zone's packet in one protocol: what the devices should show (want) and what was last sent (sent).
 struct ZoneLane {
-    uint8_t want[bracelet::PACKET_LEN]{};
-    uint8_t sent[bracelet::PACKET_LEN]{};
+    uint8_t want[rfproto::PACKET_LEN]{};
+    uint8_t sent[rfproto::PACKET_LEN]{};
     bool have_want{false};  // the zone is live on this protocol and has a colour
     bool have_sent{false};
     uint32_t last_tx_ms{0};
@@ -41,7 +41,7 @@ struct ZoneState {
     uint8_t group{0};   // vendor mode: group code taken from the input
     // One lane per protocol. Only the protocols the zone uses ever have a packet; a zone on both sends each change
     // on protocol 0, then protocol 1.
-    ZoneLane lane[bracelet::NUM_PROTOCOLS];
+    ZoneLane lane[rfproto::NUM_PROTOCOLS];
     uint32_t tx_count{0};
     bool have_sent() const { return this->lane[0].have_sent || this->lane[1].have_sent; }
     uint32_t last_tx_ms() const {  // the latest transmission on any of its protocols
@@ -101,11 +101,11 @@ struct ReceiverSnapshot {
     int32_t last_age_ms;       // -1 = nothing heard yet
     uint8_t count;
     struct Row {
-        uint8_t protocol, group;  // group bracelet::RxTracker::ALL_GROUPS = every group
+        uint8_t protocol, group;  // group rfproto::RxTracker::ALL_GROUPS = every group
         uint8_t r, g, b;
         const char *label;
         uint32_t age_ms;
-    } rows[bracelet::RxTracker::MAX_ZONES];
+    } rows[rfproto::RxTracker::MAX_ZONES];
 };
 
 struct EngineSnapshot {  // for the OLED
@@ -136,18 +136,18 @@ class Engine {
     // Queue one-off transmissions (web test buttons, raw packets, address probe).
     // Both return false when output is disabled or the queue is full.
     bool send_raw(uint8_t protocol, const uint8_t *packet, uint8_t repeats, bool fix_checksum);
-    bool send_zone(int zone, bracelet::Action action, uint8_t r, uint8_t g, uint8_t b);  // -1 = all enabled
+    bool send_zone(int zone, rfproto::Action action, uint8_t r, uint8_t g, uint8_t b);  // -1 = all enabled
 
     void set_test(TestMode mode, uint8_t r, uint8_t g, uint8_t b);
-    // Panic button: leave test mode and switch every bracelet off (one broadcast on protocol 1).
-    // Bracelets then stay off until the input actually changes a colour. False if output is disabled.
+    // Panic button: leave test mode and switch every device off (one broadcast on protocol 1).
+    // Devices then stay off until the input actually changes a colour. False if output is disabled.
     bool all_off();
     void set_suspended(bool suspended) { this->suspended_ = suspended; }  // e.g. during OTA
 
     void status_json(JsonObject out);
     // Tools page: the last transmissions (newest first) and the input channels the zones read.
     void tools_json(JsonObject out);
-    // Tools page: listen on the bracelet frequency for about 20 ms and report the signal strength. Runs in the
+    // Tools page: listen on the device frequency for about 20 ms and report the signal strength. Runs in the
     // engine task between transmissions; false if the radio can't listen (off, not ready, no receiver).
     bool measure_rssi(int16_t &peak_dbm, int16_t &avg_dbm, uint32_t &freq_hz);
     EngineSnapshot snapshot();
@@ -165,7 +165,7 @@ class Engine {
  private:
     struct Job {
         uint8_t protocol;
-        uint8_t packet[bracelet::PACKET_LEN];
+        uint8_t packet[rfproto::PACKET_LEN];
         uint8_t repeats;
         bool manual;
     };
@@ -176,8 +176,8 @@ class Engine {
     // Protocol 1 has a confirmed "all groups" address (group 0), so fan-out actions to the protocol 1 zones can be
     // one packet. Only when some zone uses protocol 1: a protocol 0-only controller never sends one.
     bool can_broadcast_() const { return protocol_in_use(g_app, 1); }
-    void queue_broadcast_(bracelet::Action action, uint8_t r, uint8_t g, uint8_t b);
-    // Treat the zones' current packets in these protocols (bracelet::PROTOCOL_BIT set) as delivered.
+    void queue_broadcast_(rfproto::Action action, uint8_t r, uint8_t g, uint8_t b);
+    // Treat the zones' current packets in these protocols (rfproto::PROTOCOL_BIT set) as delivered.
     void mark_zones_sent_(uint32_t now, uint8_t protocols);
     void apply_input_(uint32_t offset, const uint8_t *data, size_t len, bool frame_end, uint32_t src_ip,
                       InputSource source);
@@ -206,7 +206,7 @@ class Engine {
     struct TxLogEntry {
         uint32_t ms;
         uint8_t protocol, repeats;
-        uint8_t packet[bracelet::PACKET_LEN];
+        uint8_t packet[rfproto::PACKET_LEN];
         bool manual, ok;
     };
     static const uint8_t TX_LOG_SIZE = 24;
@@ -256,12 +256,12 @@ class Engine {
     uint8_t rx_profile_{0};
     uint32_t rx_retry_ms_{0};
     bool rx_failed_{false};
-    bracelet::FrameDecoder decoder_;
-    bracelet::RxTracker tracker_;
+    rfproto::FrameDecoder decoder_;
+    rfproto::RxTracker tracker_;
     // Raw capture: bursts of plausible pulses, kept whether or not they decoded (undecoded ones are kept longest).
     static const uint8_t RX_CAPTURES = 4;
-    bracelet::BurstSegmenter segmenter_;
-    bracelet::BurstStore<RX_CAPTURES> captures_;
+    rfproto::BurstSegmenter segmenter_;
+    rfproto::BurstStore<RX_CAPTURES> captures_;
     bool burst_decoded_{false};
     int16_t burst_rssi_{-127};
     uint32_t captures_quiet_{0};  // bursts dropped because the channel was no louder than its noise floor
@@ -277,7 +277,7 @@ class Engine {
     struct RxLogEntry {
         uint32_t ms;
         uint8_t protocol;
-        uint8_t packet[bracelet::PACKET_LEN];
+        uint8_t packet[rfproto::PACKET_LEN];
         uint8_t copies;  // frames heard of this transmission
         int16_t rssi_dbm;
     };

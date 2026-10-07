@@ -5,7 +5,7 @@
 #include <sx1278_ook.h>
 #include <vector>
 
-#include "bracelet_protocol.h"
+#include "rf_protocol.h"
 #include "pins.h"
 
 // Both radios share one SPI bus on the WT32-ETH01 (see pins.h); only one is fitted.
@@ -166,7 +166,7 @@ bool OokSender::begin() {
     pinMode(pins::RADIO_DATA, OUTPUT);
     digitalWrite(pins::RADIO_DATA, LOW);
     this->ready_ = rmtInit(pins::RADIO_DATA, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 1000000);  // 1 us ticks
-    this->symbols_.reserve((4 + bracelet::PACKET_LEN * 8) * 3);  // default repeats; grows once if more are used
+    this->symbols_.reserve((4 + rfproto::PACKET_LEN * 8) * 3);  // default repeats; grows once if more are used
     if (!this->ready_)
         log_e("RMT init failed on GPIO%d", pins::RADIO_DATA);
     return this->ready_;
@@ -185,7 +185,7 @@ bool OokSender::send(uint8_t protocol, const uint8_t *packet, uint8_t repeats) {
     this->symbols_.clear();
     RmtSink sink{this->symbols_};
     for (uint8_t i = 0; i < repeats; i++)
-        bracelet::encode_frame(protocol, packet, sink);
-    uint32_t timeout_ms = bracelet::frame_us(protocol) * repeats / 1000 + 100;
+        rfproto::encode_frame(protocol, packet, sink);
+    uint32_t timeout_ms = rfproto::frame_us(protocol) * repeats / 1000 + 100;
     return rmtWrite(pins::RADIO_DATA, this->symbols_.data(), this->symbols_.size(), timeout_ms);
 }

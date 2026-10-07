@@ -20,7 +20,7 @@ controller, and each group of bracelets becomes a single pixel you sequence alon
   The ESP32 only does 2.4 GHz.
 
 Check the dashboard: the radio should read **CC1101 ready** (or SX1278). *Not detected* means wiring or power to the
-radio, or the wrong module selected under **Bracelets & Radio**.
+radio, or the wrong module selected under **Devices & Radio**.
 
 Then give it a **static IP** (or a DHCP reservation) under **Network**, so xLights always finds it like your
 other controllers, and optionally an **admin password** under **System**.
@@ -34,7 +34,7 @@ other controllers, and optionally an **admin password** under **System**.
    - **green** = protocol 1 (LedGiftSupplier.com)
 3. Click the matching **use protocol** button: every zone switches to that protocol.
 
-**Both kinds of bracelets?** Under **Bracelets & Radio → Bracelet protocols**, pick **Both** (every zone sends
+**Both kinds of bracelets?** Under **Devices & Radio → Device protocols**, pick **Both** (every zone sends
 each change on both protocols, so any bracelet in its group follows it) or **Per zone**, then choose each zone's
 protocols on the **Zones** page, for example protocol 0 bracelets in one zone and protocol 1 pucks in another.
 Only the protocols you pick are transmitted: a protocol 0-only setup never spends airtime on protocol 1. Every zone
@@ -96,7 +96,7 @@ What to know:
 ### Protocol 1 (LedGiftSupplier)
 
 Every bracelet belongs to a **group**, and group **0** reaches all of them. Find each bracelet's group with **Tools →
-Address probe** (protocol 1, field *Group (byte 1)*, mode *Sweep*, 1 → 20), pressing **★ Bracelet reacted** when it
+Address probe** (protocol 1, field *Group (byte 1)*, mode *Sweep*, 1 → 20), pressing **★ Device reacted** when it
 lights. Then add a zone per group on the **Zones** page and check each with **Send**.
 
 Avoid mixing a group-0 zone with specific groups unless you mean it: every change on the group-0 zone overrides
@@ -110,7 +110,7 @@ on others.
 
 1. **Tools → Address probe:** protocol 0, field *Mask bytes 1-2*, mode *Walk single bits*, step time **3 s** or
    more. It steps through groups 0 to 15, showing each address and its group. Wake the bracelet first, then
-   press **★ Bracelet reacted** when it lights. The mark records the address and group on screen, so a slow
+   press **★ Device reacted** when it lights. The mark records the address and group on screen, so a slow
    press can land on the next step; repeat to be sure.
 2. Add a zone with that address (`00` + mask + `0F`), save, and check it with the **Zone walk** on the Zones
    page. Combining bits (`000C000F` = groups 2 and 3) addresses several groups at once.
@@ -122,7 +122,7 @@ Please report what your bracelets answer to: it's how this gets confirmed.
 1. Mount the antenna where it will live during the show: high, clear of metal, with a view of where people stand.
 2. **Dashboard → Test mode → Cycle R/G/B/W.**
 3. Walk the edges of the audience area with a bracelet. It should change colour every 2 seconds.
-4. Lower **TX power** (Bracelets & Radio) until the far edge just starts to miss, then go back up a step or two.
+4. Lower **TX power** (Devices & Radio) until the far edge just starts to miss, then go back up a step or two.
    Less power means fewer problems for your neighbours' car key fobs.
 5. Switch test mode **Off**.
 
@@ -137,7 +137,7 @@ exact settings for its current zones.
 
 1. **Controllers → Add E1.31/Artnet/DDP:** protocol **DDP**, the controller's IP, channels as listed. Leave **Keep Channel
    Numbers** unticked: with it on, xLights sends absolute show channel numbers and the controller ignores them
-   (the dashboard then shows *Wrong channels*). For **E1.31**, use the universe set under *Bracelets & Radio*.
+   (the dashboard then shows *Wrong channels*). For **E1.31**, use the universe set under *Devices & Radio*.
    - **Vendor / model:** one of these.
      - **Net2RF / Net2RF LED:** a one-port definition made for this controller. xLights doesn't ship it yet:
        copy [`tools/xlights/net2rf.xcontroller`](../tools/xlights/) into xLights' `controllers` folder and

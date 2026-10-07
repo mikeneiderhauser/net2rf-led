@@ -8,7 +8,7 @@
 
 #include "pins.h"
 
-using namespace bracelet;
+using namespace rfproto;
 
 Engine g_engine;
 
@@ -37,7 +37,7 @@ const char *radio_state_name(RadioState s) {
 static const uint32_t RADIO_RETRY_MS = 10000;
 static const uint8_t MAX_MANUAL_QUEUE = 32;
 static const uint32_t TEST_CYCLE_MS = 2000;
-// Listen before transmit: sample the channel for longer than the longest gap inside a bracelet frame
+// Listen before transmit: sample the channel for longer than the longest gap inside a device frame
 // (1.6 ms after a protocol 1 sync pulse), so a frame already on the air can't slip between samples.
 static const uint32_t LBT_WINDOW_US = 2500;
 static const uint32_t LBT_SETTLE_US = 300;    // RX start-up / RSSI settling after entering RX
@@ -75,7 +75,7 @@ static const uint32_t RX_RETRY_MS = 3000;
 static const uint32_t RX_RSSI_EVERY_MS = 10;
 static const uint32_t RX_RSSI_WINDOW_MS = 500;
 // Noise guard: a receiver with no signal can toggle its data line very fast, and an interrupt per edge would
-// starve the web server on this core. Bracelet frames need under 5000 edges/s; above this, pause briefly.
+// starve the web server on this core. Device frames need under 5000 edges/s; above this, pause briefly.
 static const uint32_t RX_STORM_WINDOW_MS = 100;
 static const uint32_t RX_STORM_EDGES = 2500;  // per window (25 000 edges/s)
 static const uint32_t RX_STORM_PAUSE_MS = 50;
@@ -116,7 +116,7 @@ void Engine::apply_input_(uint32_t offset, const uint8_t *data, size_t len, bool
         return;
     }
     // Only usable data counts as input: otherwise a stream of out-of-range packets would keep the input
-    // timeout from ever blanking the bracelets.
+    // timeout from ever blanking the devices.
     this->in_.last_rx_ms = millis();
     this->in_.seen = true;
     size_t n = std::min<size_t>(len, MAX_CHANNELS - offset);
@@ -187,7 +187,7 @@ void Engine::update_wants_(uint32_t now) {
             zs.r = cycle[0], zs.g = cycle[1], zs.b = cycle[2], zs.fx = 0;
         } else if (g_app.mode == MODE_VENDOR) {
             // Vendor transmitter layout: [boot code][group][R][G][B]. Only transmit while the boot code is 85,
-            // so sequences can switch the bracelets' transmitter on and off exactly as with the vendor hardware.
+            // so sequences can switch the devices' transmitter on and off exactly as with the vendor hardware.
             // Protocol 1 only (zone_live() leaves protocol 0 out in this mode).
             zs.gated = this->channels_[base] != VENDOR_BOOT_CODE;
             zs.group = this->channels_[base + 1];
@@ -298,7 +298,7 @@ bool Engine::zone_changed_(uint8_t i, uint8_t p) const {
     return memcmp(l.want, l.sent, PACKET_LEN) != 0;
 }
 
-// When zones that reach the same bracelets change together, the broader address (All Zones) must go out first
+// When zones that reach the same devices change together, the broader address (All Zones) must go out first
 // so the more specific colour lands last. A changed zone therefore waits while a broader, overlapping zone of the
 // same protocol is also waiting to be sent. Zones that don't overlap keep taking turns.
 bool Engine::held_back_(uint8_t i, uint8_t p) const {
@@ -561,7 +561,7 @@ void Engine::run_() {
 
             uint32_t timeout_ms = (uint32_t) g_app.input_timeout_s * 1000;
             if (timeout_ms > 0 && this->in_.seen && !this->in_.timed_out && now - this->in_.last_rx_ms > timeout_ms) {
-                log_i("No DDP for %us: blanking bracelets", g_app.input_timeout_s);
+                log_i("No DDP for %us: blanking devices", g_app.input_timeout_s);
                 memset(this->channels_, 0, sizeof(this->channels_));
                 if (g_app.mode == MODE_VENDOR) {
                     // Keep each zone's boot code + group so the blank is actually transmitted.
@@ -608,7 +608,7 @@ void Engine::run_() {
                 log_i("RF output %s", enabled ? "enabled" : "disabled");
                 if (enabled) {
                     for (auto &zs : this->zones_)
-                        zs.resend();  // bring bracelets up to date immediately
+                        zs.resend();  // bring devices up to date immediately
                 } else {
                     this->manual_.clear();
                 }
@@ -664,7 +664,7 @@ bool Engine::send_zone(int zone, Action action, uint8_t r, uint8_t g, uint8_t b)
     StateLock lock;
     if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE || zone >= (int) g_app.num_zones)
         return false;
-    // Built-in effects exist on protocol 0 only: they aren't sent to a zone's protocol 1 bracelets.
+    // Built-in effects exist on protocol 0 only: they aren't sent to a zone's protocol 1 devices.
     bool effect = action == ACTION_FX_A || action == ACTION_FX_B || action == ACTION_FX_C;
     // "All zones" on protocol 1: one packet to every group instead of one per zone.
     bool p1_broadcast = zone < 0 && !effect && this->can_broadcast_();
@@ -1055,7 +1055,7 @@ void Engine::poll_rx_(uint32_t now) {
         this->rx_storm_win_ms_ = now;
         this->rx_storm_edges_ = 0;
     }
-    bracelet::RxFrame f;
+    rfproto::RxFrame f;
     while (tail != head) {
         uint32_t v = s_rx_ring[tail & (RX_RING - 1)];
         tail++;
@@ -1134,7 +1134,7 @@ void Engine::store_burst_() {
 
 bool Engine::rx_capture_json(uint32_t id, JsonObject o) {
     StateLock lock;
-    const bracelet::RawBurst *b = this->captures_.find(id);
+    const rfproto::RawBurst *b = this->captures_.find(id);
     if (!b)
         return false;
     o["id"] = b->id;
@@ -1152,16 +1152,16 @@ bool Engine::rx_capture_json(uint32_t id, JsonObject o) {
 
 bool Engine::rx_capture_ook(uint32_t id, String &out) {
     StateLock lock;
-    const bracelet::RawBurst *b = this->captures_.find(id);
+    const rfproto::RawBurst *b = this->captures_.find(id);
     if (!b)
         return false;
     out.reserve(160 + b->count * 6);
-    bracelet::export_ook(*b, this->rx_freq_, [&](const char *t) { out += t; });
+    rfproto::export_ook(*b, this->rx_freq_, [&](const char *t) { out += t; });
     return true;
 }
 
 static String group_name(uint8_t group) {
-    if (group == bracelet::RxTracker::ALL_GROUPS)
+    if (group == rfproto::RxTracker::ALL_GROUPS)
         return "all";
     return String(group);
 }
@@ -1187,7 +1187,7 @@ void Engine::rx_json_(JsonObject o, uint32_t now) {
     char hex[PACKET_LEN * 2 + 1], rgb[7];
     JsonArray zones = o["zones"].to<JsonArray>();
     for (uint8_t i = 0; i < this->tracker_.count(); i++) {
-        const bracelet::RxZone &z = this->tracker_.zone(i);
+        const rfproto::RxZone &z = this->tracker_.zone(i);
         JsonObject j = zones.add<JsonObject>();
         j["p"] = z.protocol;
         j["group"] = group_name(z.group);
@@ -1205,9 +1205,9 @@ void Engine::rx_json_(JsonObject o, uint32_t now) {
     o["captures_quiet"] = this->captures_quiet_;
     JsonArray caps = o["captures"].to<JsonArray>();  // newest first; pulses via /api/rx/capture?id=
     for (uint8_t k = 0; k < this->captures_.size(); k++) {
-        const bracelet::RawBurst *newest = nullptr;
+        const rfproto::RawBurst *newest = nullptr;
         for (uint8_t i = 0; i < this->captures_.size(); i++) {
-            const bracelet::RawBurst &b = this->captures_.at(i);
+            const rfproto::RawBurst &b = this->captures_.at(i);
             uint32_t seen = k ? caps[k - 1]["id"].as<uint32_t>() : UINT32_MAX;
             if (b.id < seen && (!newest || b.id > newest->id))
                 newest = &b;
@@ -1234,7 +1234,7 @@ void Engine::rx_json_(JsonObject o, uint32_t now) {
         j["n"] = e.copies;
         j["rssi_dbm"] = e.rssi_dbm;
         if (e.protocol == 1)
-            j["checksum"] = bracelet::p1_checksum_kind(e.packet) == bracelet::P1_CK_LEGACY ? "legacy" : "vendor";
+            j["checksum"] = rfproto::p1_checksum_kind(e.packet) == rfproto::P1_CK_LEGACY ? "legacy" : "vendor";
     }
 }
 
@@ -1252,7 +1252,7 @@ void Engine::rx_snapshot(ReceiverSnapshot &s) {
     s.last_age_ms = this->tracker_.have_last() ? (int32_t) (now - this->tracker_.last_ms()) : -1;
     s.count = this->tracker_.count();
     for (uint8_t i = 0; i < s.count; i++) {
-        const bracelet::RxZone &z = this->tracker_.zone(i);
+        const rfproto::RxZone &z = this->tracker_.zone(i);
         s.rows[i] = {z.protocol, z.group, z.r, z.g, z.b, z.label, now - z.last_ms};
     }
 }

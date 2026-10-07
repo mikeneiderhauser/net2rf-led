@@ -43,7 +43,7 @@ void default_address(uint8_t protocol, uint8_t *addr) {
 // Defaults / persistence
 // ---------------------------------------------------------------------------------------------
 
-// Zone 0 reaches every bracelet; zone N (1-15) reaches group N only.
+// Zone 0 reaches every device; zone N (1-15) reaches group N only.
 static void zone_default_address(uint8_t protocol, uint8_t index, uint8_t *addr) {
     default_address(protocol, addr);
     if (index == 0 || index >= MAX_ZONES)
@@ -68,7 +68,7 @@ static void zone_defaults(ZoneConfig &z, uint8_t index, uint8_t protocols) {
     memset(&z, 0, sizeof(z));
     z.enabled = 1;
     zone_default_addresses(z, index);
-    z.protocols = protocols & bracelet::ALL_PROTOCOLS ? protocols & bracelet::ALL_PROTOCOLS : bracelet::PROTOCOL_BIT[0];
+    z.protocols = protocols & rfproto::ALL_PROTOCOLS ? protocols & rfproto::ALL_PROTOCOLS : rfproto::PROTOCOL_BIT[0];
     if (index == 0)
         strlcpy(z.name, "All Zones", sizeof(z.name));
     else
@@ -78,13 +78,13 @@ static void zone_defaults(ZoneConfig &z, uint8_t index, uint8_t protocols) {
 void config_reset_zone(AppConfig &c, uint8_t index) {
     if (index < MAX_ZONES)
         zone_defaults(c.zones[index], index, c.zones[index].protocols ? c.zones[index].protocols
-                                                                      : bracelet::PROTOCOL_BIT[c.protocol & 1]);
+                                                                      : rfproto::PROTOCOL_BIT[c.protocol & 1]);
 }
 
 uint8_t zones_common_protocols(const AppConfig &c) {
     uint8_t common = 0;
     for (uint8_t i = 0; i < c.num_zones && i < MAX_ZONES; i++) {
-        uint8_t p = c.zones[i].protocols & bracelet::ALL_PROTOCOLS;
+        uint8_t p = c.zones[i].protocols & rfproto::ALL_PROTOCOLS;
         if (i == 0)
             common = p;
         else if (p != common)
@@ -96,35 +96,35 @@ uint8_t zones_common_protocols(const AppConfig &c) {
 // The protocols a newly added zone gets: what the other zones share, else the default protocol.
 static uint8_t new_zone_protocols(const AppConfig &c) {
     uint8_t common = zones_common_protocols(c);
-    return common ? common : bracelet::PROTOCOL_BIT[c.protocol & 1];
+    return common ? common : rfproto::PROTOCOL_BIT[c.protocol & 1];
 }
 
 void config_defaults_app(AppConfig &c) {
     memset(&c, 0, sizeof(c));
     c.magic = APP_MAGIC;
     strlcpy(c.name, "Net2RF LED", sizeof(c.name));
-    c.protocol = 0;  // the protocol tested on real bracelets
+    c.protocol = 0;  // the protocol tested on real devices
     c.mode = MODE_PIXEL;
-    c.color_order = bracelet::ORDER_RGB;
+    c.color_order = rfproto::ORDER_RGB;
     c.num_zones = 5;  // All Zones + Zone 1-4 (the smaller xLights model, tools/xlights)
     c.start_channel = 1;
     c.ddp_port = 4048;
     c.input_timeout_s = 300;
     c.radio_type = RADIO_CC1101;
     c.tx_power = 10;
-    c.freq[0] = bracelet::DEFAULT_FREQ_P0;
-    c.freq[1] = bracelet::DEFAULT_FREQ_P1;
+    c.freq[0] = rfproto::DEFAULT_FREQ_P0;
+    c.freq[1] = rfproto::DEFAULT_FREQ_P1;
     c.repeats = 3;
     c.off_threshold = 16;
-    c.refresh_ms = 0;  // bracelets latch the last colour; re-sending only adds airtime (and car-fob interference)
+    c.refresh_ms = 0;  // devices latch the last colour; re-sending only adds airtime (and car-fob interference)
     c.tx_jitter_ms = 0;
     c.output_enabled = 1;
     c.ddp_enabled = 1;
-    c.e131_enabled = 0;  // off by default: a shared universe could drive the bracelets unintentionally
+    c.e131_enabled = 0;  // off by default: a shared universe could drive the devices unintentionally
     c.e131_multicast = 1;
     c.e131_universe = 1;
     for (uint8_t i = 0; i < MAX_ZONES; i++)
-        zone_defaults(c.zones[i], i, bracelet::PROTOCOL_BIT[c.protocol & 1]);
+        zone_defaults(c.zones[i], i, rfproto::PROTOCOL_BIT[c.protocol & 1]);
     c.lbt_enabled = 0;  // optional until tested with several controllers in range of each other
     c.lbt_threshold = LBT_DEFAULT_THRESHOLD;
     c.radio_off = 0;
@@ -191,7 +191,7 @@ void config_load() {
     // held that protocol's address. Keep it there (or move it to p1_addr) and give the other protocol its default.
     for (uint8_t i = 0; i < MAX_ZONES; i++) {
         ZoneConfig &z = g_app.zones[i];
-        if (z.protocols & bracelet::ALL_PROTOCOLS)
+        if (z.protocols & rfproto::ALL_PROTOCOLS)
             continue;
         uint8_t old[4];
         memcpy(old, z.addr, 4);
@@ -200,7 +200,7 @@ void config_load() {
             memcpy(z.p1_addr, old, 2);
         else
             memcpy(z.addr, old, 4);
-        z.protocols = bracelet::PROTOCOL_BIT[g_app.protocol & 1];
+        z.protocols = rfproto::PROTOCOL_BIT[g_app.protocol & 1];
     }
     if (g_app.radio_type >= NUM_RADIO_TYPES)  // e.g. the removed plain-OOK option
         g_app.radio_type = RADIO_CC1101;
@@ -279,8 +279,8 @@ bool auth_check(const NetConfig &c, const char *password) {
 // ---------------------------------------------------------------------------------------------
 
 static void protocols_to_json(uint8_t set, JsonArray out) {
-    for (uint8_t p = 0; p < bracelet::NUM_PROTOCOLS; p++)
-        if (bracelet::has_protocol(set, p))
+    for (uint8_t p = 0; p < rfproto::NUM_PROTOCOLS; p++)
+        if (rfproto::has_protocol(set, p))
             out.add(p);
 }
 
@@ -292,11 +292,11 @@ static bool protocols_from_json(JsonVariantConst v, uint8_t &set, const String &
         return false;
     }
     for (JsonVariantConst p : v.as<JsonArrayConst>()) {
-        if (!p.is<int>() || p.as<int>() < 0 || p.as<int>() >= bracelet::NUM_PROTOCOLS) {
+        if (!p.is<int>() || p.as<int>() < 0 || p.as<int>() >= rfproto::NUM_PROTOCOLS) {
             err = where + ": the protocols are 0 and 1";
             return false;
         }
-        s |= bracelet::PROTOCOL_BIT[p.as<int>()];
+        s |= rfproto::PROTOCOL_BIT[p.as<int>()];
     }
     if (!s) {
         err = where + ": at least one protocol";
@@ -373,7 +373,7 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     o["role"] = c.receiver ? "receiver" : "controller";
     o["rx_profile"] = RX_PROFILE_NAMES[c.rx_profile < NUM_RX_PROFILES ? c.rx_profile : 0];
 
-    JsonObject br = o["bracelets"].to<JsonObject>();
+    JsonObject br = o["devices"].to<JsonObject>();
     // "protocols": what every zone drives, or what the zones drive between them when they differ ("per_zone").
     uint8_t common = zones_common_protocols(c), all = 0;
     for (uint8_t i = 0; i < c.num_zones; i++)
@@ -382,7 +382,7 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     br["per_zone"] = common == 0;
     br["protocol"] = c.protocol;  // the default protocol (older clients read this one)
     br["mode"] = c.mode == MODE_VENDOR ? "vendor" : c.mode == MODE_DMX ? "dmx" : "pixel";
-    br["color_order"] = bracelet::COLOR_ORDER_NAMES[c.color_order % bracelet::NUM_ORDERS];
+    br["color_order"] = rfproto::COLOR_ORDER_NAMES[c.color_order % rfproto::NUM_ORDERS];
     br["base_layer"] = (bool) c.base_layer;
 
     JsonObject input = o["input"].to<JsonObject>();
@@ -456,9 +456,9 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
         }
     }
 
-    // bracelets.protocols sets every zone's protocols. bracelets.protocol (older clients) switches every zone to that
+    // devices.protocols sets every zone's protocols. devices.protocol (older clients) switches every zone to that
     // one protocol when it changes. Zones keep both addresses either way, so nothing has to be re-entered.
-    JsonObjectConst br = in["bracelets"];
+    JsonObjectConst br = in["devices"];
     uint8_t every_zone = 0;
     if (!br.isNull()) {
         if (!read_int(br, "protocol", 0, 1, c.protocol, err))
@@ -469,11 +469,11 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
         for (JsonObjectConst z : in["zones"].as<JsonArrayConst>())
             zones_say |= !z["protocols"].isNull();
         if (c.protocol != old_protocol && br["protocols"].isNull() && !zones_say)
-            every_zone = bracelet::PROTOCOL_BIT[c.protocol];
+            every_zone = rfproto::PROTOCOL_BIT[c.protocol];
         if (!br["protocols"].isNull() && !(br["per_zone"] | false)) {
-            if (!protocols_from_json(br["protocols"], every_zone, "bracelets", err))
+            if (!protocols_from_json(br["protocols"], every_zone, "devices", err))
                 return false;
-            c.protocol = every_zone == bracelet::PROTOCOL_BIT[1] ? 1 : 0;
+            c.protocol = every_zone == rfproto::PROTOCOL_BIT[1] ? 1 : 0;
         }
         if (br["mode"].is<const char *>()) {
             String m = br["mode"].as<const char *>();
@@ -484,8 +484,8 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
         if (br["color_order"].is<const char *>()) {
             String order = br["color_order"].as<const char *>();
             bool found = false;
-            for (uint8_t k = 0; k < bracelet::NUM_ORDERS; k++) {
-                if (order.equalsIgnoreCase(bracelet::COLOR_ORDER_NAMES[k])) {
+            for (uint8_t k = 0; k < rfproto::NUM_ORDERS; k++) {
+                if (order.equalsIgnoreCase(rfproto::COLOR_ORDER_NAMES[k])) {
                     c.color_order = k;
                     found = true;
                 }
@@ -605,7 +605,7 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
                 }
                 memcpy(c.protocol ? z.p1_addr : z.addr, tmp, address_len(c.protocol));
                 if (j["protocols"].isNull())
-                    z.protocols = bracelet::PROTOCOL_BIT[c.protocol];
+                    z.protocols = rfproto::PROTOCOL_BIT[c.protocol];
             }
             if (!j["protocols"].isNull() && !protocols_from_json(j["protocols"], z.protocols, where, err))
                 return false;
@@ -621,7 +621,7 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
     if (c.mode == MODE_VENDOR) {
         for (uint8_t i = 0; i < c.num_zones; i++) {
             if (c.zones[i].enabled && !zone_uses(c.zones[i], 1)) {
-                err = String("vendor 5-channel mode drives protocol 1 (LedGiftSupplier) bracelets only: zone ") +
+                err = String("vendor 5-channel mode drives protocol 1 (LedGiftSupplier) devices only: zone ") +
                       (i + 1) + " doesn't use protocol 1";
                 return false;
             }

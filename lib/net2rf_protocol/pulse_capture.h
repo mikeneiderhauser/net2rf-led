@@ -3,18 +3,18 @@
 // Raw pulse capture for receiver mode (no Arduino deps, host-testable). Cuts the demodulated OOK edge stream
 // into bursts: runs of pulses with plausible remote-control timings, separated by long gaps or by the very short
 // glitches a receiver produces on an empty channel. A burst is kept as a list of signed durations (+ mark,
-// - space, microseconds), so a signal neither bracelet protocol decodes can still be looked at, compared with
+// - space, microseconds), so a signal neither device protocol decodes can still be looked at, compared with
 // rtl_433's pulse analyser (export_ook()), or added as a new protocol.
 
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 
-namespace bracelet {
+namespace rfproto {
 
 class BurstSegmenter {
  public:
-    static const uint16_t MAX_PULSES = 1024;  // ~ 7 bracelet frames; longer bursts are truncated
+    static const uint16_t MAX_PULSES = 1024;  // ~ 7 device frames; longer bursts are truncated
     static const uint32_t MIN_US = 60;        // shorter: a receiver glitch, not a remote's pulse
     static const uint32_t GAP_US = 8000;      // longer: the burst is over
     static const uint16_t MIN_PULSES = 32;    // fewer: noise that happened to look plausible
@@ -85,7 +85,7 @@ struct RawBurst {
     uint32_t total_us;
     uint16_t count;
     bool truncated;
-    bool decoded;      // at least one bracelet frame was decoded from it
+    bool decoded;      // at least one device frame was decoded from it
     int16_t rssi_dbm;  // strongest reading while it lasted
     int16_t pulses[BurstSegmenter::MAX_PULSES];
 };
@@ -155,4 +155,4 @@ template<typename Emit> uint16_t export_ook(const RawBurst &b, uint32_t freq_hz,
     return pairs;
 }
 
-}  // namespace bracelet
+}  // namespace rfproto
