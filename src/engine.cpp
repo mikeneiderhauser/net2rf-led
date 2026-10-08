@@ -1,6 +1,7 @@
 #include "engine.h"
 #include "input_parsers.h"
 
+#include <new>
 #include <esp_random.h>
 #include <esp_timer.h>
 #include <freertos/semphr.h>
@@ -51,7 +52,7 @@ static const uint32_t LBT_MAX_WAIT_MS = 250;  // never hold an update longer tha
 // the engine task. Each entry is (duration_us << 1) | level, the level being the one that just ended.
 namespace {
 constexpr uint32_t RX_RING = 1024;  // power of two
-volatile uint32_t s_rx_ring[RX_RING];
+volatile uint32_t *s_rx_ring = nullptr;  // allocated when receiver mode first starts (start_rx_)
 volatile uint32_t s_rx_head = 0, s_rx_tail = 0, s_rx_dropped = 0;
 volatile int64_t s_rx_last_us = 0;
 
@@ -546,8 +547,10 @@ void Engine::run_() {
         want_rx = want_rx && this->radio_state_ == RadioState::READY && !this->suspended_ && this->radio_->rx_supported();
         if (this->rx_active_ && (!want_rx || rx_freq != this->rx_freq_ || rx_profile != this->rx_profile_))
             this->stop_rx_();
-        if (!want_rx)
+        if (!want_rx) {
             this->rx_failed_ = false;
+            this->free_rx_buffers_();
+        }
         else if (!this->rx_active_ && (int32_t) (now - this->rx_retry_ms_) >= 0)
             this->start_rx_(rx_freq, rx_profile);
         if (this->rx_active_)
@@ -747,7 +750,8 @@ void Engine::reset_stats() {
         zs.tx_count = 0;
     this->tracker_.clear();
     this->decoder_.reset_counts();
-    this->captures_.clear();
+    if (this->captures_)
+        this->captures_->clear();
     this->captures_quiet_ = 0;
     this->rx_edges_ = 0;
     this->rx_storms_ = 0;
@@ -989,6 +993,23 @@ EngineSnapshot Engine::snapshot() {
 // ---------------------------------------------------------------------------------------------
 
 void Engine::start_rx_(uint32_t freq, uint8_t profile) {
+    // The capture buffers (about 14 KB) are only held while receiver mode is on (free_rx_buffers_): the secure
+    // firmware download needs that memory, and most controllers only ever transmit.
+    if (!s_rx_ring)
+        s_rx_ring = new (std::nothrow) uint32_t[RX_RING];
+    if (!this->segmenter_)
+        this->segmenter_ = new (std::nothrow) rfproto::BurstSegmenter();
+    if (!this->captures_) {
+        auto *c = new (std::nothrow) rfproto::BurstStore<RX_CAPTURES>();
+        StateLock lock;  // the web server reads it
+        this->captures_ = c;
+    }
+    if (!s_rx_ring || !this->segmenter_ || !this->captures_) {
+        log_w("Not enough memory for receiver mode");
+        this->rx_retry_ms_ = millis() + RX_RETRY_MS;
+        this->rx_failed_ = true;
+        return;
+    }
     this->sender_.end();  // the radio drives the data line from here
     bool ok = this->radio_->tune(freq, this->radio_->min_power()) && this->radio_->rx_data_on(profile);
     this->tuned_ = false;  // the next transmission re-tunes
@@ -1001,7 +1022,7 @@ void Engine::start_rx_(uint32_t freq, uint8_t profile) {
         return;
     }
     this->decoder_.reset();
-    this->segmenter_.reset();  // (not by assignment: a temporary would put 2 KB on this task's stack)
+    this->segmenter_->reset();
     this->burst_decoded_ = false;
     this->burst_rssi_ = -127;
     s_rx_tail = s_rx_head;
@@ -1035,6 +1056,24 @@ void Engine::stop_rx_() {
     log_i("Receiver stopped");
 }
 
+// Receiver mode is off (or held off: radio down, firmware update): give the capture buffers back. The raw
+// captures go with them.
+void Engine::free_rx_buffers_() {
+    if (!s_rx_ring && !this->segmenter_ && !this->captures_)
+        return;
+    delete[] s_rx_ring;  // the edge interrupt is detached (stop_rx_)
+    s_rx_ring = nullptr;
+    delete this->segmenter_;
+    this->segmenter_ = nullptr;
+    rfproto::BurstStore<RX_CAPTURES> *c;
+    {
+        StateLock lock;  // the web server reads it
+        c = this->captures_;
+        this->captures_ = nullptr;
+    }
+    delete c;
+}
+
 void Engine::poll_rx_(uint32_t now) {
     uint32_t tail = s_rx_tail, head = s_rx_head;
     this->rx_edges_ += head - tail;
@@ -1059,7 +1098,7 @@ void Engine::poll_rx_(uint32_t now) {
     while (tail != head) {
         uint32_t v = s_rx_ring[tail & (RX_RING - 1)];
         tail++;
-        if (this->segmenter_.push(v & 1, v >> 1))
+        if (this->segmenter_->push(v & 1, v >> 1))
             this->store_burst_();
         if (!this->decoder_.push(v & 1, v >> 1, f))
             continue;
@@ -1089,13 +1128,13 @@ void Engine::poll_rx_(uint32_t now) {
     }
     s_rx_tail = tail;
 
-    if (this->segmenter_.open()) {
+    if (this->segmenter_->open()) {
         // A burst is coming in: track its strength, and end it if the line has gone quiet.
         int16_t r = this->radio_->rssi_dbm();
         if (r > this->burst_rssi_)
             this->burst_rssi_ = r;
         int64_t quiet = esp_timer_get_time() - s_rx_last_us;
-        if (s_rx_tail == s_rx_head && this->segmenter_.idle(quiet > 0x7FFFFFFF ? 0x7FFFFFFF : (uint32_t) quiet))
+        if (s_rx_tail == s_rx_head && this->segmenter_->idle(quiet > 0x7FFFFFFF ? 0x7FFFFFFF : (uint32_t) quiet))
             this->store_burst_();
     }
 
@@ -1126,7 +1165,7 @@ void Engine::store_burst_() {
         if (quiet)
             this->captures_quiet_++;
         else
-            this->captures_.add(this->segmenter_, millis(), this->burst_decoded_, this->burst_rssi_);
+            this->captures_->add(*this->segmenter_, millis(), this->burst_decoded_, this->burst_rssi_);
     }
     this->burst_decoded_ = false;
     this->burst_rssi_ = -127;
@@ -1134,7 +1173,7 @@ void Engine::store_burst_() {
 
 bool Engine::rx_capture_json(uint32_t id, JsonObject o) {
     StateLock lock;
-    const rfproto::RawBurst *b = this->captures_.find(id);
+    const rfproto::RawBurst *b = this->captures_ ? this->captures_->find(id) : nullptr;
     if (!b)
         return false;
     o["id"] = b->id;
@@ -1152,7 +1191,7 @@ bool Engine::rx_capture_json(uint32_t id, JsonObject o) {
 
 bool Engine::rx_capture_ook(uint32_t id, String &out) {
     StateLock lock;
-    const rfproto::RawBurst *b = this->captures_.find(id);
+    const rfproto::RawBurst *b = this->captures_ ? this->captures_->find(id) : nullptr;
     if (!b)
         return false;
     out.reserve(160 + b->count * 6);
@@ -1204,10 +1243,11 @@ void Engine::rx_json_(JsonObject o, uint32_t now) {
     }
     o["captures_quiet"] = this->captures_quiet_;
     JsonArray caps = o["captures"].to<JsonArray>();  // newest first; pulses via /api/rx/capture?id=
-    for (uint8_t k = 0; k < this->captures_.size(); k++) {
+    uint8_t n_caps = this->captures_ ? this->captures_->size() : 0;
+    for (uint8_t k = 0; k < n_caps; k++) {
         const rfproto::RawBurst *newest = nullptr;
-        for (uint8_t i = 0; i < this->captures_.size(); i++) {
-            const rfproto::RawBurst &b = this->captures_.at(i);
+        for (uint8_t i = 0; i < n_caps; i++) {
+            const rfproto::RawBurst &b = this->captures_->at(i);
             uint32_t seen = k ? caps[k - 1]["id"].as<uint32_t>() : UINT32_MAX;
             if (b.id < seen && (!newest || b.id > newest->id))
                 newest = &b;

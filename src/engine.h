@@ -248,6 +248,7 @@ class Engine {
     // signal; an edge interrupt times it and the engine task decodes the frames. Nothing is transmitted.
     void start_rx_(uint32_t freq, uint8_t profile);
     void stop_rx_();
+    void free_rx_buffers_();
     void poll_rx_(uint32_t now);
     void store_burst_();
     void rx_json_(JsonObject o, uint32_t now);
@@ -260,8 +261,9 @@ class Engine {
     rfproto::RxTracker tracker_;
     // Raw capture: bursts of plausible pulses, kept whether or not they decoded (undecoded ones are kept longest).
     static const uint8_t RX_CAPTURES = 4;
-    rfproto::BurstSegmenter segmenter_;
-    rfproto::BurstStore<RX_CAPTURES> captures_;
+    // Held only while receiver mode is on (start_rx_ / free_rx_buffers_), so a controller that transmits keeps the memory.
+    rfproto::BurstSegmenter *segmenter_{nullptr};
+    rfproto::BurstStore<RX_CAPTURES> *captures_{nullptr};
     bool burst_decoded_{false};
     int16_t burst_rssi_{-127};
     uint32_t captures_quiet_{0};  // bursts dropped because the channel was no louder than its noise floor
