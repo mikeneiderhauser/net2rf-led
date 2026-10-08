@@ -23,6 +23,16 @@ bool ap_active();
 String ap_ssid();
 void status_json(JsonObject out);
 
+// The last time a working connection was lost (not a failed join). `count` is since boot; 0 = never.
+struct Drop {
+    uint16_t count;
+    bool wifi;        // Wi-Fi, else Ethernet
+    uint8_t reason;   // Wi-Fi disconnect reason code (wifi_err_reason_t)
+    uint32_t age_ms;
+};
+Drop last_drop();
+String drop_text(const Drop &d);  // e.g. "BEACON_TIMEOUT (200)", "Ethernet link down"
+
 void start_scan();              // async Wi-Fi scan for the settings page
 void scan_json(JsonObject out);  // {"running":bool,"networks":[...]}
 

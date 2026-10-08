@@ -81,11 +81,16 @@ static uint32_t s_press_start = 0, s_last_change = 0;
 
 // Display sleep: the OLED switches off after a while without a USER press. It wakes on the next press (which
 // only wakes: it doesn't change the page), from the web UI / API, after a reboot, and by itself when there is
-// something to read: the network address changes, the setup hotspot starts or stops, or the radio fails.
+// something to read: the network drops or its address changes, the setup hotspot starts or stops, or the radio fails.
 // Controllers without a button rely on those.
 static bool s_asleep = false;
 static bool s_wake_press = false;
 static uint32_t s_last_activity = 0;
+
+// Network drop: when a working connection is lost, the OLED wakes and shows why straight away, for a while.
+static const uint32_t DROP_SCREEN_MS = 30000;
+static uint32_t s_drop_until = 0;
+static uint16_t s_drops_seen = 0;
 
 // Identify (Tools page): blink the LED fast and flash "THIS ONE" on the OLED, to tell controllers apart.
 static uint32_t s_identify_until = 0;
@@ -467,6 +472,22 @@ static void draw_page(uint32_t now) {
     s_oled->display();
 }
 
+static void draw_drop() {
+    net::Drop d = net::last_drop();
+    s_oled->clear();
+    s_oled->setFont(ArialMT_Plain_10);
+    s_oled->drawString(0, 0, d.wifi ? "Wi-Fi dropped" : "Ethernet dropped");
+    s_oled->setTextAlignment(TEXT_ALIGN_RIGHT);
+    s_oled->drawString(128, 0, "x" + String(d.count));
+    s_oled->setTextAlignment(TEXT_ALIGN_LEFT);
+    s_oled->drawHorizontalLine(0, 12, 128);
+    s_oled->drawString(0, 14, fit(net::drop_text(d), 128));
+    s_oled->drawString(0, 26, age_string(d.age_ms) + " ago, up " + age_string(millis()));
+    s_oled->drawString(0, 38, net::connected() ? fit("back: " + net::ip().toString(), 128) : String("reconnecting..."));
+    s_oled->drawString(0, 50, fit(g_net.hostname, 128));
+    s_oled->display();
+}
+
 static void update_led(uint32_t now) {
     EngineSnapshot s = g_engine.snapshot();
     bool on;
@@ -524,6 +545,16 @@ void loop() {
             return;
         }
     }
+    uint16_t drops = net::last_drop().count;
+    if (drops != s_drops_seen) {  // a connection was just lost: say why right away
+        s_drops_seen = drops;
+        s_drop_until = (now + DROP_SCREEN_MS) | 1;
+        wake_display(now);
+    }
+    if (s_drop_until && (int32_t) (now - s_drop_until) >= 0) {
+        s_drop_until = 0;
+        s_last_draw = 0;
+    }
     // Things worth waking for, checked once a second.
     static uint32_t last_check = 0, last_ip = 0;
     static bool last_ap = false, last_fault = false;
@@ -545,8 +576,12 @@ void loop() {
         log_i("OLED asleep");
     }
     if (!s_asleep && !s_pressed && now - s_last_draw > 500) {
-        if (oled_ok())
-            draw_page(now);
+        if (oled_ok()) {
+            if (s_drop_until)
+                draw_drop();
+            else
+                draw_page(now);
+        }
         s_last_draw = now;
     }
 }

@@ -31,6 +31,18 @@ static uint32_t s_alias_retry_ms = 0;             // after a failed claim, don't
 static const uint32_t ALIAS_RETRY_MS = 30000;
 static volatile uint8_t s_sta_reason = 0;       // last station disconnect reason (wifi_err_reason_t), 0 = none
 static volatile bool s_sta_paused = false;      // station retries paused so AP clients stay connected
+// The last time a working connection was lost (kept after it comes back, for the OLED and the status API).
+static volatile uint16_t s_drops = 0;           // since boot
+static volatile bool s_drop_wifi = false;       // Wi-Fi (else Ethernet)
+static volatile uint8_t s_drop_reason = 0;      // wifi_err_reason_t, Wi-Fi only
+static volatile uint32_t s_drop_ms = 0;
+
+static void note_drop(bool wifi, uint8_t reason) {
+    s_drop_wifi = wifi;
+    s_drop_reason = reason;
+    s_drop_ms = millis();
+    s_drops = s_drops + 1;
+}
 
 static volatile bool s_discovery_requested = true, s_discovery_running = false;
 static const uint32_t DISCOVERY_INTERVAL_MS = 60000;
@@ -47,6 +59,8 @@ static void on_event(arduino_event_id_t event, arduino_event_info_t info) {
             break;
         case ARDUINO_EVENT_ETH_DISCONNECTED:
         case ARDUINO_EVENT_ETH_STOP:
+            if (s_eth_ip)
+                note_drop(false, 0);
             s_eth_link = false;
             s_eth_ip = false;
             log_i("Ethernet down");
@@ -60,6 +74,9 @@ static void on_event(arduino_event_id_t event, arduino_event_info_t info) {
             log_i("Wi-Fi IP %s", WiFi.localIP().toString().c_str());
             break;
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+            // A connection that was working (not a failed join, and not us leaving the network on purpose)
+            if (s_sta_ip && info.wifi_sta_disconnected.reason != WIFI_REASON_ASSOC_LEAVE)
+                note_drop(true, info.wifi_sta_disconnected.reason);
             s_sta_ip = false;
             if (!s_sta_paused && info.wifi_sta_disconnected.reason != WIFI_REASON_ASSOC_LEAVE) {
                 s_sta_reason = info.wifi_sta_disconnected.reason;
@@ -100,6 +117,21 @@ static const char *reason_text(uint8_t r) {
     }
 }
 
+Drop last_drop() {
+    Drop d;
+    d.count = s_drops;
+    d.wifi = s_drop_wifi;
+    d.reason = s_drop_reason;
+    d.age_ms = millis() - s_drop_ms;
+    return d;
+}
+
+String drop_text(const Drop &d) {
+    if (!d.wifi)
+        return "Ethernet link down";
+    return String(WiFi.STA.disconnectReasonName((wifi_err_reason_t) d.reason)) + " (" + d.reason + ")";
+}
+
 static void apply_static(NetworkInterface &iface) {
     if (g_net.dhcp)
         return;
@@ -115,6 +147,9 @@ static void start_sta() {
     WiFi.setHostname(g_net.hostname);
     apply_static(WiFi.STA);
     WiFi.begin(g_net.wifi_ssid, g_net.wifi_pass);
+    // No modem sleep: the radio dozing between the access point's beacons delays incoming DDP frames by up to
+    // a beacon interval or more, and stalled the firmware download from GitHub for tens of seconds at a time.
+    WiFi.setSleep(false);
     s_sta_started = true;
     s_sta_started_ms = millis();
 }
@@ -345,6 +380,16 @@ void status_json(JsonObject o) {
     o["ip"] = ip().toString();
     o["hostname"] = g_net.hostname;
     o["dhcp"] = (bool) g_net.dhcp;
+    Drop drop = last_drop();
+    o["drops"] = drop.count;  // working connections lost since boot
+    if (drop.count) {
+        JsonObject ld = o["last_drop"].to<JsonObject>();
+        ld["interface"] = drop.wifi ? "wifi" : "ethernet";
+        ld["reason"] = drop_text(drop);
+        if (drop.wifi)
+            ld["reason_code"] = drop.reason;
+        ld["ago_s"] = drop.age_ms / 1000;
+    }
     JsonObject eth = o["ethernet"].to<JsonObject>();
     eth["present"] = (bool) NET2RF_HAS_ETHERNET;  // the board has an Ethernet port
     eth["enabled"] = (bool) g_net.eth_enabled && NET2RF_HAS_ETHERNET;
