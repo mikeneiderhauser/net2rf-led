@@ -215,6 +215,16 @@ def status():
     }
 
 
+STORE_BOOTS = {"boots": 14, "abnormal_streak": 0, "boot_no": 14, "entries": [
+    {"n": 11, "reason": "power on", "fw": "0.0.6", "prev_uptime_s": 0},
+    {"n": 12, "reason": "software restart", "fw": "0.0.7", "prev_uptime_s": 86400},
+    {"n": 13, "reason": "crash", "fw": "0.0.7", "prev_uptime_s": 5400, "pc": "0x400d1234"},
+    {"n": 14, "reason": "software restart", "fw": "0.0.8-dev", "prev_uptime_s": 120}]}
+STORE_SEEN = {"saved": True, "recording": False, "entries": [
+    {"protocol": 1, "address": "05000000", "group": 5, "count": 412, "first_boot": 9, "last_boot": 14, "best_rssi_dbm": -48},
+    {"protocol": 0, "address": "0008000F", "count": 37, "first_boot": 12, "last_boot": 12, "best_rssi_dbm": -71}]}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -297,13 +307,27 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/update/status":
             return self.send(200, gh_job())
         if path == "/api/flash":
-            return self.send(200, {"flash_bytes": 4194304, "partitions": [
+            return self.send(200, {"flash_bytes": 4194304, "flash_chip_bytes": 4194304, "flash_id": "EF4016", "flash_maker_id": 0xEF,
+                                   "flash_speed_hz": 40000000, "flash_mode": "DIO", "partitions": [
                 {"label": "nvs", "offset": 0x9000, "bytes": 0x5000, "kind": "settings", "used_bytes": 5120},
                 {"label": "otadata", "offset": 0xE000, "bytes": 0x2000, "kind": "boot_select"},
                 {"label": "app0", "offset": 0x10000, "bytes": 0x1E0000, "kind": "firmware_running", "used_bytes": 1471297},
                 {"label": "app1", "offset": 0x1F0000, "bytes": 0x1E0000, "kind": "firmware_next"},
                 {"label": "spiffs", "offset": 0x3D0000, "bytes": 0x20000, "kind": "files"},
                 {"label": "coredump", "offset": 0x3F0000, "bytes": 0x10000, "kind": "crash_dump"}]})
+        if path == "/api/store":
+            return self.send(200, {"mounted": True, "partition": "spiffs", "total_bytes": 131072, "used_bytes": 24576, "boot_no": 14, "writes": 231,
+                                   "record_seen": STORE_SEEN["recording"], "boot_log_paused": False,
+                                   "files": [{"name": "boots.json", "bytes": 1890}, {"name": "seen.json", "bytes": 412}, {"name": "cap0.json", "bytes": 688}]})
+        if path == "/api/store/boots":
+            return self.send(200, STORE_BOOTS)
+        if path == "/api/store/seen":
+            return self.send(200, STORE_SEEN)
+        if path == "/api/store/captures":
+            return self.send(200, {"captures": [{"slot": 0, "freq": 433920000, "us": 95000, "boot": 12, "decoded": True, "truncated": False,
+                                                 "rssi_dbm": -48, "note": "", "pulses_n": 116}]})
+        if path in ("/api/store/file", "/api/store/bundle"):
+            return self.send(200, {"mock": True, "boots": STORE_BOOTS, "seen": STORE_SEEN})
         if path == "/api/i2c/scan":
             return self.send(200, {"bus_ok": True, "devices": [], "sda_high": True, "scl_high": True, "orientation": "normal (SDA=IO5, SCL=IO17)"})
         if path == "/mock/log":
@@ -319,6 +343,19 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(raw or b"{}")
         LOG.append([path, body])
         reboot = False
+        if path == "/api/store":
+            STORE_SEEN["recording"] = bool(body.get("record_seen"))
+            return self.send(200, {"ok": True, "reboot": False})
+        if path == "/api/store/file":
+            return self.send(200, {"ok": True, "reboot": False})
+        if path == "/api/store/captures":
+            return self.send(200, {"ok": True, "slot": 1})
+        if path == "/api/store/clear":
+            if body.get("what") in ("boots", "all"):
+                STORE_BOOTS["entries"] = []
+            if body.get("what") in ("seen", "all"):
+                STORE_SEEN["entries"] = []
+            return self.send(200, {"ok": True, "reboot": False})
         if path == "/api/net/check":
             NETCHECK["started"] = time.time()
             return self.send(200, {"ok": True, "reboot": False})

@@ -10,6 +10,7 @@
 #include "panel.h"
 #include "peers.h"
 #include "updater.h"
+#include "store.h"
 #include "web.h"
 
 static AsyncUDP s_ddp;
@@ -82,6 +83,7 @@ void setup() {
 
     state_lock_init();
     config_load();
+    store::begin();  // boot log first: a crash later in setup() is then already on record
     panel::begin();
     peers::begin();
     net::begin();  // network and web UI come up first...
@@ -95,6 +97,7 @@ void loop() {
     panel::loop();
     peers::loop();
     updater::loop();
+    store::loop();
     ota_guard::loop(net::connected() || net::ap_active());  // web UI is up from setup()
     static uint32_t last_bind_check = 0;
     if (millis() - last_bind_check > 1000) {

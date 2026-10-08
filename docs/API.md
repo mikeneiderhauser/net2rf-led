@@ -39,6 +39,16 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/json/cfg` | What xLights posts on *Upload*: `hw.led.ins[0].len` sets the number of zones (pixel mode; 1-16), `if.live.port` 4048 enables DDP and 5568 enables E1.31 with `if.live.dmx.uni`. Start channel becomes 1. A zone added this way gets its own group unless it was configured before. WLED's per-port colour order is ignored (it describes LED wiring; the controller's colour order must match the model's String Type). Art-Net, more than one port or more than 16 pixels return 400. |
 | GET | `/api/flash` | Flash chip size and the partition table: `label`, `offset`, `bytes`, `kind`, and `used_bytes` for the running firmware slot and the settings store. Shown under *System → Advanced: flash storage*. Always open. |
 | GET 🔒 | `/api/crash` | The last crash, from the dump the controller keeps in flash: `present`, `task`, `reason`, `pc`, `address`, `backtrace` (addresses to look up in that build's `firmware.elf`), `elf_sha256`. Stays until the next crash. |
+| GET 🔒 | `/api/store` | Board records kept on the data partition: `mounted`, `total_bytes`, `used_bytes`, `boot_no`, `writes` (file writes over the partition's life), `record_seen`, `boot_log_paused`, and `files` (`name`, `bytes`). See [Board records](#board-records). |
+| POST 🔒 | `/api/store` | `{"record_seen": true}`: also write the transmitters receiver mode hears to flash (off by default). |
+| GET 🔒 | `/api/store/boots` | The boot log: `boots` (count since the log began), `abnormal_streak`, `entries` (`n`, `reason`, `fw`, `prev_uptime_s`, and `pc` after a crash), oldest first, the last 32. |
+| GET 🔒 | `/api/store/seen` | Transmitters receiver mode has decoded: `entries` (`protocol`, `address`, `group` for protocol 1, `count`, `first_boot`, `last_boot`, `best_rssi_dbm`). |
+| GET 🔒 | `/api/store/captures` | Saved captures without their pulses; with `?slot=N` one capture in full (same shape as `/api/rx/capture`). |
+| POST 🔒 | `/api/store/captures` | `{"id": N, "note": "..."}` keeps receiver capture N (replies `slot`; 507 when all 6 slots are used). `{"delete": slot}` frees one. |
+| POST 🔒 | `/api/store/clear` | `{"what": "boots" \| "seen" \| "captures" \| "all"}` |
+| GET 🔒 | `/api/store/file?name=boots.json` | One stored file, as a download. |
+| POST 🔒 | `/api/store/file` | `{"delete": "cap0.json"}` deletes one stored file. `boots.json` restarts the restart count, `seen.json` empties the heard list, `store.json` puts recording back to off. |
+| GET 🔒 | `/api/store/bundle` | One diagnostics file for a fault report: status, last crash, boot log, heard transmitters, saved captures (no pulses) and settings. Never the Wi-Fi or admin password. |
 | GET 🔒 | `/api/config` | Current settings (`app` + `network`, without passwords) |
 | POST 🔒 | `/api/config` | Update app settings. Any subset of the fields below. Changing `radio.type` reboots. |
 | POST 🔒 | `/api/network` | Update network settings, then reboot |
@@ -261,3 +271,26 @@ uploads and to installs from GitHub alike.
 ```
 
 Omit `wifi_pass` / `ap_pass` to keep the current ones. `ap_mode`: `no_connection` (default), `always`, `never`.
+
+## Board records
+
+The controller keeps three kinds of record as small JSON files on its 128 KB data partition (LittleFS on the
+partition labelled `spiffs`), so they survive restarts, firmware updates and a factory reset. A full flash erase
+removes them. Nothing depends on them: a board without the partition simply reports `mounted: false`.
+
+| File | Holds | Written |
+|---|---|---|
+| `boots.json` | The last 32 restarts: why, on which firmware, how long the run before lasted, and the crash address when there was a core dump | Once per boot. After 5 abnormal restarts in a row nothing is written until a boot has stayed up for a minute; that entry then says how many were `skipped` |
+| `seen.json` | Up to 64 transmitters heard in receiver mode, by protocol and address | Only with *Record this list to flash* switched on: a new transmitter within a minute, updated counts every 15 minutes, never during a firmware update |
+| `store.json` | The recording setting | When it is changed |
+| `cap0.json` ... `cap5.json` | Raw captures kept with **Keep** on the Receiver page | When kept |
+
+`/api/flash` also reports the flash chip itself: `flash_chip_bytes` (the real size, from the chip), `flash_id`
+(JEDEC id), `flash_maker_id`, `flash_mode` and `flash_speed_hz`. `flash_bytes` stays the size the firmware was
+built for; on a board with a larger chip the difference is unused.
+
+**Flash wear.** The partition is 32 blocks rated for about 100,000 erases each, and writing a small file costs
+about two, so it is good for roughly a million writes. One write per boot is centuries of normal use; the two
+cases that could matter are paced: a restart loop stops writing the boot log, and the heard list is opt-in
+and written at most every 15 minutes (a new transmitter within one). Every file carries the running total as
+`w`, reported as `writes`.

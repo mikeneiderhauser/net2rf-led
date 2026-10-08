@@ -420,6 +420,21 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
         <button class="danger" id="s_factory" title="Both of the above">Factory reset</button></div>
       <p class="dim small">Reset settings keeps the network connection. Reset network keeps your zones and radio settings, but the controller goes back to DHCP and forgets its Wi-Fi, so it may come up on another address or on its setup hotspot.</p>
     </div>
+    <details class="card adv" id="s_store"><summary>Diagnostics and stored files</summary>
+      <p class="dim small" style="margin-top:10px">The controller keeps a boot log, the transmitters receiver mode has heard and any captures you saved, as small JSON files. They survive restarts, firmware updates and a factory reset; a full flash erase removes them.</p>
+      <div class="actions" style="margin-top:0"><a href="/api/store/bundle"><button title="Status, last crash, boot log, heard transmitters and settings in one file. No Wi-Fi or admin password.">Download diagnostics</button></a>
+        <a href="/api/export"><button title="Settings and network in one file, as Export above">settings.json</button></a></div>
+      <div class="small dim" id="s_storeSum" style="margin-top:10px"></div>
+      <table class="tbl" style="width:100%"><thead><tr><th>File</th><th>Holds</th><th>Size</th><th></th></tr></thead><tbody id="s_storeFiles"></tbody></table>
+      <h3 style="margin:14px 0 6px">Restarts</h3>
+      <div class="small" id="s_bootSum"></div>
+      <table class="tbl" style="width:100%"><thead><tr><th>#</th><th>Why</th><th>Firmware</th><th>Ran before that</th><th>Crash at</th></tr></thead><tbody id="s_bootRows"></tbody></table>
+      <h3 style="margin:14px 0 6px">Heard in receiver mode</h3>
+      <label class="small" style="display:block;margin-bottom:6px" title="Off: the list below is kept in memory only and starts again at each restart. On: it is also written to flash, a new transmitter within a minute and the counts every 15 minutes."><input type="checkbox" id="s_recSeen"> Record this list to flash, so it survives a restart</label>
+      <div class="small dim" id="s_seenNote"></div>
+      <table class="tbl" style="width:100%"><thead><tr><th>Protocol</th><th>Address</th><th>Times</th><th>Best signal</th><th>Last heard</th></tr></thead><tbody id="s_seenRows"></tbody></table>
+      <div class="actions"><button class="danger" data-clear="boots">Clear restarts</button><button class="danger" data-clear="seen">Clear heard list</button><button class="danger" data-clear="captures">Delete saved captures</button></div>
+    </details>
     <details class="card adv" id="s_adv"><summary>Advanced: flash storage</summary>
       <div class="small dim" id="s_flashSum" style="margin-top:10px"></div>
       <div id="s_flashMap" style="display:flex;height:14px;border-radius:4px;overflow:hidden;margin:8px 0;background:var(--rule)"></div>
@@ -468,28 +483,61 @@ const util=(pct,lv)=>`<div class="util${lv!==undefined?(lv?' '+lv:''):pct>=92?' 
 // 100 KB on top of everything else, and stalled with 137 KB free (fine with 152 KB). Receiver mode's capture
 // buffers (14 KB) are given back for an update, so they don't count against it.
 const HEAP_WARN=145e3,HEAP_BAD=110e3,HEAP_RX=14e3,HEAP_MIN_BAD=20e3;
-function heapLevel(d){const free=d.free_heap+(S&&S.engine&&S.engine.receiver.active?HEAP_RX:0);
-  return free<HEAP_BAD||d.min_free_heap<HEAP_MIN_BAD?'bad':free<HEAP_WARN?'warn':''}
+// While the controller is itself talking to GitHub (a check for updates, or a download) that secure connection
+// holds ~100 KB, so free memory dips for a few seconds: that is the cost being measured, not a shortage. The
+// level from just before is kept until it has finished.
+let heapLevelLast='';
+function heapBusy(d){const j=d.update_job&&d.update_job.state;return!!(d.update_check&&d.update_check.checking)||(!!j&&j!=='idle'&&j!=='failed')}
+function heapLevel(d){if(heapBusy(d))return heapLevelLast;const free=d.free_heap+(S&&S.engine&&S.engine.receiver.active?HEAP_RX:0);
+  return heapLevelLast=free<HEAP_BAD||d.min_free_heap<HEAP_MIN_BAD?'bad':free<HEAP_WARN?'warn':''}
 function heapFree(d,long){if(!d.heap_bytes)return fmtBytes(d.free_heap);const used=Math.round((d.heap_bytes-d.free_heap)/d.heap_bytes*100),lv=heapLevel(d);
   const note=!lv?'':`<br><span class="small" style="color:var(--${lv})">⚠ ${lv==='bad'?'Very low':'Low'} memory${long?': a firmware update from GitHub may stall. Upload the file instead, or restart the controller first.':''}</span>`;
-  return util(used,lv)+'<span class="small">'+(long?`${fmtBytes(d.free_heap)} free of ${fmtBytes(d.heap_bytes)} (${used}% used; lowest since boot ${fmtBytes(d.min_free_heap)} free)`:`${fmtBytes(d.free_heap)} free (${used}% used)`)+'</span>'+note}
+  return util(used,lv)+'<span class="small">'+(long?`${fmtBytes(d.free_heap)} free of ${fmtBytes(d.heap_bytes)} (${used}% used; lowest since boot ${fmtBytes(d.min_free_heap)} free)`:`${fmtBytes(d.free_heap)} free (${used}% used)`)+(heapBusy(d)?' <span class="dim">(talking to GitHub)</span>':'')+'</span>'+note}
 function flashFree(d,long){if(!d.firmware_slot_bytes)return'–';const free=d.firmware_slot_bytes-d.firmware_bytes,used=Math.round(d.firmware_bytes/d.firmware_slot_bytes*100);
-  return util(used)+'<span class="small">'+(long?`${fmtBytes(free)} free of ${fmtBytes(d.firmware_slot_bytes)} (firmware uses ${fmtBytes(d.firmware_bytes)}, ${used}%)`:`${fmtBytes(free)} free (${used}% used)`)+'</span>'}
+  return util(used,'')+'<span class="small">'+(long?`${fmtBytes(free)} free of ${fmtBytes(d.firmware_slot_bytes)} (firmware uses ${fmtBytes(d.firmware_bytes)}, ${used}%)`:`${fmtBytes(free)} free (${used}% used)`)+'</span>'}
 // System page: the whole flash chip, partition by partition
 const FLASH_KIND={firmware_running:['Firmware (running)','#2dd4bf'],firmware_next:['Firmware slot for the next update','#0f766e'],firmware:['Firmware slot','#0f766e'],
-  settings:['Settings','#f59e0b'],boot_select:['Which firmware slot boots','#a78bfa'],crash_dump:['Crash dump','#f87171'],files:['File storage (not used)','#64748b'],other:['Other','#64748b'],
+  settings:['Settings','#f59e0b'],boot_select:['Which firmware slot boots','#a78bfa'],crash_dump:['Crash dump','#f87171'],files:['Board records: boot log, heard transmitters, saved captures','#64748b'],other:['Other','#64748b'],
   boot:['Bootloader and partition table','#94a3b8'],free:['Not allocated','transparent']};
+// System page: the board records (src/store.cpp). Fetched when the section is opened.
+const STORE_FILE={'boots.json':'Restarts and crashes','seen.json':'Transmitters heard in receiver mode'};
+async function storeInfo(){let st,b,sn;try{[st,b,sn]=await Promise.all([api('store'),api('store/boots'),api('store/seen')])}catch(e){return}
+  if(!st.mounted){$('s_storeSum').textContent='No storage partition on this board: nothing is kept.';return}
+  $('s_storeSum').textContent=`${fmtBytes(st.used_bytes)} of ${fmtBytes(st.total_bytes)} used. Written ${fmtN(st.writes)} times so far; the flash is good for roughly a million.`+(st.boot_log_paused?' Restart loop: the boot log is paused until this boot has stayed up a minute.':'');
+  $('s_recSeen').checked=st.record_seen;
+  $('s_seenNote').textContent=st.record_seen?(sn.saved?'':'Heard since the last write; saved within 15 minutes.'):'Not recorded: this list is in memory only and starts again at each restart.';
+  $('s_storeFiles').innerHTML=(st.files||[]).map(f=>`<tr><td class="mono">${esc(f.name)}</td><td>${STORE_FILE[f.name]||(/^cap\d+\.json$/.test(f.name)?'Saved capture':'')}</td><td class="nw">${fmtBytes(f.bytes)}</td><td class="nw"><a href="/api/store/file?name=${encodeURIComponent(f.name)}">Download</a> &nbsp; <a href="#" data-del="${esc(f.name)}" style="color:var(--bad)">Delete</a></td></tr>`).join('')||'<tr><td colspan="4" class="dim">Nothing stored yet</td></tr>';
+  const bad=r=>r==='crash'||r==='watchdog'||r==='brownout';
+  $('s_bootSum').innerHTML=`${fmtN(b.boots)} restarts since this log began.`+(b.abnormal_streak>=3?` <span style="color:var(--bad)">⚠ The last ${b.abnormal_streak} were crashes, watchdog resets or brownouts.</span>`:'');
+  $('s_bootRows').innerHTML=b.entries.slice().reverse().map(e=>`<tr><td class="dim">${e.n}${e.n===b.boot_no?' (now)':''}</td><td>${bad(e.reason)?`<span class="badge warn">${esc(e.reason)}</span>`:esc(e.reason)}</td><td class="mono">${esc(e.fw)}</td><td class="dim nw">${e.prev_uptime_s?fmtUp(e.prev_uptime_s):'–'}</td><td class="mono dim">${esc(e.pc||'')}</td></tr>`).join('');
+  $('s_seenRows').innerHTML=sn.entries.length?sn.entries.slice().sort((x,y)=>y.count-x.count).map(e=>`<tr><td>${e.protocol}</td><td class="mono">${e.protocol?'group '+e.group:esc(e.address)}</td><td>${fmtN(e.count)}</td><td class="dim nw">${e.best_rssi_dbm>-127?e.best_rssi_dbm+' dBm':'–'}</td><td class="dim nw">${e.last_boot===b.boot_no?'since this restart':(b.boot_no-e.last_boot)+' restarts ago'}</td></tr>`).join(''):'<tr><td colspan="5" class="dim">Nothing yet. Receiver mode adds every transmitter it decodes.</td></tr>'}
+$('s_store').addEventListener('toggle',()=>{if($('s_store').open)storeInfo()});
+$('s_recSeen').onchange=async e=>{try{await api('store',{record_seen:e.target.checked});toast(e.target.checked?'Recording heard transmitters to flash':'Recording off')}catch(x){}storeInfo()};
+$('s_store').addEventListener('click',async e=>{const del=e.target.dataset&&e.target.dataset.del;
+  if(del){e.preventDefault();if(!await ask(`Delete ${del}?`+(del==='boots.json'?' The restart count starts again.':del==='store.json'?' Recording goes back to off.':''),'Delete'))return;
+    try{await api('store/file',{delete:del})}catch(x){return}storeInfo();return}
+  const w=e.target.dataset&&e.target.dataset.clear;if(!w)return;
+  if(!await ask({boots:'Clear the list of restarts?',seen:'Clear the list of heard transmitters?',captures:'Delete every saved capture?'}[w],'Clear'))return;
+  try{await api('store/clear',{what:w})}catch(e){return}storeInfo()});
+// Receiver mode: keep a capture on the controller
+document.addEventListener('click',async e=>{const id=e.target.dataset&&e.target.dataset.keep;if(!id)return;
+  try{const r=await api('store/captures',{id:+id,note:''});toast('Kept as cap'+r.slot+'.json (System, Diagnostics and stored files)',3500)}catch(e){}});
 let flashLoaded=false;
 $('s_adv').addEventListener('toggle',()=>{if($('s_adv').open)flashInfo()});  // only fetched when opened
 async function flashInfo(){if(flashLoaded)return;let f;try{f=await api('flash')}catch(e){return}flashLoaded=true;
   const ps=f.partitions.slice().sort((a,b)=>a.offset-b.offset),rows=[];let at=0;
   for(const p of ps){if(p.offset>at)rows.push({label:at?'(gap)':'(start)',kind:at?'free':'boot',bytes:p.offset-at});rows.push(p);at=p.offset+p.bytes}
   if(f.flash_bytes>at)rows.push({label:'(end)',kind:'free',bytes:f.flash_bytes-at});
-  $('s_flashSum').textContent=`${fmtBytes(f.flash_bytes)} flash chip, ${ps.length} partitions. The bar shows each partition's share of the chip.`;
+  const MAKER={0xEF:'Winbond',0xC8:'GigaDevice',0x20:'XMC',0x68:'Boya',0x85:'Puya',0xC2:'Macronix',0x5E:'Zbit',0x0B:'XTX',0xA1:'Fudan',0xCD:'TH',0x1C:'Eon',0x9D:'ISSI',0x46:'Dosilicon'};
+  const chip=f.flash_chip_bytes||f.flash_bytes,spare=chip-f.flash_bytes;
+  $('s_flashSum').innerHTML=`<b>${fmtBytes(chip)} flash chip</b>`+(f.flash_id?` &middot; ${esc(MAKER[f.flash_maker_id]||'maker 0x'+(f.flash_maker_id||0).toString(16))}, JEDEC id <span class="mono">${esc(f.flash_id)}</span>`:'')
+    +(f.flash_mode?` &middot; ${esc(f.flash_mode)} at ${Math.round(f.flash_speed_hz/1e6)} MHz`:'')+`<br>${ps.length} partitions`
+    +(spare>0?`; the firmware is built for ${fmtBytes(f.flash_bytes)}, so <b>${fmtBytes(spare)} of the chip is not used</b>`:'')
+    +(at<f.flash_bytes?`; ${fmtBytes(f.flash_bytes-at)} after the last partition is not allocated`:'')+`. The bar shows each partition's share.`;
   $('s_flashMap').innerHTML=rows.map(r=>`<div title="${esc(r.label)}: ${fmtBytes(r.bytes)}" style="width:${r.bytes/f.flash_bytes*100}%;background:${FLASH_KIND[r.kind][1]}"></div>`).join('');
   $('s_flashRows').innerHTML=rows.map(r=>{const k=FLASH_KIND[r.kind],u=r.used_bytes,pct=u===undefined?null:Math.round(u/r.bytes*100);
     return `<tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:${k[1]};border:1px solid var(--rule)"></span><span class="mono">${esc(r.label)}</span></td><td>${k[0]}</td><td style="white-space:nowrap">${fmtBytes(r.bytes)} <span class="dim small">${(r.bytes/f.flash_bytes*100).toFixed(1)}%</span></td>`+
-      `<td>${pct===null?'<span class="dim small">–</span>':util(pct)+`<span class="small">${fmtBytes(u)} (${pct}%), ${fmtBytes(r.bytes-u)} free</span>`}</td></tr>`}).join('')}
+      `<td>${pct===null?'<span class="dim small">–</span>':util(pct,'')+`<span class="small">${fmtBytes(u)} (${pct}%), ${fmtBytes(r.bytes-u)} free</span>`}</td></tr>`}).join('')}
 function fmtUp(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+'d ':'')+(h?h+'h ':'')+m+'m'}
 const mhz=hz=>(hz/1e6).toFixed(3)+' MHz';
 const pill=(cls,txt)=>`<span class="pill"><span class="led ${cls}"></span>${txt}</span>`;
@@ -879,7 +927,7 @@ function renderRx(x){
   $('d_rxFreq').textContent=mhz(x.freq)+' (protocols 0 and 1)';
   if(document.activeElement!==$('d_rxProf')&&x.profile)$('d_rxProf').value=x.profile;
   $('d_rxBw').textContent=x.bandwidth?`${Math.round(x.bandwidth/1000)} kHz bandwidth`:'';
-  $('d_rxCaps').innerHTML=(x.captures||[]).length?x.captures.map(c=>`<tr><td class="dim nw">${fmtAge(c.age_ms)}</td><td>${fmtN(c.pulses)}${c.truncated?' <span class="badge warn" title="Longer bursts are cut at 1024 pulses">cut</span>':''}</td><td class="nw">${(c.us/1000).toFixed(1)} ms</td><td class="dim nw">${c.rssi_dbm>-127?c.rssi_dbm+' dBm':'–'}</td><td>${c.decoded?'<span class="badge good">yes</span>':'<span class="badge warn">no</span>'}</td><td class="nw"><button data-cap="${c.id}">View</button> <a href="/api/rx/capture?id=${c.id}&format=ook" download="net2rf-capture-${c.id}.ook">.ook</a></td></tr>`).join(''):
+  $('d_rxCaps').innerHTML=(x.captures||[]).length?x.captures.map(c=>`<tr><td class="dim nw">${fmtAge(c.age_ms)}</td><td>${fmtN(c.pulses)}${c.truncated?' <span class="badge warn" title="Longer bursts are cut at 1024 pulses">cut</span>':''}</td><td class="nw">${(c.us/1000).toFixed(1)} ms</td><td class="dim nw">${c.rssi_dbm>-127?c.rssi_dbm+' dBm':'–'}</td><td>${c.decoded?'<span class="badge good">yes</span>':'<span class="badge warn">no</span>'}</td><td class="nw"><button data-cap="${c.id}">View</button> <button data-keep="${c.id}" title="Keep this capture on the controller">Keep</button> <a href="/api/rx/capture?id=${c.id}&format=ook" download="net2rf-capture-${c.id}.ook">.ook</a></td></tr>`).join(''):
     `<tr><td colspan="6" class="dim">None yet.${x.captures_quiet?` ${fmtN(x.captures_quiet)} noise bursts skipped.`:''}</td></tr>`;
   $('d_rxLevel').textContent=x.active&&x.rssi_dbm>-127?`${x.rssi_dbm} dBm average, ${x.rssi_peak_dbm} dBm peak`:'–';
   $('d_rxFrames').textContent=`${fmtN(x.frames)} / ${fmtN(x.bad)}`+(x.dropped?` · ${fmtN(x.dropped)} edges dropped`:'')+(x.noise_pauses?` · ${fmtN(x.noise_pauses)} noise pauses`:'');

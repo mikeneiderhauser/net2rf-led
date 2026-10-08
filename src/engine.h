@@ -156,6 +156,8 @@ class Engine {
     // Receiver mode raw capture: one stored burst, as JSON pulses or as rtl_433 pulse data. False if unknown.
     bool rx_capture_json(uint32_t id, JsonObject out);
     bool rx_capture_ook(uint32_t id, String &out);
+    // A copy of one stored burst and the frequency it was heard on (to keep it: src/store.cpp).
+    bool rx_capture_copy(uint32_t id, rfproto::RawBurst &out, uint32_t &freq_hz);
     uint8_t rx_zone_count() {
         StateLock lock;
         return this->tracker_.count();
@@ -289,3 +291,7 @@ class Engine {
 };
 
 extern Engine g_engine;
+
+// Called from the engine task for each transmission receiver mode decodes (not for its repeats). Set once at
+// boot, before receiver mode can start; must return quickly.
+extern void (*g_rx_heard_hook)(uint8_t protocol, const uint8_t *packet, int16_t rssi_dbm);

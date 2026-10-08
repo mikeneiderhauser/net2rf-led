@@ -4,6 +4,7 @@
 #include <Update.h>
 #include <WebServer.h>
 #include <esp_core_dump.h>
+#include <esp_flash.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 #include <esp_system.h>
@@ -16,6 +17,7 @@
 #include "ota_guard.h"
 #include "panel.h"
 #include "pins.h"
+#include "store.h"
 #include "updater.h"
 #include "web_ui.h"
 
@@ -701,7 +703,21 @@ static void handle_update_upload() {
 // firmware slot and the settings store). Fixed until the next flash, apart from the settings usage.
 static void handle_flash() {
     JsonDocument doc;
-    doc["flash_bytes"] = ESP.getFlashChipSize();
+    doc["flash_bytes"] = ESP.getFlashChipSize();  // what the firmware was built for
+    // The chip itself: JEDEC id (manufacturer, type, capacity code: the chip holds 2^code bytes), and how it is driven.
+    uint32_t jedec = 0, real_bytes = 0;
+    if (esp_flash_read_id(esp_flash_default_chip, &jedec) == ESP_OK) {
+        char hex[9];
+        snprintf(hex, sizeof(hex), "%06X", (unsigned) (jedec & 0xFFFFFF));
+        doc["flash_id"] = hex;
+        doc["flash_maker_id"] = (jedec >> 16) & 0xFF;
+    }
+    if (esp_flash_get_physical_size(esp_flash_default_chip, &real_bytes) == ESP_OK)
+        doc["flash_chip_bytes"] = real_bytes;  // can be more than flash_bytes: the rest is then unused
+    doc["flash_speed_hz"] = ESP.getFlashChipSpeed();
+    static const char *const MODES[] = {"QIO", "QOUT", "DIO", "DOUT", "fast read", "slow read"};
+    uint8_t mode = (uint8_t) ESP.getFlashChipMode();
+    doc["flash_mode"] = mode < sizeof(MODES) / sizeof(MODES[0]) ? MODES[mode] : "unknown";
     const esp_partition_t *running = esp_ota_get_running_partition();
     const esp_partition_t *next = esp_ota_get_next_update_partition(nullptr);
     JsonArray parts = doc["partitions"].to<JsonArray>();
@@ -738,8 +754,7 @@ static void handle_flash() {
 
 // The last crash, from the dump the system keeps in flash: which task, where, and the call chain (addresses to
 // look up in that build's firmware.elf). Stays until the next crash or a full flash erase.
-static void handle_crash() {
-    JsonDocument doc;
+static void crash_json(JsonObject doc) {
     esp_core_dump_summary_t *sum = (esp_core_dump_summary_t *) malloc(sizeof(esp_core_dump_summary_t));
     esp_err_t e = sum ? esp_core_dump_get_summary(sum) : ESP_ERR_NO_MEM;
     doc["present"] = e == ESP_OK;
@@ -766,7 +781,150 @@ static void handle_crash() {
         doc["error"] = esp_err_to_name(e);
     }
     free(sum);
+}
+
+static void handle_crash() {
+    JsonDocument doc;
+    crash_json(doc.to<JsonObject>());
     send_json(200, doc);
+}
+
+// ---- Board store: JSON files on the data partition (src/store.cpp) ----
+
+static void send_download(const String &file_name, const String &body) {
+    s_server.sendHeader("Cache-Control", "no-store");
+    s_server.sendHeader("Content-Disposition", "attachment; filename=\"" + file_name + "\"");
+    s_server.send(200, "application/json", body);
+}
+
+// Everything worth sending along with a fault report, in one file: device, network and engine status, the last
+// crash, the boot log, what receiver mode has heard, saved captures (without pulses) and the settings. No
+// Wi-Fi or admin password.
+static void handle_store_bundle() {
+    JsonDocument doc;
+    doc["format"] = "net2rf-led-diagnostics";
+    JsonObject dev = doc["device"].to<JsonObject>();
+    dev["firmware"] = FW_VERSION;
+    dev["built"] = __DATE__ " " __TIME__;
+    dev["board"] = NET2RF_BOARD_ID;
+    dev["chip"] = ESP.getChipModel();
+    dev["chip_rev"] = ESP.getChipRevision();
+    dev["suffix"] = device_suffix();
+    dev["uptime_s"] = millis() / 1000;
+    dev["reset_reason"] = reset_reason();
+    dev["free_heap"] = ESP.getFreeHeap();
+    dev["min_free_heap"] = ESP.getMinFreeHeap();
+    dev["flash_bytes"] = ESP.getFlashChipSize();
+    net::status_json(doc["network"].to<JsonObject>());
+    g_engine.status_json(doc["engine"].to<JsonObject>());
+    crash_json(doc["crash"].to<JsonObject>());
+    store::status_json(doc["store"].to<JsonObject>());
+    store::boots_json(doc["boots"].to<JsonObject>());
+    store::seen_json(doc["seen"].to<JsonObject>());
+    store::captures_json(doc["captures"].to<JsonArray>());
+    {
+        StateLock lock;
+        app_to_json(g_app, doc["settings"].to<JsonObject>());
+        net_to_json(g_net, doc["network_settings"].to<JsonObject>(), false);  // never the Wi-Fi password
+    }
+    String body;
+    serializeJsonPretty(doc, body);
+    send_download(String("net2rf-") + device_suffix() + "-diagnostics.json", body);
+}
+
+static void register_store_routes() {
+    s_server.on("/api/store", HTTP_GET, protect([]() {  // what is stored: space used and the files
+        JsonDocument doc;
+        store::status_json(doc.to<JsonObject>());
+        send_json(200, doc);
+    }));
+    s_server.on("/api/store", HTTP_POST, protect([]() {  // {"record_seen": true}
+        JsonDocument doc;
+        if (!parse_body(doc))
+            return;
+        if (!doc["record_seen"].is<bool>()) {
+            send_error(400, "record_seen must be true or false");
+            return;
+        }
+        if (store::set_record_seen(doc["record_seen"].as<bool>()))
+            send_ok();
+        else
+            send_error(500, "could not save the setting");
+    }));
+    s_server.on("/api/store/boots", HTTP_GET, protect([]() {
+        JsonDocument doc;
+        store::boots_json(doc.to<JsonObject>());
+        send_json(200, doc);
+    }));
+    s_server.on("/api/store/seen", HTTP_GET, protect([]() {
+        JsonDocument doc;
+        store::seen_json(doc.to<JsonObject>());
+        send_json(200, doc);
+    }));
+    // Saved captures: the list, or with ?slot=N one of them with its pulses.
+    s_server.on("/api/store/captures", HTTP_GET, protect([]() {
+        JsonDocument doc;
+        if (s_server.hasArg("slot")) {
+            if (!store::capture_json((uint8_t) s_server.arg("slot").toInt(), doc)) {
+                send_error(404, "no capture in that slot");
+                return;
+            }
+        } else {
+            store::captures_json(doc["captures"].to<JsonArray>());
+        }
+        send_json(200, doc);
+    }));
+    // {"id": N, "note": "..."}: keep receiver capture N. {"delete": slot}: free a slot.
+    s_server.on("/api/store/captures", HTTP_POST, protect([]() {
+        JsonDocument doc;
+        if (!parse_body(doc))
+            return;
+        if (doc["delete"].is<int>()) {
+            if (store::delete_capture(doc["delete"].as<uint8_t>()))
+                send_ok();
+            else
+                send_error(404, "no capture in that slot");
+            return;
+        }
+        int slot = store::save_capture(doc["id"] | 0u, doc["note"] | "");
+        if (slot == -1) {
+            send_error(404, "no such capture (receiver mode only keeps the last few)");
+        } else if (slot < 0) {
+            send_error(507, "no free slot: delete a saved capture first");
+        } else {
+            JsonDocument out;
+            out["ok"] = true;
+            out["slot"] = slot;
+            send_json(200, out);
+        }
+    }));
+    s_server.on("/api/store/clear", HTTP_POST, protect([]() {  // {"what": "boots" | "seen" | "captures" | "all"}
+        JsonDocument doc;
+        if (!parse_body(doc))
+            return;
+        if (store::clear(doc["what"] | ""))
+            send_ok();
+        else
+            send_error(400, "what must be boots, seen, captures or all");
+    }));
+    s_server.on("/api/store/file", HTTP_GET, protect([]() {  // ?name=boots.json: the file as stored
+        String body, name = s_server.arg("name");
+        if (!store::read_file(name, body)) {
+            send_error(404, "no such file");
+            return;
+        }
+        send_download(String("net2rf-") + device_suffix() + "-" + name, body);
+    }));
+    s_server.on("/api/store/file", HTTP_POST, protect([]() {  // {"delete": "cap0.json"}
+        JsonDocument doc;
+        if (!parse_body(doc))
+            return;
+        if (store::delete_file(doc["delete"] | ""))
+            send_ok();
+        else
+            send_error(404, "no such file");
+    }));
+    s_server.on("/api/store/bundle", HTTP_GET, protect(handle_store_bundle));
 }
 
 // ---- xLights upload: the part of WLED's JSON API its WLED driver uses (see lib/net2rf_wled) ----
@@ -885,6 +1043,7 @@ void begin() {
     s_server.on("/api/stats", HTTP_GET, handle_stats);
     s_server.on("/api/flash", HTTP_GET, handle_flash);
     s_server.on("/api/crash", HTTP_GET, protect(handle_crash));
+    register_store_routes();
     // ---- Tools page ----
     s_server.on("/api/tools", HTTP_GET, []() {  // transmit log + input channels (live view)
         JsonDocument doc;

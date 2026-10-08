@@ -12,6 +12,7 @@
 using namespace rfproto;
 
 Engine g_engine;
+void (*g_rx_heard_hook)(uint8_t protocol, const uint8_t *packet, int16_t rssi_dbm) = nullptr;
 
 static SemaphoreHandle_t s_lock = nullptr;
 
@@ -1109,6 +1110,8 @@ void Engine::poll_rx_(uint32_t now) {
         uint32_t ms = millis();
         StateLock lock;
         bool fresh = this->tracker_.apply(f, ms, rssi);
+        if (fresh && g_rx_heard_hook)
+            g_rx_heard_hook(f.protocol, f.pkt, rssi);
         RxLogEntry *e = this->rx_log_count_ ? &this->rx_log_[(this->rx_log_head_ + RX_LOG_SIZE - 1) % RX_LOG_SIZE]
                                             : nullptr;
         if (!fresh && e) {
@@ -1186,6 +1189,16 @@ bool Engine::rx_capture_json(uint32_t id, JsonObject o) {
     JsonArray p = o["pulses"].to<JsonArray>();  // + mark, - space, microseconds
     for (uint16_t i = 0; i < b->count; i++)
         p.add(b->pulses[i]);
+    return true;
+}
+
+bool Engine::rx_capture_copy(uint32_t id, rfproto::RawBurst &out, uint32_t &freq_hz) {
+    StateLock lock;
+    const rfproto::RawBurst *b = this->captures_ ? this->captures_->find(id) : nullptr;
+    if (!b)
+        return false;
+    out = *b;
+    freq_hz = this->rx_freq_;
     return true;
 }
 
