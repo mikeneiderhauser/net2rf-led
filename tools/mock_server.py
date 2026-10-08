@@ -294,6 +294,8 @@ class Handler(BaseHTTPRequestHandler):
                 out.update(done_ago_s=int(time.time() - NETCHECK["started"] - 2.5), dns={"ok": True, "ms": 41, "ip": "140.82.112.4"},
                            tcp={"ok": True, "ms": 38}, https={"ok": True, "ms": 1320, "status": 200})
             return self.send(200, out)
+        if path == "/api/update/status":
+            return self.send(200, gh_job())
         if path == "/api/flash":
             return self.send(200, {"flash_bytes": 4194304, "partitions": [
                 {"label": "nvs", "offset": 0x9000, "bytes": 0x5000, "kind": "settings", "used_bytes": 5120},

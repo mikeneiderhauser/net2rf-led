@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <Update.h>
 #include <WebServer.h>
+#include <esp_core_dump.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 #include <esp_system.h>
@@ -735,6 +736,39 @@ static void handle_flash() {
     send_json(200, doc);
 }
 
+// The last crash, from the dump the system keeps in flash: which task, where, and the call chain (addresses to
+// look up in that build's firmware.elf). Stays until the next crash or a full flash erase.
+static void handle_crash() {
+    JsonDocument doc;
+    esp_core_dump_summary_t *sum = (esp_core_dump_summary_t *) malloc(sizeof(esp_core_dump_summary_t));
+    esp_err_t e = sum ? esp_core_dump_get_summary(sum) : ESP_ERR_NO_MEM;
+    doc["present"] = e == ESP_OK;
+    doc["firmware"] = FW_VERSION;  // the build running now, which may not be the one that crashed
+    if (e == ESP_OK) {
+        char hex[11];
+        doc["task"] = sum->exc_task;
+        snprintf(hex, sizeof(hex), "0x%08x", (unsigned) sum->exc_pc);
+        doc["pc"] = hex;
+        doc["cause"] = sum->ex_info.exc_cause;
+        snprintf(hex, sizeof(hex), "0x%08x", (unsigned) sum->ex_info.exc_vaddr);
+        doc["address"] = hex;
+        doc["elf_sha256"] = (const char *) sum->app_elf_sha256;
+        JsonArray bt = doc["backtrace"].to<JsonArray>();
+        for (uint32_t i = 0; i < sum->exc_bt_info.depth && i < 16; i++) {
+            snprintf(hex, sizeof(hex), "0x%08x", (unsigned) sum->exc_bt_info.bt[i]);
+            bt.add(hex);
+        }
+        doc["backtrace_corrupted"] = (bool) sum->exc_bt_info.corrupted;
+        char reason[200];
+        if (esp_core_dump_get_panic_reason(reason, sizeof(reason)) == ESP_OK)
+            doc["reason"] = reason;
+    } else {
+        doc["error"] = esp_err_to_name(e);
+    }
+    free(sum);
+    send_json(200, doc);
+}
+
 // ---- xLights upload: the part of WLED's JSON API its WLED driver uses (see lib/net2rf_wled) ----
 
 static net2rf::WledConfig wled_view(const AppConfig &c) {
@@ -850,6 +884,7 @@ void begin() {
     s_server.on("/api/status", HTTP_GET, handle_status);
     s_server.on("/api/stats", HTTP_GET, handle_stats);
     s_server.on("/api/flash", HTTP_GET, handle_flash);
+    s_server.on("/api/crash", HTTP_GET, protect(handle_crash));
     // ---- Tools page ----
     s_server.on("/api/tools", HTTP_GET, []() {  // transmit log + input channels (live view)
         JsonDocument doc;
@@ -1000,6 +1035,13 @@ void begin() {
     // Upload handler checks credentials itself before writing flash.
     s_server.on("/update", HTTP_POST, handle_update_done, handle_update_upload);
     s_server.on("/api/update/github", HTTP_POST, protect(handle_update_github));
+    // The download job by itself: what the web UI polls during an install, when there is no memory to spare for
+    // the full status.
+    s_server.on("/api/update/status", HTTP_GET, []() {
+        JsonDocument doc;
+        updater::status_json(doc.to<JsonObject>());
+        send_json(200, doc);
+    });
     s_server.on("/api/update/check", HTTP_POST, protect([]() {
                     updater::check_now();
                     send_ok();

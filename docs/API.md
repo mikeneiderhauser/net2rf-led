@@ -38,6 +38,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | GET | `/json/info`, `/json/cfg` | The part of WLED's JSON API that xLights' WLED upload driver reads: device info, and port 1's pixel count (= zones) and input. `brand` is `Net2RF`, so xLights' WLED discovery ignores the controller. Always open. |
 | POST 🔒 | `/json/cfg` | What xLights posts on *Upload*: `hw.led.ins[0].len` sets the number of zones (pixel mode; 1-16), `if.live.port` 4048 enables DDP and 5568 enables E1.31 with `if.live.dmx.uni`. Start channel becomes 1. A zone added this way gets its own group unless it was configured before. WLED's per-port colour order is ignored (it describes LED wiring; the controller's colour order must match the model's String Type). Art-Net, more than one port or more than 16 pixels return 400. |
 | GET | `/api/flash` | Flash chip size and the partition table: `label`, `offset`, `bytes`, `kind`, and `used_bytes` for the running firmware slot and the settings store. Shown under *System → Advanced: flash storage*. Always open. |
+| GET 🔒 | `/api/crash` | The last crash, from the dump the controller keeps in flash: `present`, `task`, `reason`, `pc`, `address`, `backtrace` (addresses to look up in that build's `firmware.elf`), `elf_sha256`. Stays until the next crash. |
 | GET 🔒 | `/api/config` | Current settings (`app` + `network`, without passwords) |
 | POST 🔒 | `/api/config` | Update app settings. Any subset of the fields below. Changing `radio.type` reboots. |
 | POST 🔒 | `/api/network` | Update network settings, then reboot |
@@ -64,7 +65,8 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/reboot` | Reboot |
 | POST 🔒 | `/api/factory-reset` | Same as `/api/reset` with `all` |
 | POST 🔒 | `/api/update/check` | Ask GitHub for the latest release now (also works with the automatic check off). The result appears in `device.update_check` a few seconds later. |
-| POST 🔒 | `/api/update/github` | `{"tag": "v1.2.3", "asset": "net2rf-led-1.2.3.bin"}`: the controller downloads that file from the release of the configured repository (`update.repo`) over HTTPS and flashes it, then reboots. Returns at once; progress is `device.update_job` in `/api/status` (`state`: `idle` / `downloading` / `done` / `failed`, `progress` in %, `error`). 409 while an update is running. Needs internet access. |
+| POST 🔒 | `/api/update/github` | `{"tag": "v1.2.3", "asset": "net2rf-led-1.2.3.bin"}`: the controller downloads that file from the release of the configured repository (`update.repo`) over HTTPS and flashes it, then reboots. Returns at once; progress is `GET /api/update/status`, or `device.update_job` in `/api/status` (`state`: `idle` / `downloading` / `done` / `failed`, `progress` in %, `resumes`, `error`). A download that stalls is picked up from where it stopped. 409 while an update is running. Needs internet access. |
+| GET | `/api/update/status` | The download job only (the same object as `device.update_job`). Poll this during an install, not `/api/status`: memory is tight while the secure download runs and the full status is a large reply. |
 | POST 🔒 | `/update` | `multipart/form-data` firmware upload (`firmware.bin`). Origin and credentials are checked before anything is written to flash. Reboots when done; see *Update rollback*. |
 
 ## Settings (`/api/config` → `app`)

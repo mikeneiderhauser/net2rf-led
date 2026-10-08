@@ -109,7 +109,8 @@ signal strength is shown per transmission), or as a stand-in bracelet while you 
   controller on the same bench, since a strong signal overloads the receiver and frames stop decoding while the
   signal level reads high. *Wide band* (325 / 250 kHz) is for transmitters that are well off frequency.
 - **Raw captures:** every burst of remote-control-like pulses that is louder than the noise floor is kept, whether
-  it decoded or not. The last 4 are kept, and undecoded ones are kept longest. *View* draws the waveform, groups
+  it decoded or not, for as long as receiver mode stays on (switching it off, or a firmware update, clears them
+  and frees their memory). The last 4 are kept, and undecoded ones are kept longest. *View* draws the waveform, groups
   the mark and space widths, and, if the signal is pulse-width coded, reads its bits as hex: a quick way to see
   what an unknown transmitter or remote sends. *.ook* downloads it in [rtl_433](https://github.com/merbanan/rtl_433)'s
   pulse format; `rtl_433 -r capture.ook -A` runs rtl_433's pulse analyser on it.
@@ -162,8 +163,12 @@ name and page number.
   available; the Status page's version line says which.
 - **Sleep:** the display switches off after 10 minutes without a USER press (*System → Display*: 1 to 240
   minutes, 0 = never). It wakes on the next USER press (which only wakes it), from *Wake display* on the System
-  page, after a reboot, and by itself when the network address changes, the setup hotspot starts or stops, or
-  the radio fails. A controller without a USER button sleeps too, and relies on those.
+  page, after a reboot, and by itself when the network drops or its address changes, the setup hotspot starts
+  or stops, or the radio fails. A controller without a USER button sleeps too, and relies on those.
+- **Network drop screen:** when a working connection is lost, the OLED shows why straight away, for 30 seconds:
+  which interface dropped, the reason (for Wi-Fi the driver's reason and its code, such as `BEACON_TIMEOUT (200)`;
+  for Ethernet "link down"), how many drops there have been since boot, how long ago, and whether it is back.
+  The same record stays in `/api/status` (`network.drops`, `network.last_drop`) after the screen has gone.
 
 An OLED that isn't fitted, or stops answering, is simply ignored; the controller keeps looking for one every 5 s.
 
@@ -192,6 +197,13 @@ controller reboots.
   `firmware.bin` if you built it), not the `.factory.bin` used for the first flash.
 
 ![System page: firmware version, free memory and flash, and the update card](images/system.png)
+
+**Free memory** is shown on the Dashboard and the System page. The bar turns amber with a ⚠ *Low memory* note
+when less than about 145 KB is free, and red below about 110 KB or if it has ever dropped under 20 KB since the
+last restart. The amounts matter more than the percentage: the secure download of a firmware update from GitHub
+needs about 100 KB by itself, and stalls when there isn't enough (it stalled with 137 KB free and ran with
+152 KB). With low memory, upload the firmware file instead, or restart the controller first. Receiver mode's
+capture buffers (14 KB) are given back for an update, so they don't count towards the warning.
 
 **Release source** on the same card sets which GitHub repository is checked (`owner/name`, default
 `mikeneiderhauser/net2rf-led`). Change it only if you run firmware from a fork.

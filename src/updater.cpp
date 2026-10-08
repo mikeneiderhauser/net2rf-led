@@ -26,9 +26,10 @@ enum class State : uint8_t { IDLE, DOWNLOADING, DONE, FAILED };
 volatile State s_state = State::IDLE;
 volatile bool s_checking = false;  // the release check (below) has a connection open
 volatile uint8_t s_progress = 0;  // percent
+volatile uint8_t s_resumes = 0;   // times this download stalled and was picked up again
 char s_url[256];
 char s_tag[41];
-char s_error[96];
+char s_error[200];
 
 const char *state_name(State s) {
     switch (s) {
@@ -61,30 +62,22 @@ void fail(const String &msg) {
     s_state = State::FAILED;
 }
 
-// Returns an empty string on success, otherwise why it failed. `retry` is set when nothing was written yet and
-// trying again is worthwhile (the connection could not be made).
-String download(bool &retry) {
-    retry = false;
-    esp_http_client_config_t cfg = {};
-    cfg.url = s_url;
-    cfg.crt_bundle_attach = esp_crt_bundle_attach;  // verify GitHub's certificate against the built-in CA bundle
-    cfg.timeout_ms = 15000;
-    cfg.buffer_size = 8192;     // GitHub's response headers are long
-    cfg.buffer_size_tx = 2048;  // ... and so is the signed URL it redirects to
-    cfg.user_agent = "net2rf-led/" FW_VERSION;
-    cfg.keep_alive_enable = false;
-    esp_http_client_handle_t http = esp_http_client_init(&cfg);
-    if (!http)
-        return "out of memory";
-
-    // GitHub answers with a redirect to its file servers: follow it (a few hops at most).
+// Opens the connection for the file from byte `from` on, following GitHub's redirect to its file servers (a few
+// hops at most). Returns the HTTP status, or 0 when the connection could not be made (`e` says why); `len` is the
+// number of bytes this response carries.
+int open_at(esp_http_client_handle_t http, int64_t from, int64_t &len, esp_err_t &e) {
+    esp_http_client_set_url(http, s_url);  // a resume starts from GitHub again: the redirect target expires
+    if (from > 0) {
+        char range[40];
+        snprintf(range, sizeof(range), "bytes=%llu-", (unsigned long long) from);
+        esp_http_client_set_header(http, "Range", range);
+    }
     int code = 0;
-    int64_t len = 0;
-    esp_err_t e = ESP_OK;
+    len = 0;
     for (int hop = 0; hop < 4; hop++) {
         e = esp_http_client_open(http, 0);
         if (e != ESP_OK)
-            break;
+            return 0;
         len = esp_http_client_fetch_headers(http);
         code = esp_http_client_get_status_code(http);
         if (code != 301 && code != 302 && code != 307 && code != 308)
@@ -92,46 +85,121 @@ String download(bool &retry) {
         esp_http_client_set_redirection(http);
         esp_http_client_close(http);
     }
-    String err;
-    if (e != ESP_OK || len < 0) {
-        err = String("could not reach GitHub (") + esp_err_to_name(e != ESP_OK ? e : ESP_FAIL) + ")";
-        retry = true;
+    if (len < 0) {
+        e = ESP_FAIL;
+        return 0;
     }
-    else if (code == 404)
-        err = "release file not found";
-    else if (code != 200)
-        err = "GitHub answered HTTP " + String(code);
-    else if (len <= 0)
-        err = "unknown download size";
-    else if (!Update.begin((size_t) len, U_FLASH))
-        err = Update.errorString();
-    if (err.isEmpty()) {
-        uint8_t *buf = (uint8_t *) malloc(4096);
-        int64_t done = 0;
-        while (buf && done < len) {
-            int n = esp_http_client_read(http, (char *) buf, 4096);
-            if (n <= 0)
+    return code;
+}
+
+const int MAX_RESUMES = 40;        // in total
+const int MAX_EMPTY_RESUMES = 3;   // in a row that brought no new data
+
+// Returns an empty string on success, otherwise why it failed. `retry` is set when nothing was written yet and
+// trying again is worthwhile (the connection could not be made). A download that stalls part-way (the network
+// going quiet, a dropped connection) is picked up from where it stopped, not started again.
+String download(bool &retry) {
+    retry = false;
+    esp_http_client_config_t cfg = {};
+    cfg.url = s_url;
+    cfg.crt_bundle_attach = esp_crt_bundle_attach;  // verify GitHub's certificate against the built-in CA bundle
+    cfg.timeout_ms = 8000;
+    cfg.buffer_size = 8192;     // GitHub's response headers are long
+    cfg.buffer_size_tx = 2048;  // ... and so is the signed URL it redirects to
+    cfg.user_agent = "net2rf-led/" FW_VERSION;
+    cfg.keep_alive_enable = false;
+    esp_http_client_handle_t http = esp_http_client_init(&cfg);
+    uint8_t *buf = (uint8_t *) malloc(4096);
+    if (!http || !buf) {
+        if (http)
+            esp_http_client_cleanup(http);
+        free(buf);
+        return "out of memory";
+    }
+
+    String err;
+    bool begun = false;  // Update.begin() has run: the size is known and flash is being written
+    int64_t total = 0, done = 0;
+    int empty_resumes = 0;
+    // What a stall looked like, for the error text: the failing read, and the worst memory and timing seen.
+    int last_n = 0, last_code = 0;
+    uint32_t read_ms = 0, max_write_ms = 0, low_heap = UINT32_MAX, low_block = UINT32_MAX;
+    s_resumes = 0;
+    while (true) {
+        int64_t len = 0;
+        esp_err_t e = ESP_OK;
+        int code = open_at(http, done, len, e);
+        last_code = code;
+        if (!begun) {
+            if (code == 0) {
+                err = String("could not reach GitHub (") + esp_err_to_name(e) + ")";
+                retry = true;
+            } else if (code == 404)
+                err = "release file not found";
+            else if (code != 200)
+                err = "GitHub answered HTTP " + String(code);
+            else if (len <= 0)
+                err = "unknown download size";
+            else if (!Update.begin((size_t) len, U_FLASH))
+                err = Update.errorString();
+            if (!err.isEmpty())
                 break;
+            total = len;
+            begun = true;
+        } else if (code != 0 && (code != 206 || len != total - done)) {
+            err = "GitHub would not resume the download (HTTP " + String(code) + ")";
+            break;
+        }
+        int64_t before = done;
+        while (code != 0 && done < total) {
+            uint32_t t0 = millis();
+            int n = esp_http_client_read(http, (char *) buf, 4096);
+            read_ms = millis() - t0;
+            low_heap = min(low_heap, (uint32_t) ESP.getFreeHeap());
+            low_block = min(low_block, (uint32_t) ESP.getMaxAllocHeap());
+            if (n <= 0) {
+                last_n = n;
+                break;
+            }
+            t0 = millis();
             if (Update.write(buf, n) != (size_t) n) {
                 err = Update.errorString();
                 break;
             }
+            max_write_ms = max(max_write_ms, (uint32_t) (millis() - t0));
             done += n;
-            s_progress = (uint8_t) (done * 100 / len);
+            s_progress = (uint8_t) (done * 100 / total);
         }
-        free(buf);
-        if (err.isEmpty() && done != len)
-            err = buf ? "download incomplete (" + String((uint32_t) done) + " of " + String((uint32_t) len) + " bytes)"
-                      : String("out of memory");
+        esp_http_client_close(http);
+        if (!err.isEmpty() || done == total)
+            break;
+        // Stalled or cut off: carry on from `done`, unless it keeps happening without getting anywhere.
+        empty_resumes = done > before ? 0 : empty_resumes + 1;
+        if (s_resumes >= MAX_RESUMES || empty_resumes >= MAX_EMPTY_RESUMES) {
+            char why[176];
+            snprintf(why, sizeof(why),
+                     "download incomplete (%u of %u bytes after %u resumes; last: HTTP %d, read %d after %u ms; "
+                     "heap low %u, block low %u; slowest write %u ms)",
+                     (unsigned) done, (unsigned) total, (unsigned) s_resumes, last_code, last_n, (unsigned) read_ms,
+                     (unsigned) low_heap, (unsigned) low_block, (unsigned) max_write_ms);
+            err = why;
+            break;
+        }
+        s_resumes = s_resumes + 1;
+        log_w("Download stalled at %u of %u bytes (read %d after %u ms): resuming (%u)", (unsigned) done,
+              (unsigned) total, last_n, (unsigned) read_ms, (unsigned) s_resumes);
+        delay(1000);
+    }
+    free(buf);
+    if (begun) {
         if (err.isEmpty() && !Update.end(true))
             err = Update.errorString();
         if (!err.isEmpty())
             Update.abort();
     }
-    esp_http_client_close(http);
     esp_http_client_cleanup(http);
     if (err.isEmpty())
-        log_i("Update %s written (%u bytes)", s_tag, (unsigned) len);
+        log_i("Update %s written (%u bytes, %u resumes)", s_tag, (unsigned) total, (unsigned) s_resumes);
     return err;
 }
 
@@ -461,6 +529,8 @@ void status_json(JsonObject out) {
         return;
     out["tag"] = s_tag;
     out["progress"] = s_progress;
+    if (s_resumes)
+        out["resumes"] = s_resumes;
     if (s == State::FAILED)
         out["error"] = s_error;
 }

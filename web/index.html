@@ -463,9 +463,16 @@ function fmtBytes(b){b=Number(b);return b<1024?b+' B':b<1048576?(b/1024).toFixed
 function fmtAge(ms){if(ms<0)return'never';const s=ms/1000;return s<1?'just now':s<60?Math.round(s)+'s ago':s<3600?Math.round(s/60)+'m ago':Math.round(s/3600)+'h ago'}
 // room left in the firmware slot: what a future, larger firmware can still grow into
 // utilization bar: how full something is (amber from 80%, red from 92%)
-const util=pct=>`<div class="util${pct>=92?' bad':pct>=80?' warn':''}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" title="${pct}% used"><i style="width:${Math.min(100,pct)}%"></i></div>`;
-function heapFree(d,long){if(!d.heap_bytes)return fmtBytes(d.free_heap);const used=Math.round((d.heap_bytes-d.free_heap)/d.heap_bytes*100);
-  return util(used)+'<span class="small">'+(long?`${fmtBytes(d.free_heap)} free of ${fmtBytes(d.heap_bytes)} (${used}% used; lowest since boot ${fmtBytes(d.min_free_heap)} free)`:`${fmtBytes(d.free_heap)} free (${used}% used)`)+'</span>'}
+const util=(pct,lv)=>`<div class="util${lv!==undefined?(lv?' '+lv:''):pct>=92?' bad':pct>=80?' warn':''}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" title="${pct}% used"><i style="width:${Math.min(100,pct)}%"></i></div>`;
+// Free memory is judged by the amount, not the percentage: the secure download of a firmware update needs about
+// 100 KB on top of everything else, and stalled with 137 KB free (fine with 152 KB). Receiver mode's capture
+// buffers (14 KB) are given back for an update, so they don't count against it.
+const HEAP_WARN=145e3,HEAP_BAD=110e3,HEAP_RX=14e3,HEAP_MIN_BAD=20e3;
+function heapLevel(d){const free=d.free_heap+(S&&S.engine&&S.engine.receiver.active?HEAP_RX:0);
+  return free<HEAP_BAD||d.min_free_heap<HEAP_MIN_BAD?'bad':free<HEAP_WARN?'warn':''}
+function heapFree(d,long){if(!d.heap_bytes)return fmtBytes(d.free_heap);const used=Math.round((d.heap_bytes-d.free_heap)/d.heap_bytes*100),lv=heapLevel(d);
+  const note=!lv?'':`<br><span class="small" style="color:var(--${lv})">⚠ ${lv==='bad'?'Very low':'Low'} memory${long?': a firmware update from GitHub may stall. Upload the file instead, or restart the controller first.':''}</span>`;
+  return util(used,lv)+'<span class="small">'+(long?`${fmtBytes(d.free_heap)} free of ${fmtBytes(d.heap_bytes)} (${used}% used; lowest since boot ${fmtBytes(d.min_free_heap)} free)`:`${fmtBytes(d.free_heap)} free (${used}% used)`)+'</span>'+note}
 function flashFree(d,long){if(!d.firmware_slot_bytes)return'–';const free=d.firmware_slot_bytes-d.firmware_bytes,used=Math.round(d.firmware_bytes/d.firmware_slot_bytes*100);
   return util(used)+'<span class="small">'+(long?`${fmtBytes(free)} free of ${fmtBytes(d.firmware_slot_bytes)} (firmware uses ${fmtBytes(d.firmware_bytes)}, ${used}%)`:`${fmtBytes(free)} free (${used}% used)`)+'</span>'}
 // System page: the whole flash chip, partition by partition
@@ -496,7 +503,7 @@ function show(page){if(!PAGES[page])page='dashboard';
 window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
 
 // ---------- status polling ----------
-async function poll(){try{S=await api('status');render();if(location.hash==='#tools'){gUi();rwTick();toolsLive()}}catch(e){$('pills').innerHTML=pill('bad','offline')}}
+async function poll(){try{if(ghWatch&&S){S.device.update_job=await api('update/status');ghJob();return}S=await api('status');render();if(location.hash==='#tools'){gUi();rwTick();toolsLive()}}catch(e){$('pills').innerHTML=pill('bad','offline')}}
 function inputState(i){if(S.engine.test.mode!=='off')return['warn','Test mode'];if(i.out_of_range_channel)return['bad','Wrong channels'];if(!i.seen)return['','No DDP yet'];if(i.timed_out)return['warn','Timed out (blank)'];return i.age_ms<3000?['good','Receiving']:['','Idle']}
 function radioState(r){return r.state==='ready'&&r.data_line==='fault'?['bad','data line fault']:r.state==='ready'?['good','ready']:r.state==='not_detected'?['bad','not detected']:r.state==='off'?['','shut down']:['warn','initializing']}
 function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.toggle('hide',!(ap&&CNA));
@@ -1003,7 +1010,7 @@ $('s_ghCheck').onclick=async()=>{const repo=C&&C.app.update?C.app.update.repo:''
 $('s_ghInstall').onclick=async()=>{if(!GH||!await ask(`Download and install ${GH.tag} from GitHub? RF output pauses and the controller reboots.`))return;
   await api('update/github',{tag:GH.tag,asset:GH.asset});ghWatch=true;$('s_ghInstall').classList.add('hide');$('s_ghProg').classList.remove('hide');poll()};
 function ghJob(){const j=S.device.update_job;if(!j||j.state==='idle'||!ghWatch&&j.state!=='downloading')return;const msg=$('s_ghMsg'),pr=$('s_ghProg');
-  if(j.state==='downloading'){ghWatch=true;pr.classList.remove('hide');pr.value=j.progress;msg.textContent=`Downloading ${j.tag}… ${j.progress}%`}
+  if(j.state==='downloading'){ghWatch=true;pr.classList.remove('hide');pr.value=j.progress;msg.textContent=`Downloading ${j.tag}… ${j.progress}%${j.resumes?` (picked up again ${j.resumes}×)`:''}`}
   else if(j.state==='done'){ghWatch=false;pr.value=100;msg.textContent=`${j.tag} installed. Rebooting…`;setTimeout(()=>location.reload(),12000)}
   else if(j.state==='failed'){ghWatch=false;pr.classList.add('hide');
     msg.innerHTML=`<span class="badge bad">update failed</span> ${esc(j.error||'')}.`+(GH?` If the controller has no internet access, <a href="${esc(GH.url)}" rel="noopener">download the .bin</a> and upload it above.`:'')}}
