@@ -351,11 +351,6 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="util" id="cm_bar" style="height:14px"><i style="width:0"></i></div>
       <div class="small dim" id="cm_info"></div>
     </div>
-    <div class="card"><h2>Connection check</h2>
-      <p class="dim small" style="margin-top:0">Can the controller itself reach GitHub? It needs to for the automatic update check and to install a release. Takes a few seconds.</p>
-      <div class="actions" style="margin-top:0"><button class="primary" id="nc_run">Run check</button><span class="small dim" id="nc_state"></span></div>
-      <dl class="kv" id="nc_out"></dl>
-    </div>
     <div class="card"><h2>Identify</h2>
       <p class="dim small" style="margin-top:0">Flickers the status LED and flashes &ldquo;THIS ONE&rdquo; on the OLED for 15&nbsp;s, to tell this controller apart from others.</p>
       <div class="actions" style="margin-top:0"><button class="primary" id="idn_go">Identify this controller</button><button id="idn_stop">Stop</button></div>
@@ -374,14 +369,12 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
         <div class="actions"><button class="primary" id="s_upload" disabled>Upload</button></div>
         <progress id="s_prog" class="hide" max="100" value="0"></progress><div class="small dim" id="s_upMsg"></div>
         <h3 style="margin:16px 0 4px">From GitHub releases</h3>
-        <p class="dim small" style="margin-top:0">Your browser asks GitHub for the latest release; the controller then downloads and installs it itself, so it needs internet access.</p>
+        <p class="dim small" style="margin-top:0">Your browser asks GitHub for the latest release, downloads it and hands it to the controller, which only has to write it. The controller itself never contacts GitHub, so it needs no internet access. If this browser cannot fetch the file, download the .bin and use <i>Upload</i> above.</p>
         <div class="actions"><button id="s_ghCheck">Check for updates</button><button class="hide" id="s_ghInstall"></button></div>
         <div class="small" id="s_ghMsg" style="margin-top:6px"></div>
         <progress id="s_ghProg" class="hide" max="100" value="0"></progress>
         <div class="small dim" id="s_ghAuto" style="margin-top:6px"></div>
-        <div class="grid" style="margin-top:10px"><label>Release source (GitHub owner/name)<input id="s_ghRepo" class="mono" maxlength="63" placeholder="mikeneiderhauser/net2rf-led"></label>
-          <label>Check every (hours)<input id="s_ghHours" type="number" min="1" max="168"></label>
-          <label class="inline"><input type="checkbox" id="s_ghAutoOn"> Check for new releases automatically (after boot, then on this schedule)</label></div>
+        <div class="grid" style="margin-top:10px"><label>Release source (GitHub owner/name)<input id="s_ghRepo" class="mono" maxlength="63" placeholder="mikeneiderhauser/net2rf-led"></label></div>
         <div class="actions"><button id="s_ghSave">Save</button></div>
       </div>
     </div>
@@ -424,6 +417,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <p class="dim small" style="margin-top:10px">The controller keeps a boot log, the transmitters receiver mode has heard and any captures you saved, as small JSON files. They survive restarts, firmware updates and a factory reset; a full flash erase removes them.</p>
       <div class="actions" style="margin-top:0"><a href="/api/store/bundle"><button title="Status, last crash, boot log, heard transmitters and settings in one file. No Wi-Fi or admin password.">Download diagnostics</button></a>
         <a href="/api/export"><button title="Settings and network in one file, as Export above">settings.json</button></a></div>
+      <div class="small" id="s_heapSum" style="margin-top:10px"></div>
       <div class="small dim" id="s_storeSum" style="margin-top:10px"></div>
       <table class="tbl" style="width:100%"><thead><tr><th>File</th><th>Holds</th><th>Size</th><th></th></tr></thead><tbody id="s_storeFiles"></tbody></table>
       <h3 style="margin:14px 0 6px">Restarts</h3>
@@ -479,19 +473,14 @@ function fmtAge(ms){if(ms<0)return'never';const s=ms/1000;return s<1?'just now':
 // room left in the firmware slot: what a future, larger firmware can still grow into
 // utilization bar: how full something is (amber from 80%, red from 92%)
 const util=(pct,lv)=>`<div class="util${lv!==undefined?(lv?' '+lv:''):pct>=92?' bad':pct>=80?' warn':''}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" title="${pct}% used"><i style="width:${Math.min(100,pct)}%"></i></div>`;
-// Free memory is judged by the amount, not the percentage: the secure download of a firmware update needs about
-// 100 KB on top of everything else, and stalled with 137 KB free (fine with 152 KB). Receiver mode's capture
-// buffers (14 KB) are given back for an update, so they don't count against it.
-const HEAP_WARN=145e3,HEAP_BAD=110e3,HEAP_RX=14e3,HEAP_MIN_BAD=20e3;
-// While the controller is itself talking to GitHub (a check for updates, or a download) that secure connection
-// holds ~100 KB, so free memory dips for a few seconds: that is the cost being measured, not a shortage. The
-// level from just before is kept until it has finished.
-let heapLevelLast='';
-function heapBusy(d){const j=d.update_job&&d.update_job.state;return!!(d.update_check&&d.update_check.checking)||(!!j&&j!=='idle'&&j!=='failed')}
-function heapLevel(d){if(heapBusy(d))return heapLevelLast;const free=d.free_heap+(S&&S.engine&&S.engine.receiver.active?HEAP_RX:0);
-  return heapLevelLast=free<HEAP_BAD||d.min_free_heap<HEAP_MIN_BAD?'bad':free<HEAP_WARN?'warn':''}
+// Free memory is judged by the amount, not the percentage. Nothing the controller does in normal running needs a
+// large block any more (firmware arrives by upload; it never opens a secure connection for updates), so the
+// warning is only for a controller that is really running out.
+const HEAP_WARN=60e3,HEAP_BAD=30e3,HEAP_MIN_BAD=8e3;
+function heapBusy(d){return false}
+function heapLevel(d){return d.free_heap<HEAP_BAD||d.min_free_heap<HEAP_MIN_BAD?'bad':d.free_heap<HEAP_WARN?'warn':''}
 function heapFree(d,long){if(!d.heap_bytes)return fmtBytes(d.free_heap);const used=Math.round((d.heap_bytes-d.free_heap)/d.heap_bytes*100),lv=heapLevel(d);
-  const note=!lv?'':`<br><span class="small" style="color:var(--${lv})">⚠ ${lv==='bad'?'Very low':'Low'} memory${long?': a firmware update from GitHub may stall. Upload the file instead, or restart the controller first.':''}</span>`;
+  const note=!lv?'':`<br><span class="small" style="color:var(--${lv})">⚠ ${lv==='bad'?'Very low':'Low'} memory${long?': restart the controller if it misbehaves, and please report it.':''}</span>`;
   return util(used,lv)+'<span class="small">'+(long?`${fmtBytes(d.free_heap)} free of ${fmtBytes(d.heap_bytes)} (${used}% used; lowest since boot ${fmtBytes(d.min_free_heap)} free)`:`${fmtBytes(d.free_heap)} free (${used}% used)`)+(heapBusy(d)?' <span class="dim">(talking to GitHub)</span>':'')+'</span>'+note}
 function flashFree(d,long){if(!d.firmware_slot_bytes)return'–';const free=d.firmware_slot_bytes-d.firmware_bytes,used=Math.round(d.firmware_bytes/d.firmware_slot_bytes*100);
   return util(used,'')+'<span class="small">'+(long?`${fmtBytes(free)} free of ${fmtBytes(d.firmware_slot_bytes)} (firmware uses ${fmtBytes(d.firmware_bytes)}, ${used}%)`:`${fmtBytes(free)} free (${used}% used)`)+'</span>'}
@@ -501,7 +490,10 @@ const FLASH_KIND={firmware_running:['Firmware (running)','#2dd4bf'],firmware_nex
   boot:['Bootloader and partition table','#94a3b8'],free:['Not allocated','transparent']};
 // System page: the board records (src/store.cpp). Fetched when the section is opened.
 const STORE_FILE={'boots.json':'Restarts and crashes','seen.json':'Transmitters heard in receiver mode'};
-async function storeInfo(){let st,b,sn;try{[st,b,sn]=await Promise.all([api('store'),api('store/boots'),api('store/seen')])}catch(e){return}
+async function storeInfo(){let st,b,sn;try{const h=await api('heap');
+    $('s_heapSum').innerHTML=`<b>Memory:</b> ${fmtBytes(h.free)} free, largest single block ${fmtBytes(h.largest_block)}, lowest since boot ${fmtBytes(h.min_free)}.`
+      +(h.tasks.length?` Unused stack: ${h.tasks.map(t=>esc(t.name)+' '+fmtBytes(t.stack_unused)).join(', ')}.`:'')}catch(e){}
+  try{[st,b,sn]=await Promise.all([api('store'),api('store/boots'),api('store/seen')])}catch(e){return}
   if(!st.mounted){$('s_storeSum').textContent='No storage partition on this board: nothing is kept.';return}
   $('s_storeSum').textContent=`${fmtBytes(st.used_bytes)} of ${fmtBytes(st.total_bytes)} used. Written ${fmtN(st.writes)} times so far; the flash is good for roughly a million.`+(st.boot_log_paused?' Restart loop: the boot log is paused until this boot has stayed up a minute.':'');
   $('s_recSeen').checked=st.record_seen;
@@ -551,7 +543,7 @@ function show(page){if(!PAGES[page])page='dashboard';
 window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
 
 // ---------- status polling ----------
-async function poll(){try{if(ghWatch&&S){S.device.update_job=await api('update/status');ghJob();return}S=await api('status');render();if(location.hash==='#tools'){gUi();rwTick();toolsLive()}}catch(e){$('pills').innerHTML=pill('bad','offline')}}
+async function poll(){try{S=await api('status');render();if(location.hash==='#tools'){gUi();rwTick();toolsLive()}}catch(e){$('pills').innerHTML=pill('bad','offline')}}
 function inputState(i){if(S.engine.test.mode!=='off')return['warn','Test mode'];if(i.out_of_range_channel)return['bad','Wrong channels'];if(!i.seen)return['','No DDP yet'];if(i.timed_out)return['warn','Timed out (blank)'];return i.age_ms<3000?['good','Receiving']:['','Idle']}
 function radioState(r){return r.state==='ready'&&r.data_line==='fault'?['bad','data line fault']:r.state==='ready'?['good','ready']:r.state==='not_detected'?['bad','not detected']:r.state==='off'?['','shut down']:['warn','initializing']}
 function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.toggle('hide',!(ap&&CNA));
@@ -809,7 +801,7 @@ $('w_prev').onclick=()=>{if(W.list.length){walkPause(true);walkShow(W.i-1)}};
 $('w_next').onclick=()=>{if(W.list.length){walkPause(true);walkShow(W.i+1)}};
 $('w_stop').onclick=()=>walkStop(true);
 
-// ---- tools: group tester, range walk, input monitor, transmit log, channel meter, connection check, identify
+// ---- tools: group tester, range walk, input monitor, transmit log, channel meter, identify
 const P0NAME={0:'red',1:'green',2:'blue',3:'pink',4:'white',5:'yellow',8:'violet',9:'orange',10:'indigo',11:'cyan'};
 const p0rgb=c=>{const e=PAL.find(x=>x[0]===c);return e?'#'+hx(e[1])+hx(e[2])+hx(e[3]):''};
 // who a protocol 0 mask reaches, in words; a nearly full mask reads better as "all except"
@@ -859,15 +851,6 @@ async function cmTick(){let r;try{const x=await fetch('/api/rssi');r=await x.jso
 $('cm_start').onclick=()=>{clearInterval(CM.timer);CM={timer:setInterval(cmTick,400),peak:-127,floor:0};cmTick()};
 $('cm_stop').onclick=()=>{clearInterval(CM.timer);CM.timer=null};
 
-const okBadge=(ok,t)=>`<span class="badge ${ok?'good':'bad'}">${ok?'ok':'failed'}</span> <span class="dim small">${esc(t)}</span>`;
-async function ncShow(){let r;try{r=await api('net/check')}catch(e){return}
-  if(r.running){$('nc_state').textContent='checking…';setTimeout(ncShow,700);return}
-  $('nc_run').disabled=false;$('nc_state').textContent=r.dns?`done ${r.done_ago_s<5?'just now':fmtUp(r.done_ago_s)+' ago'}`:'';if(!r.dns)return;
-  const n=S.network,rows=[['Controller',`${esc(n.ip)} <span class="dim small">${esc(n.interface)}</span>`],['Look up '+r.host,okBadge(r.dns.ok,r.dns.ok?`${r.dns.ip} in ${r.dns.ms} ms`:'DNS did not answer: check the DNS server and gateway on the Network page')]];
-  if(r.dns.ok)rows.push(['Connect (port 443)',okBadge(r.tcp.ok,r.tcp.ok?`${r.tcp.ms} ms`:'no route to the internet, or a firewall is blocking it')]);
-  if(r.dns.ok&&r.tcp.ok)rows.push(['Secure request',okBadge(r.https.ok,r.https.ok?`HTTP ${r.https.status} in ${r.https.ms} ms`:(r.https.error||'failed')+(r.https.status?`, HTTP ${r.https.status}`:''))]);
-  rows.push(['Result',r.dns.ok&&r.tcp.ok&&r.https.ok?'The controller can reach GitHub: update checks and installs will work.':'The controller cannot reach GitHub. Updates still work by uploading the .bin file on the System page.']);kv($('nc_out'),rows)}
-$('nc_run').onclick=async()=>{$('nc_run').disabled=true;try{await api('net/check',{})}catch(e){$('nc_run').disabled=false;return}setTimeout(ncShow,500)};
 
 $('idn_go').onclick=()=>api('identify',{seconds:15}).then(()=>toast('Identifying for 15 s'));
 $('idn_stop').onclick=()=>api('identify',{seconds:0});
@@ -1018,7 +1001,7 @@ const GH_URL='https://github.com/mikeneiderhauser/net2rf-led';
 // Release files are per board: the WT32-ETH01's carry no board tag, every other board's do (see src/pins.h).
 const OTHER_BOARD_TAGS=['-xiao-esp32s3-'];
 function forBoard(name){const b=(S&&S.device.board)||'wt32-eth01';return b==='wt32-eth01'?!OTHER_BOARD_TAGS.some(t=>name.includes(t)):name.includes('-'+b+'-')}
-function sysInfo(){authUi();displayUi();ghFill();ghJob();fwNotice();const d=S.device;
+function sysInfo(){authUi();displayUi();ghFill();fwNotice();const d=S.device;
   const upd=d.update_pending?'<span class="badge warn">new update, confirming…</span>':d.update_rolled_back?'<span class="badge bad">last update failed and was rolled back</span>':'<span class="badge good">confirmed</span>';
   kv($('s_info'),[['Version',d.firmware],['Project',`<a href="${GH_URL}" target="_blank" rel="noopener">github.com/mikeneiderhauser/net2rf-led</a><br><span class="small"><a href="${GH_URL}#documentation" target="_blank" rel="noopener">docs</a> · <a href="${GH_URL}/releases" target="_blank" rel="noopener">releases</a> · <a href="${GH_URL}/issues" target="_blank" rel="noopener">report a problem</a> · GPL-3.0</span>`],['Update state',upd],['Built',d.built],['Board',esc(d.board_name||'WT32-ETH01')],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',heapFree(d,true)],['Free flash',flashFree(d,true)],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`${d.display_info.type.toUpperCase()} at ${d.display_info.address}`:'none']])}
 $('s_file').onchange=()=>{$('s_upload').disabled=!$('s_file').files.length};
@@ -1029,25 +1012,32 @@ $('s_upload').onclick=async()=>{const f=$('s_file').files[0];if(!f)return;if(!aw
   x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}if(x.status===401)j.error='admin password required';if(x.status===200&&j.ok){$('s_upMsg').textContent='Update complete. Rebooting…';setTimeout(()=>location.reload(),9000)}else{$('s_upMsg').textContent='Update failed: '+(j.error||x.status);$('s_upload').disabled=false}};
   x.onerror=()=>{$('s_upMsg').textContent='Upload failed';$('s_upload').disabled=false};x.open('POST','/update');x.send(fd)};
 // tools: firmware from GitHub releases. The browser finds the release; the controller downloads it.
-let GH=null,ghWatch=false;
+let GH=null;
 const verNum=v=>String(v).replace(/^v/,'').split('-')[0].split('.').map(n=>+n||0);
 const verCmp=(a,b)=>{a=verNum(a);b=verNum(b);for(let i=0;i<3;i++){const d=(a[i]||0)-(b[i]||0);if(d)return d}return 0};
 let ghFilled=false;
-function ghFill(){if(!C||!C.app.update||ghFilled)return;ghFilled=true;const u=C.app.update;$('s_ghRepo').value=u.repo;$('s_ghHours').value=u.check_hours;$('s_ghAutoOn').checked=u.auto_check}
-// what the controller's own release check found: dashboard notice + a status line on the System page
+function ghFill(){if(!C||!C.app.update||ghFilled)return;ghFilled=true;const u=C.app.update;$('s_ghRepo').value=u.repo}
+// The latest release, as some browser last told the controller: dashboard notice + a status line on the System
+// page. The controller does not ask GitHub itself; this page does, once when it opens (ghAuto) and on request.
 function fwNotice(){const u=S.device.update_check,n=$('d_fwNote');if(!u)return;
   n.classList.toggle('hide',!u.available);if(u.available)n.innerHTML=`Firmware <b>${esc(u.latest)}</b> is available (running ${esc(S.device.firmware)}). <a href="#system">Update on the System page</a>`;
-  const ago=u.checked_ago_s===undefined?'':` Checked ${u.checked_ago_s<90?'just now':fmtUp(u.checked_ago_s)+' ago'}.`;
-  $('s_ghAuto').textContent=u.checking?'Controller is checking GitHub…':u.error?`Controller's check: ${u.error}.`+ago:u.latest?`Controller's check: latest release is ${u.latest}${u.available?' (newer than this firmware)':''}.`+ago:
-    u.auto_check?'Controller checks about 30 s after boot, then every '+u.check_hours+' h.':'Automatic check is off.'}
-$('s_ghSave').onclick=async()=>{await api('config',{update:{repo:$('s_ghRepo').value.trim(),auto_check:$('s_ghAutoOn').checked,check_hours:+$('s_ghHours').value||12}});
+  $('s_ghAuto').textContent=u.latest?`Latest release seen: ${u.latest}${u.available?' (newer than this firmware)':''}, reported ${u.reported_ago_s<90?'just now':fmtUp(u.reported_ago_s)+' ago'} by a browser on this page.`:
+    'No release check yet since the controller started. This page checks when it opens; the controller never does.';
+  ghAuto()}
+async function ghLatest(repo){const r=await fetch(`https://api.github.com/repos/${repo}/releases/latest`,{headers:{Accept:'application/vnd.github+json'}});return r}
+let ghAutoDone=false;
+async function ghAuto(){const u=S.device.update_check;if(ghAutoDone||!C||!C.app.update||!C.app.update.repo)return;ghAutoDone=true;
+  if(u.latest&&u.reported_ago_s<6*3600)return;  // fresh enough: GitHub rate-limits anonymous requests
+  try{const r=await ghLatest(C.app.update.repo);if(!r.ok)return;const rel=await r.json();if(rel.tag_name)await fetch('/api/update/latest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:rel.tag_name})})}catch(e){}}
+$('s_ghSave').onclick=async()=>{await api('config',{update:{repo:$('s_ghRepo').value.trim()}});ghAutoDone=false;
   await loadConfig();ghFilled=false;ghFill();GH=null;$('s_ghInstall').classList.add('hide');$('s_ghMsg').textContent='';toast('Update settings saved')};
 $('s_ghCheck').onclick=async()=>{const repo=C&&C.app.update?C.app.update.repo:'',msg=$('s_ghMsg'),btn=$('s_ghInstall');GH=null;btn.classList.add('hide');
-  if(!repo)return;msg.textContent='Checking '+repo+'…';api('update/check',{}).catch(()=>{});  // refresh the controller's own check too
-  let r;try{r=await fetch(`https://api.github.com/repos/${repo}/releases/latest`,{headers:{Accept:'application/vnd.github+json'}})}
+  if(!repo)return;msg.textContent='Checking '+repo+'…';
+  let r;try{r=await ghLatest(repo)}
   catch(e){msg.textContent='Could not reach GitHub from this browser.';return}
   if(!r.ok){msg.textContent=r.status===404?`No releases found for ${repo}.`:r.status===403?'GitHub is rate-limiting this network; try again later.':'GitHub answered '+r.status+'.';return}
-  const rel=await r.json(),asset=(rel.assets||[]).find(a=>/\.bin$/.test(a.name)&&!/factory/.test(a.name)&&forBoard(a.name)),cur=S.device.firmware,c=verCmp(rel.tag_name,cur);
+  const rel=await r.json();api('update/latest',{tag:rel.tag_name}).catch(()=>{});  // so the dashboard and OLED know
+  const asset=(rel.assets||[]).find(a=>/\.bin$/.test(a.name)&&!/factory/.test(a.name)&&forBoard(a.name)),cur=S.device.firmware,c=verCmp(rel.tag_name,cur);
   const links=` <a href="${esc(rel.html_url)}" target="_blank" rel="noopener">release notes</a>`+(asset?` · <a href="${esc(asset.browser_download_url)}" rel="noopener">download .bin</a>`:'');
   if(!asset){msg.innerHTML=`${esc(rel.tag_name)} has no firmware .bin attached.`+links;return}
   msg.innerHTML=(c>0?`<span class="badge warn">${esc(rel.tag_name)} available</span> running ${esc(cur)}.`:
@@ -1055,13 +1045,26 @@ $('s_ghCheck').onclick=async()=>{const repo=C&&C.app.update?C.app.update.repo:''
     cur.includes('-')?`<span class="badge">development build</span> running ${esc(cur)}; latest release is ${esc(rel.tag_name)}.`:
     `<span class="badge good">up to date</span> running ${esc(cur)}; latest release is ${esc(rel.tag_name)}.`)+links;
   GH={tag:rel.tag_name,asset:asset.name,url:asset.browser_download_url};btn.textContent=(c>0?'Install ':c<0?'Downgrade to ':'Reinstall ')+rel.tag_name;btn.className=c>0?'primary':'';};
-$('s_ghInstall').onclick=async()=>{if(!GH||!await ask(`Download and install ${GH.tag} from GitHub? RF output pauses and the controller reboots.`))return;
-  await api('update/github',{tag:GH.tag,asset:GH.asset});ghWatch=true;$('s_ghInstall').classList.add('hide');$('s_ghProg').classList.remove('hide');poll()};
-function ghJob(){const j=S.device.update_job;if(!j||j.state==='idle'||!ghWatch&&j.state!=='downloading')return;const msg=$('s_ghMsg'),pr=$('s_ghProg');
-  if(j.state==='downloading'){ghWatch=true;pr.classList.remove('hide');pr.value=j.progress;msg.textContent=`Downloading ${j.tag}… ${j.progress}%${j.resumes?` (picked up again ${j.resumes}×)`:''}`}
-  else if(j.state==='done'){ghWatch=false;pr.value=100;msg.textContent=`${j.tag} installed. Rebooting…`;setTimeout(()=>location.reload(),12000)}
-  else if(j.state==='failed'){ghWatch=false;pr.classList.add('hide');
-    msg.innerHTML=`<span class="badge bad">update failed</span> ${esc(j.error||'')}.`+(GH?` If the controller has no internet access, <a href="${esc(GH.url)}" rel="noopener">download the .bin</a> and upload it above.`:'')}}
+// Install: the browser fetches the firmware from the project's GitHub Pages site (same files as the web flasher,
+// served with CORS) and uploads it like a file picked by hand, so the controller needs no secure connection and
+// no spare memory. Only the latest release is there. If the browser cannot get it, the user downloads the .bin and uploads it.
+async function ghRelay(){const repo=C.app.update.repo.split('/');if(repo.length!==2)throw new Error('repo');
+  const base=`https://${repo[0]}.github.io/${repo[1]}/`,msg=$('s_ghMsg'),pr=$('s_ghProg'),board=S.device.board;
+  const man=await (await fetch(base+'manifest.json',{cache:'no-store'})).json();
+  if(verCmp('v'+man.version,GH.tag)!==0)throw new Error('pages has '+man.version);
+  const r=await fetch(base+(board==='wt32-eth01'?'firmware.bin':`firmware-${board}.bin`),{cache:'no-store'});if(!r.ok)throw new Error('no image '+r.status);
+  msg.textContent=`Downloading ${GH.tag} in this browser…`;pr.classList.remove('hide');pr.removeAttribute('value');
+  const blob=await r.blob();if(blob.size<200e3)throw new Error('image too small');
+  await new Promise((res,rej)=>{const fd=new FormData();fd.append('firmware',blob,GH.asset);const x=new XMLHttpRequest();
+    x.upload.onprogress=ev=>{if(ev.lengthComputable){pr.value=ev.loaded/ev.total*100;msg.textContent=`Sending ${GH.tag} to the controller… ${Math.round(pr.value)}%`}};
+    x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}x.status===200&&j.ok?res():rej(Object.assign(new Error(j.error||('controller answered '+x.status)),{fatal:true}))};
+    x.onerror=()=>rej(Object.assign(new Error('upload failed'),{fatal:true}));x.open('POST','/update');x.send(fd)});
+  pr.value=100;msg.textContent=`${GH.tag} installed. Rebooting…`;setTimeout(()=>location.reload(),12000)}
+$('s_ghInstall').onclick=async()=>{if(!GH||!await ask(`Download and install ${GH.tag}? RF output pauses and the controller reboots.`))return;
+  $('s_ghInstall').classList.add('hide');
+  try{await ghRelay()}catch(e){$('s_ghProg').classList.add('hide');$('s_ghInstall').classList.remove('hide');
+    $('s_ghMsg').innerHTML=(e.fatal?`<span class="badge bad">install failed</span> ${esc(e.message)}.`:`<span class="badge warn">could not fetch ${esc(GH.tag)} in this browser</span>`)
+      +` <a href="${esc(GH.url)}" rel="noopener">Download the .bin</a> and use <i>Upload</i> above.`}};
 // what a settings file holds: "settings", "network" or both
 const cfgParts=c=>[c.app?'settings':'',c.network?'network':''].filter(Boolean);
 $('s_import').onchange=async()=>{const f=$('s_import').files[0];$('s_importBtn').disabled=true;$('s_importWhat').textContent='';if(!f)return;

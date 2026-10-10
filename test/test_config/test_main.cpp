@@ -195,6 +195,26 @@ void test_json_errors(void) {
     TEST_ASSERT_TRUE(apply(c, R"({"devices":{"mode":"vendor","protocols":[0,1]}})", err));
 }
 
+// The update settings are just the release source: the controller no longer checks for releases itself, so the
+// old check settings are gone from the JSON, and a file that still carries them imports without complaint.
+void test_update_settings(void) {
+    AppConfig c;
+    config_defaults_app(c);
+    JsonDocument out;
+    app_to_json(c, out.to<JsonObject>());
+    TEST_ASSERT_EQUAL_STRING("mikeneiderhauser/net2rf-led", out["update"]["repo"].as<const char *>());
+    TEST_ASSERT_TRUE(out["update"]["auto_check"].isNull());
+    TEST_ASSERT_TRUE(out["update"]["check_hours"].isNull());
+
+    JsonDocument in;
+    in["update"]["repo"] = "someone/fork";
+    in["update"]["auto_check"] = false;  // from an older export: ignored
+    in["update"]["check_hours"] = 999;   // out of the old range: also just ignored
+    String err;
+    TEST_ASSERT_TRUE(app_from_json(in.as<JsonObjectConst>(), c, err));
+    TEST_ASSERT_EQUAL_STRING("someone/fork", c.update_repo);
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -209,5 +229,6 @@ int main(int, char **) {
     RUN_TEST(test_json_older_clients);
     RUN_TEST(test_export_import_roundtrip);
     RUN_TEST(test_json_errors);
+    RUN_TEST(test_update_settings);
     return UNITY_END();
 }

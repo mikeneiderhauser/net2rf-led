@@ -96,7 +96,6 @@ void loop() {
     web::loop();
     panel::loop();
     peers::loop();
-    updater::loop();
     store::loop();
     ota_guard::loop(net::connected() || net::ap_active());  // web UI is up from setup()
     static uint32_t last_bind_check = 0;

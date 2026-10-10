@@ -66,9 +66,7 @@ struct AppConfig {
     uint8_t lbt_enabled;    // listen before transmit: wait for a clear channel (other controllers, key fobs)
     int8_t lbt_threshold;   // dBm; a channel louder than this counts as busy
     uint8_t radio_off;      // radio chip powered down: nothing is transmitted until it is switched back on
-    char update_repo[64];   // GitHub "owner/name" whose releases the firmware update checks and installs
-    uint8_t update_check_off;     // 1 = don't look for new releases automatically (0 = on, so older records opt in)
-    uint16_t update_check_hours;  // how often the automatic check runs
+    char update_repo[64];   // GitHub "owner/name" whose releases the web UI offers as firmware updates
     uint8_t base_layer;     // protocol 0: the all-groups zone is a base layer under the other zones
     uint8_t display_sleep;  // OLED sleep after this many minutes without a button press: 0 = default, 255 = never
     uint8_t receiver;       // 1 = receiver mode: listen on 433 MHz and show what the devices are told; never transmits
@@ -83,7 +81,6 @@ static const uint8_t DISPLAY_SLEEP_NEVER = 255;
 inline uint8_t display_sleep_minutes(const AppConfig &c) {
     return c.display_sleep == 0 ? DISPLAY_SLEEP_DEFAULT_MIN : c.display_sleep == DISPLAY_SLEEP_NEVER ? 0 : c.display_sleep;
 }
-static const uint16_t UPDATE_CHECK_DEFAULT_HOURS = 12;
 // True when transmissions may be queued (call with StateLock held).
 inline bool tx_allowed(const AppConfig &c) { return c.output_enabled && !c.radio_off && !c.receiver; }
 static const int8_t LBT_DEFAULT_THRESHOLD = -75;

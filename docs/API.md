@@ -39,6 +39,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/json/cfg` | What xLights posts on *Upload*: `hw.led.ins[0].len` sets the number of zones (pixel mode; 1-16), `if.live.port` 4048 enables DDP and 5568 enables E1.31 with `if.live.dmx.uni`. Start channel becomes 1. A zone added this way gets its own group unless it was configured before. WLED's per-port colour order is ignored (it describes LED wiring; the controller's colour order must match the model's String Type). Art-Net, more than one port or more than 16 pixels return 400. |
 | GET | `/api/flash` | Flash chip size and the partition table: `label`, `offset`, `bytes`, `kind`, and `used_bytes` for the running firmware slot and the settings store. Shown under *System → Advanced: flash storage*. Always open. |
 | GET 🔒 | `/api/crash` | The last crash, from the dump the controller keeps in flash: `present`, `task`, `reason`, `pc`, `address`, `backtrace` (addresses to look up in that build's `firmware.elf`), `elf_sha256`. Stays until the next crash. |
+| GET | `/api/heap` | Memory diagnostics: `free`, `largest_block` (what one big allocation can get), `min_free`, block counts, and per task `stack_unused`. |
 | GET 🔒 | `/api/store` | Board records kept on the data partition: `mounted`, `total_bytes`, `used_bytes`, `boot_no`, `writes` (file writes over the partition's life), `record_seen`, `boot_log_paused`, and `files` (`name`, `bytes`). See [Board records](#board-records). |
 | POST 🔒 | `/api/store` | `{"record_seen": true}`: also write the transmitters receiver mode hears to flash (off by default). |
 | GET 🔒 | `/api/store/boots` | The boot log: `boots` (count since the log began), `abnormal_streak`, `entries` (`n`, `reason`, `fw`, `prev_uptime_s`, and `pc` after a crash), oldest first, the last 32. |
@@ -64,7 +65,6 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | GET | `/api/tools` | Live data for the Tools page: `tx` = the last 24 transmissions, newest first (`age_ms`, `p` protocol, `pkt` hex, `n` repeats, `manual`, `ok`), `tx_total`, and `input` (`start`, `width`, `channels`: the raw values the zones read). Always open. |
 | GET 🔒 | `/api/rssi` | Listen on the bracelet frequency for about 20 ms, between transmissions: `peak_dbm`, `avg_dbm`, `freq_hz`. 409 if the radio can't listen (off, not ready). |
 | POST 🔒 | `/api/identify` | `{"seconds": 15}` (0-120; 0 stops): flicker the status LED and flash the OLED |
-| POST / GET 🔒 | `/api/net/check` | Start / read a connection check to GitHub: `dns` (`ok`, `ms`, `ip`), `tcp` (port 443), `https` (`ok`, `ms`, `status`), `running`. 409 while a check or update is running. |
 | POST 🔒 | `/api/display` | Any of `{"type": "ssd1306"\|"sh1106", "sleep_min": 10, "wake": true}`: OLED driver, minutes without a USER press before it sleeps (0-240, 0 = never), and switch a sleeping display back on. `device.display_info` in `/api/status` has `asleep`, `sleep_min` and `button`. |
 | POST 🔒 | `/api/raw` | `{"protocol": 1, "hex": "55000FFFFF55FF", "repeats": 3, "fix": true}`. 409 when output is disabled. |
 | POST 🔒 | `/api/stats/reset` | Zero the packet counters |
@@ -74,9 +74,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/reset` | `{"what": "settings"\|"network"\|"all"}`: put that part back to defaults (`all` = both). Reboots. |
 | POST 🔒 | `/api/reboot` | Reboot |
 | POST 🔒 | `/api/factory-reset` | Same as `/api/reset` with `all` |
-| POST 🔒 | `/api/update/check` | Ask GitHub for the latest release now (also works with the automatic check off). The result appears in `device.update_check` a few seconds later. |
-| POST 🔒 | `/api/update/github` | `{"tag": "v1.2.3", "asset": "net2rf-led-1.2.3.bin"}`: the controller downloads that file from the release of the configured repository (`update.repo`) over HTTPS and flashes it, then reboots. Returns at once; progress is `GET /api/update/status`, or `device.update_job` in `/api/status` (`state`: `idle` / `downloading` / `done` / `failed`, `progress` in %, `resumes`, `error`). A download that stalls is picked up from where it stopped. 409 while an update is running. Needs internet access. |
-| GET | `/api/update/status` | The download job only (the same object as `device.update_job`). Poll this during an install, not `/api/status`: memory is tight while the secure download runs and the full status is a large reply. |
+| POST 🔒 | `/api/update/latest` | `{"tag": "v1.2.3"}`: the web UI reports the latest release it found on GitHub, so the dashboard and the OLED can show that a newer version exists. Kept in memory only. The controller never contacts GitHub for updates itself. |
 | POST 🔒 | `/update` | `multipart/form-data` firmware upload (`firmware.bin`). Origin and credentials are checked before anything is written to flash. Reboots when done; see *Update rollback*. |
 
 ## Settings (`/api/config` → `app`)
@@ -132,7 +130,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 - Transmit order: zones are sent when their colour changes, taking turns. When zones that reach the same
   bracelets change together, the broader address goes first (all groups before a single group), so the more
   specific colour lands last.
-- `radio.type`: `cc1101` or `sx1278`. `tx_power` is clamped to the module's range. `refresh_ms` defaults to 0
+- `radio.type`: `cc1101` or `sx1278`. A new or reset controller starts on `sx1278` (WT32-ETH01) or `cc1101` (XIAO ESP32-S3). `tx_power` is clamped to the module's range. `refresh_ms` defaults to 0
   (send on change only): the bracelets latch, and extra airtime only adds interference.
 - `radio.power`: `false` = radio chip shut down (same as `POST /api/radio`).
 - `role`: `controller` (default) or `receiver`. A receiver never transmits: it listens between the two protocol
@@ -151,12 +149,8 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
   for being no louder than the noise floor. `GET /api/rx/capture?id=N` returns one: `pulses` is a list of
   durations in µs, positive = carrier on, negative = off. Add `&format=ook` for rtl_433's pulse-data text.
 - `display.sleep_min`: minutes without a USER button press before the OLED switches off (default 10, 0 = never).
-- `update.repo`: GitHub repository (`owner/name`) whose releases the firmware update checks and installs.
+- `update.repo`: GitHub repository (`owner/name`) whose releases the web UI offers as firmware updates.
   Default `mikeneiderhauser/net2rf-led`; `""` restores the default.
-- `update.auto_check` (default `true`) and `update.check_hours` (1-168, default 12): the controller looks up the
-  latest release about 30 s after boot and then on this period. It reads which tag
-  `github.com/<repo>/releases/latest` redirects to: one small HTTPS request, no GitHub API. If GitHub can't be
-  reached it retries after 1 minute, doubling up to 15. Nothing is installed automatically.
 - `radio.lbt_enabled` (listen before transmit, off by default): before each update the radio listens for 2.5 ms
   and only transmits if the strongest signal stayed below `lbt_threshold_dbm` (-120..-30, default -75).
   Otherwise it backs off a random 3-15 ms and listens again, for at most 250 ms, then sends anyway. Set the
@@ -189,18 +183,16 @@ listened first, `lbt_waits` those that found the channel busy, `lbt_forced` thos
 `lbt_wait_ms` the total delay. A steadily rising `lbt_forced` means the channel is saturated: lower the load
 (fewer updates, fewer repeats) or the number of transmitters. `POST /api/stats/reset` zeroes the counters.
 
-`firmware` is the running version, and `update` the controller's release check, also in `/api/status` as
-`device.update_check`:
+`firmware` is the running version, and `update` the latest release a browser has reported (`POST /api/update/latest`),
+also in `/api/status` as `device.update_check`:
 
 ```json
 "firmware": "0.0.3",
-"update": {"auto_check": true, "check_hours": 12, "checking": false, "latest": "v0.0.4", "available": true,
-           "checked_ago_s": 840}
+"update": {"available": true, "latest": "v0.0.4", "reported_ago_s": 840}
 ```
 
-`available` is true when `latest` is newer than the running firmware. `latest` and `checked_ago_s` are missing
-until a check has run; `error` is set when the last one failed (`could not reach GitHub (...)`, `no releases
-found`, `repository not found`).
+`available` is true when `latest` is newer than the running firmware. `latest` and `reported_ago_s` are missing
+until a browser has reported one since the controller started.
 
 ## Controller discovery
 
@@ -294,3 +286,11 @@ about two, so it is good for roughly a million writes. One write per boot is cen
 cases that could matter are paced: a restart loop stops writing the boot log, and the heard list is opt-in
 and written at most every 15 minutes (a new transmitter within one). Every file carries the running total as
 `w`, reported as `writes`.
+
+## Firmware updates
+
+Firmware is installed by uploading a `.bin` to `POST /update`: a file picked in the web UI, or one the web UI
+fetched in the browser from the project's GitHub Pages site (the latest release only). The controller does not
+download firmware and does not check for releases: a secure connection needs about 100 KB of heap, which left
+about 7 KB free while it ran. `device.update_check` is `{available, latest?, reported_ago_s?}`. Nothing in the
+firmware opens a secure connection, and the TLS stack is not linked in.

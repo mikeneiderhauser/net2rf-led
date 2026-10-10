@@ -15,6 +15,8 @@
 #define NET2RF_BOARD_NAME "XIAO ESP32-S3"
 // Release assets: net2rf-led-xiao-esp32s3-<version>.bin (the WT32-ETH01's carry no board tag).
 #define NET2RF_HAS_ETHERNET 0
+// Radio a fresh or reset controller starts with (RadioType): this wiring is the CC1101 one.
+#define NET2RF_DEFAULT_RADIO 0
 
 namespace pins {
 
@@ -50,6 +52,8 @@ constexpr bool STATUS_LED_ACTIVE_LOW = true;
 #define NET2RF_BOARD_ID "wt32-eth01"
 #define NET2RF_BOARD_NAME "WT32-ETH01"
 #define NET2RF_HAS_ETHERNET 1
+// Radio a fresh or reset controller starts with (RadioType): the carrier board has an Ra-02 (SX1278) soldered on.
+#define NET2RF_DEFAULT_RADIO 1
 
 namespace pins {
 
@@ -60,10 +64,10 @@ constexpr int ETH_MDIO_PIN = 18;
 constexpr int ETH_POWER_PIN = 16;
 
 // Radio SPI bus (CC1101 / SX1278)
-constexpr int SPI_SCK = 14;
-constexpr int SPI_MOSI = 15;  // strapping pin: fine as MOSI
+constexpr int SPI_SCK = 4;
+constexpr int SPI_MOSI = 14;
 constexpr int SPI_MISO = 35;  // input-only
-constexpr int RADIO_CS = 4;
+constexpr int RADIO_CS = 15;  // strapping pin: wants to be high at reset, which the chip-select pull-up gives it
 
 // OOK data in and out: CC1101 GDO0 or SX1278 DIO2
 constexpr int RADIO_DATA = 33;
@@ -71,8 +75,8 @@ constexpr int RADIO_DATA = 33;
 constexpr int RADIO_RESET = 32;
 
 // SSD1306 128x64 OLED (optional). Not IO2: pull-ups there break serial flashing.
-constexpr int I2C_SDA = 5;
-constexpr int I2C_SCL = 17;
+constexpr int I2C_SDA = 17;
+constexpr int I2C_SCL = 5;
 constexpr uint8_t OLED_ADDR = 0x3C;
 
 // User button (optional): input-only pin, needs an external 10k pull-up to 3V3. Active low.

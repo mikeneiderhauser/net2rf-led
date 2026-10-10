@@ -1,6 +1,7 @@
 #include "store.h"
 
 #include <LittleFS.h>
+#include <Update.h>
 #include <esp_core_dump.h>
 #include <esp_system.h>
 #include <freertos/FreeRTOS.h>
@@ -10,7 +11,6 @@
 #include <pulse_capture.h>
 
 #include "engine.h"
-#include "updater.h"
 
 namespace store {
 
@@ -29,12 +29,46 @@ static const uint32_t BOOT_STABLE_MS = 60000;  // ...until a boot has stayed up 
 
 static uint32_t s_writes = 0;  // file writes over the partition's life (stamped into every file as "w")
 
+static bool s_mounted = false;  // the partition is usable (it is only actually mounted inside a Session)
+
+// LittleFS costs a few KB of heap while mounted, and this firmware's secure downloads need every one of them.
+// So the file system is mounted for the length of an operation and released again. Sessions nest; take one
+// BEFORE the Guard below, never after (two tasks use both locks).
+static SemaphoreHandle_t s_fs_mutex = nullptr;
+static int s_fs_depth = 0;
+struct Session {
+    bool ok = false;
+    bool held = false;
+    Session() {
+        if (!s_mounted || !s_fs_mutex)
+            return;
+        xSemaphoreTakeRecursive(s_fs_mutex, portMAX_DELAY);
+        this->held = true;
+        if (s_fs_depth == 0 && !LittleFS.begin(false, "/store", 4, "spiffs"))
+            return;
+        s_fs_depth++;
+        this->ok = true;
+    }
+    ~Session() {
+        if (!this->held)
+            return;
+        if (this->ok && --s_fs_depth == 0)
+            LittleFS.end();
+        xSemaphoreGiveRecursive(s_fs_mutex);
+    }
+    Session(const Session &) = delete;
+    Session &operator=(const Session &) = delete;
+};
+
 // LittleFS behind the lib's Storage interface. A file is replaced by writing a temporary one and renaming it,
 // so a power cut leaves either the old or the new contents.
 class Flash : public boardstore::Storage {
  public:
     bool read(const char *name, std::string &out) override {
         out.clear();
+        Session fs;
+        if (!fs.ok)
+            return false;
         File f = LittleFS.open(name, "r");
         if (!f || f.isDirectory())
             return false;
@@ -45,6 +79,9 @@ class Flash : public boardstore::Storage {
         return got == n;
     }
     bool write(const char *name, const std::string &data) override {
+        Session fs;
+        if (!fs.ok)
+            return false;
         // Every file is a JSON object: stamp the running write count in as its first member.
         std::string text = data;
         if (!text.empty() && text[0] == '{')
@@ -65,11 +102,13 @@ class Flash : public boardstore::Storage {
         s_writes++;
         return true;
     }
-    bool remove(const char *name) override { return LittleFS.remove(name); }
+    bool remove(const char *name) override {
+        Session fs;
+        return fs.ok && LittleFS.remove(name);
+    }
 };
 
 static Flash s_flash;
-static bool s_mounted = false;
 static uint32_t s_boot_no = 0;
 static boardstore::BootLog s_boots;
 static boardstore::SeenTable s_seen;
@@ -156,8 +195,13 @@ void begin() {
     rtc_seal();
 
     // formatOnFail: a never-used (or SPIFFS-formatted) partition is formatted once, which takes a few seconds.
+    s_fs_mutex = xSemaphoreCreateRecursiveMutex();
     s_mounted = LittleFS.begin(true, MOUNT, 4, PARTITION);
-    if (!s_mounted) {
+    if (s_mounted)
+        LittleFS.end();
+    Session fs;
+    if (!s_mounted || !fs.ok) {
+        s_mounted = false;
         log_w("Board store: no usable '%s' partition, nothing will be kept", PARTITION);
         return;
     }
@@ -197,7 +241,8 @@ uint32_t boot_no() { return s_boot_no; }
 bool record_seen() { return s_record_seen; }
 
 bool set_record_seen(bool on) {
-    if (!s_mounted)
+    Session fs;
+    if (!fs.ok)
         return false;
     if (on == s_record_seen)
         return true;
@@ -247,10 +292,11 @@ void loop() {
     last_tick = now;
     s_rtc.uptime_s = now / 1000;
     rtc_seal();
-    if (!s_mounted || updater::busy() || updater::reboot_due())
-        return;  // during an update the flash is busy with the new firmware
+    if (!s_mounted || Update.isRunning())
+        return;  // an upload is writing the new firmware
     if (s_boot_deferred && now >= BOOT_STABLE_MS) {
         s_boot_deferred = false;
+        Session fs;
         Guard g;  // a ~2 KB file: short enough to write under the lock
         s_boot_no = s_boots.record(s_flash, s_boot_reason, FW_VERSION, s_boot_prev_uptime, s_boot_pc, s_rtc.skipped - 1);
         s_rtc.skipped = 0;
@@ -263,7 +309,8 @@ void loop() {
 void status_json(JsonObject out) {
     out["mounted"] = s_mounted;
     out["partition"] = PARTITION;
-    if (!s_mounted)
+    Session fs;
+    if (!fs.ok)
         return;
     out["total_bytes"] = (uint32_t) LittleFS.totalBytes();
     out["used_bytes"] = (uint32_t) LittleFS.usedBytes();
@@ -296,7 +343,8 @@ void seen_json(JsonObject out) {
 }
 
 void captures_json(JsonArray out) {
-    if (!s_mounted)
+    Session fs;
+    if (!fs.ok)
         return;
     for (uint8_t slot = 0; slot < boardstore::CaptureShelf::SLOTS; slot++) {
         JsonDocument doc;
@@ -345,6 +393,7 @@ bool delete_capture(uint8_t slot) { return s_mounted && boardstore::CaptureShelf
 
 // Forgets every restart and the count; this boot is then logged afresh, as boot 1.
 static bool clear_boots_all() {
+    Session fs;
     Guard g;
     s_boots.reset(s_flash);
     s_boot_no = s_boots.record(s_flash, s_boot_reason, FW_VERSION, s_boot_prev_uptime, s_boot_pc);
@@ -355,7 +404,8 @@ static bool clear_boots_all() {
 }
 
 bool clear(const char *what) {
-    if (!s_mounted)
+    Session fs;
+    if (!fs.ok)
         return false;
     bool all = !strcmp(what, "all");
     bool any = false;
@@ -393,7 +443,8 @@ static bool safe_name(const String &name) {
 }
 
 bool delete_file(const String &name) {
-    if (!s_mounted || !safe_name(name) || !LittleFS.exists("/" + name))
+    Session fs;
+    if (!fs.ok || !safe_name(name) || !LittleFS.exists("/" + name))
         return false;
     if (name == "boots.json")
         return clear_boots_all();
@@ -405,7 +456,8 @@ bool delete_file(const String &name) {
 }
 
 bool read_file(const String &name, String &out) {
-    if (!s_mounted || !safe_name(name))
+    Session fs;
+    if (!fs.ok || !safe_name(name))
         return false;
     File f = LittleFS.open("/" + name, "r");
     if (!f || f.isDirectory())

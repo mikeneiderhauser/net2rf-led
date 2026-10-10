@@ -94,7 +94,7 @@ struct OutputStats {
 struct ReceiverSnapshot {
     bool enabled;    // receiver mode is selected
     bool active;     // ... and the radio is listening
-    bool supported;  // the fitted radio can receive (CC1101)
+    bool supported;  // the fitted radio can receive
     uint32_t freq_hz;
     uint32_t frames, bad, updates;
     int16_t rssi_dbm;          // channel level now (average over the last half second)

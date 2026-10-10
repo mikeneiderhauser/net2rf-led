@@ -5,6 +5,9 @@
 #include <WebServer.h>
 #include <esp_core_dump.h>
 #include <esp_flash.h>
+#include <esp_heap_caps.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 #include <esp_system.h>
@@ -286,7 +289,6 @@ static void handle_status() {
     dev["suffix"] = device_suffix();
     dev["update_pending"] = ota_guard::pending();
     dev["update_rolled_back"] = ota_guard::rolled_back();
-    updater::status_json(dev["update_job"].to<JsonObject>());
     updater::check_json(dev["update_check"].to<JsonObject>());
     {
         StateLock lock;
@@ -328,10 +330,7 @@ static void handle_post_config() {
     }
     config_save_app(next);
     if (!doc["update"]["repo"].isNull()) {  // a new release source: the old result no longer applies
-        if (next.update_check_off)
-            updater::forget();
-        else
-            updater::check_now();
+        updater::forget();
     }
     if (reboot)
         schedule_reboot();
@@ -674,7 +673,7 @@ static void handle_update_upload() {
             s_update_error = "unauthorized";
             return;
         }
-        if (updater::busy() || updater::reboot_due()) {
+        if (Update.isRunning()) {
             s_update_error = "an update is already running";
             return;
         }
@@ -789,6 +788,31 @@ static void handle_crash() {
     send_json(200, doc);
 }
 
+// Where the memory is: the heap as the allocator sees it (the largest free block is what a big allocation such
+// as a secure connection needs, and can be far below the total when the heap is fragmented), and how much of
+// each task's stack has never been used.
+static void heap_json(JsonObject o) {
+    multi_heap_info_t h;
+    heap_caps_get_info(&h, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    o["free"] = (uint32_t) h.total_free_bytes;
+    o["largest_block"] = (uint32_t) h.largest_free_block;
+    o["min_free"] = (uint32_t) h.minimum_free_bytes;
+    o["allocated"] = (uint32_t) h.total_allocated_bytes;
+    o["blocks_used"] = (uint32_t) h.allocated_blocks;
+    o["blocks_free"] = (uint32_t) h.free_blocks;
+    JsonArray tasks = o["tasks"].to<JsonArray>();
+    static const char *const NAMES[] = {"loopTask", "engine", "discovery", "async_udp", "mdns",    "tiT",
+                                        "wifi",     "sys_evt", "emac_rx",  "arduino_events", "esp_timer", "ipc0", "ipc1"};
+    for (const char *name : NAMES) {
+        TaskHandle_t t = xTaskGetHandle(name);
+        if (!t)
+            continue;
+        JsonObject j = tasks.add<JsonObject>();
+        j["name"] = name;
+        j["stack_unused"] = (uint32_t) uxTaskGetStackHighWaterMark(t);  // bytes never touched since the task started
+    }
+}
+
 // ---- Board store: JSON files on the data partition (src/store.cpp) ----
 
 static void send_download(const String &file_name, const String &body) {
@@ -817,6 +841,7 @@ static void handle_store_bundle() {
     dev["flash_bytes"] = ESP.getFlashChipSize();
     net::status_json(doc["network"].to<JsonObject>());
     g_engine.status_json(doc["engine"].to<JsonObject>());
+    heap_json(doc["heap"].to<JsonObject>());
     crash_json(doc["crash"].to<JsonObject>());
     store::status_json(doc["store"].to<JsonObject>());
     store::boots_json(doc["boots"].to<JsonObject>());
@@ -833,6 +858,11 @@ static void handle_store_bundle() {
 }
 
 static void register_store_routes() {
+    s_server.on("/api/heap", HTTP_GET, []() {  // memory diagnostics (no secrets: open, like /api/status)
+        JsonDocument doc;
+        heap_json(doc.to<JsonObject>());
+        send_json(200, doc);
+    });
     s_server.on("/api/store", HTTP_GET, protect([]() {  // what is stored: space used and the files
         JsonDocument doc;
         store::status_json(doc.to<JsonObject>());
@@ -1003,24 +1033,6 @@ static void handle_wled_post_cfg() {
 }
 
 // Install a release from GitHub: {"tag": "v1.2.3", "asset": "net2rf-led-1.2.3.bin"}. The repository is the
-// configured update source. Progress is reported in /api/status (device.update_job).
-static void handle_update_github() {
-    JsonDocument doc;
-    if (!parse_body(doc))
-        return;
-    String repo;
-    {
-        StateLock lock;
-        repo = g_app.update_repo;
-    }
-    String err;
-    if (!updater::start(repo, doc["tag"] | "", doc["asset"] | "", err)) {
-        send_error(err.startsWith("an update") ? 409 : 400, err);
-        return;
-    }
-    send_ok();
-}
-
 static void handle_not_found() {
     // Captive portal: phones probe random hosts; send them to the setup page.
     if (net::ap_active()) {
@@ -1095,18 +1107,6 @@ void begin() {
         }
         panel::identify((uint16_t) seconds);
         send_ok();
-    }));
-    s_server.on("/api/net/check", HTTP_POST, protect([]() {
-        if (!updater::net_check_start()) {
-            send_error(409, "a check or an update is already running");
-            return;
-        }
-        send_ok();
-    }));
-    s_server.on("/api/net/check", HTTP_GET, protect([]() {
-        JsonDocument doc;
-        updater::net_check_json(doc.to<JsonObject>());
-        send_json(200, doc);
     }));
     s_server.on("/json/info", HTTP_GET, handle_wled_info);
     s_server.on("/json/cfg", HTTP_GET, handle_wled_get_cfg);
@@ -1193,26 +1193,22 @@ void begin() {
                 }));
     // Upload handler checks credentials itself before writing flash.
     s_server.on("/update", HTTP_POST, handle_update_done, handle_update_upload);
-    s_server.on("/api/update/github", HTTP_POST, protect(handle_update_github));
-    // The download job by itself: what the web UI polls during an install, when there is no memory to spare for
-    // the full status.
-    s_server.on("/api/update/status", HTTP_GET, []() {
+    // The browser found the latest release (it can afford to ask GitHub); remember it for the dashboard and OLED.
+    s_server.on("/api/update/latest", HTTP_POST, protect([]() {  // {"tag": "v1.2.3"}
         JsonDocument doc;
-        updater::status_json(doc.to<JsonObject>());
-        send_json(200, doc);
-    });
-    s_server.on("/api/update/check", HTTP_POST, protect([]() {
-                    updater::check_now();
-                    send_ok();
-                }));
+        if (!parse_body(doc))
+            return;
+        if (updater::note_latest(doc["tag"] | ""))
+            send_ok();
+        else
+            send_error(400, "tag is not a release tag");
+    }));
     s_server.onNotFound(handle_not_found);
     s_server.begin();
 }
 
 void loop() {
     s_server.handleClient();
-    if (updater::reboot_due() && !s_reboot_at)
-        schedule_reboot(2500);  // let the UI read the result first
     if (s_reboot_at && (int32_t) (millis() - s_reboot_at) >= 0) {
         log_i("Rebooting");
         delay(100);

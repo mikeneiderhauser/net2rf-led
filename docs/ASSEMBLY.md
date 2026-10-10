@@ -45,14 +45,17 @@ The WT32-ETH01 silkscreen labels some pins by their original serial-bridge funct
 
 #### Radio (fit one; both use the same pins)
 
+A new or reset WT32-ETH01 controller expects the Ra-02 (SX1278); pick CC1101 under Settings > Radio if that is
+what you fitted. The XIAO ESP32-S3 build starts on CC1101.
+
 | WT32-ETH01 pin | Silkscreen | Function | CC1101 | Ra-02 (SX1278) |
 |---|---|---|---|---|
 | 3V3 | 3V3 | Power | VCC | 3.3V |
 | GND | GND | Ground | GND | GND |
-| IO14 | IO14 | SPI SCK | SCK | SCK |
-| IO15 | IO15 | SPI MOSI | MOSI (SI) | MOSI |
+| IO4 | IO4 | SPI SCK | SCK | SCK |
+| IO14 | IO14 | SPI MOSI | MOSI (SI) | MOSI |
 | IO35 | IO35 | SPI MISO | MISO (SO) | MISO |
-| IO4 | IO4 | Radio CS | CSN | NSS |
+| IO15 | IO15 | Radio CS | CSN | NSS |
 | IO33 | 485_EN | OOK data (via 330 Ω–1 kΩ) | GDO0 | DIO2 |
 | IO32 | CFG | Radio reset | not used | RESET |
 
@@ -64,8 +67,8 @@ on the dashboard, instead of the radio silently keying up with nothing on it.
 | WT32-ETH01 pin | Silkscreen | Function | Connection |
 |---|---|---|---|
 | 5V | 5V | Power in | 5 V supply |
-| IO5 | RXD | I²C SDA | OLED SDA (optional) |
-| IO17 | TXD | I²C SCL | OLED SCL (optional) |
+| IO5 | RXD | I²C SCL | OLED SCL (optional) |
+| IO17 | TXD | I²C SDA | OLED SDA (optional) |
 | IO39 | IO39 | USER button (optional) | button to GND, 10 kΩ pull-up to 3V3 |
 | IO1 | TXD0 | Serial TX | adapter **RX** (first flash) |
 | IO3 | RXD0 | Serial RX | adapter **TX** (first flash) |

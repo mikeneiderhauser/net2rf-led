@@ -67,6 +67,9 @@ jobs:
           cp flasher/index.html site/
           cp .pio/build/wt32-eth01/firmware.factory.bin site/
           cp .pio/build/xiao-esp32s3/firmware.factory.bin site/firmware-xiao-esp32s3.factory.bin
+          # Update images for the web UI's browser-relayed install (the browser downloads, the controller only flashes)
+          cp .pio/build/wt32-eth01/firmware.bin site/firmware.bin
+          cp .pio/build/xiao-esp32s3/firmware.bin site/firmware-xiao-esp32s3.bin
           sed "s/__VERSION__/${FW_VERSION}/" flasher/manifest.json > site/manifest.json
           sed -i "s|__RELEASES_URL__|https://github.com/${GITHUB_REPOSITORY}/releases/latest|" site/index.html
 

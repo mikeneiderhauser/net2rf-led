@@ -68,7 +68,6 @@ The pill row at the top of every page shows the radio, input and network state a
 | **Input monitor** | The channel values arriving from xLights / FPP right now, per zone: shows a wrong start channel or colour order at a glance |
 | **Transmit log** | The last 24 RF packets: when, to which groups, what command. Shows the base layer at work (for example *all except groups 2, 3*: red). |
 | **Channel meter** | Live signal strength on the bracelet frequency, measured between transmissions: spot other transmitters and pick the listen-before-transmit threshold |
-| **Connection check** | Whether the controller itself can look up, reach and talk to GitHub, which the update check and install need |
 | **Identify** | Flickers the status LED and flashes *THIS ONE* on the OLED for 15 s, to tell controllers apart |
 | **xLights setup** | The exact controller and model settings for the current zones |
 
@@ -182,30 +181,29 @@ password.
 ## Firmware updates
 
 Two ways, both under **System → Update firmware**. RF output pauses while the firmware is written, then the
-controller reboots.
+controller reboots. The controller never contacts GitHub itself, so it needs no internet access: your browser
+does the fetching.
 
-- **Automatic check:** about 30 s after boot, and then every 12 hours, the controller asks GitHub which
-  release is the latest. When it's newer than the running firmware, the **Dashboard** shows *Firmware vX is
-  available*, the OLED's status page shows it next to the version, and `/api/stats` reports it. Nothing is
-  installed automatically. The check can be switched off, and its period changed (1 to 168 hours), on the same
-  card. Without internet access it simply finds nothing and tries again later.
-- **From GitHub:** press **Check for updates**. Your browser asks GitHub for the latest release and shows
-  whether it's newer than what's running. **Install** then has the controller download and flash it itself,
-  so the controller needs internet access. If it can't reach GitHub, the page says so and gives a download link
-  for the manual way.
+- **From GitHub releases:** press **Check for updates**. Your browser asks GitHub for the latest release and
+  shows whether it's newer than what's running. **Install** has the browser download that release and hand it
+  to the controller. If the browser can't fetch it, the page gives a download link for the manual way.
 - **Upload a file:** choose `net2rf-led-<version>.bin` from the [latest release](https://github.com/mikeneiderhauser/net2rf-led/releases/latest) (or
   `firmware.bin` if you built it), not the `.factory.bin` used for the first flash.
+
+**Update notice:** whenever the web UI is opened it checks GitHub (at most every 6 hours) and tells the
+controller which release is the latest. When that is newer than the running firmware, the **Dashboard** shows
+*Firmware vX is available*, the OLED's status page shows it next to the version, and `/api/stats` reports it.
+Nothing is installed automatically. The controller forgets this at a restart, until a browser opens the page
+again.
 
 ![System page: firmware version, free memory and flash, and the update card](images/system.png)
 
 **Free memory** is shown on the Dashboard and the System page. The bar turns amber with a ⚠ *Low memory* note
-when less than about 145 KB is free, and red below about 110 KB or if it has ever dropped under 20 KB since the
-last restart. The amounts matter more than the percentage: the secure download of a firmware update from GitHub
-needs about 100 KB by itself, and stalls when there isn't enough (it stalled with 137 KB free and ran with
-152 KB). With low memory, upload the firmware file instead, or restart the controller first. Receiver mode's
-capture buffers (14 KB) are given back for an update, so they don't count towards the warning.
+when less than about 60 KB is free, and red below about 30 KB or if it has ever dropped under 8 KB since the
+last restart. In normal running about 140 KB is free. *System → Diagnostics and stored files* shows more: the
+largest single free block and how much of each task's stack is unused.
 
-**Release source** on the same card sets which GitHub repository is checked (`owner/name`, default
+**Release source** on the same card sets which GitHub repository the browser checks (`owner/name`, default
 `mikeneiderhauser/net2rf-led`). Change it only if you run firmware from a fork.
 
 **Automatic rollback:** a new build is only kept once the controller has come back up and stayed reachable for
@@ -219,7 +217,7 @@ The controller keeps its settings in two parts:
 | Part | What's in it |
 |---|---|
 | **Network** | Hostname, Ethernet on/off, Wi-Fi network, IP settings, setup hotspot, admin password |
-| **Settings** | Everything else: controller name, zones, devices, radio, input, display, update check |
+| **Settings** | Everything else: controller name, zones, devices, radio, input, display, release source |
 
 Each part is exported, imported and reset by itself, under **System**:
 

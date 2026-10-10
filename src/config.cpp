@@ -1,4 +1,5 @@
 #include "config.h"
+#include "pins.h"
 #include "updater.h"
 
 #include <Preferences.h>
@@ -9,7 +10,7 @@
 AppConfig g_app;
 NetConfig g_net;
 
-static const uint32_t APP_MAGIC = 0x4E325231;  // "N2R1": bump when the AppConfig layout changes (older records are dropped)
+static const uint32_t APP_MAGIC = 0x4E325232;  // "N2R2": bump when the AppConfig layout changes (older records are dropped)
 static const uint32_t NET_MAGIC = 0x52464E02;  // v2: admin password fields
 static const char *const NVS_NS = "rfb";
 
@@ -110,7 +111,7 @@ void config_defaults_app(AppConfig &c) {
     c.start_channel = 1;
     c.ddp_port = 4048;
     c.input_timeout_s = 300;
-    c.radio_type = RADIO_CC1101;
+    c.radio_type = NET2RF_DEFAULT_RADIO;
     c.tx_power = 10;
     c.freq[0] = rfproto::DEFAULT_FREQ_P0;
     c.freq[1] = rfproto::DEFAULT_FREQ_P1;
@@ -129,8 +130,6 @@ void config_defaults_app(AppConfig &c) {
     c.lbt_threshold = LBT_DEFAULT_THRESHOLD;
     c.radio_off = 0;
     strlcpy(c.update_repo, updater::DEFAULT_REPO, sizeof(c.update_repo));
-    c.update_check_off = 0;
-    c.update_check_hours = UPDATE_CHECK_DEFAULT_HOURS;
     c.base_layer = 1;  // new controllers only: saved settings keep the old behaviour until switched on
     c.display_sleep = 0;  // the default (10 minutes)
     c.receiver = 0;
@@ -172,12 +171,10 @@ void config_load() {
     if (g_app.num_zones == 0 || g_app.num_zones > MAX_ZONES)
         g_app.num_zones = 1;
     if (g_app.radio_type >= NUM_RADIO_TYPES)
-        g_app.radio_type = RADIO_CC1101;
+        g_app.radio_type = NET2RF_DEFAULT_RADIO;
     g_app.update_repo[sizeof(g_app.update_repo) - 1] = 0;
     if (!updater::valid_repo(g_app.update_repo))
         strlcpy(g_app.update_repo, updater::DEFAULT_REPO, sizeof(g_app.update_repo));
-    if (g_app.update_check_hours < 1 || g_app.update_check_hours > 168)
-        g_app.update_check_hours = UPDATE_CHECK_DEFAULT_HOURS;
 }
 
 void config_save_app(const AppConfig &c) {
@@ -384,8 +381,6 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     o["display"]["sleep_min"] = display_sleep_minutes(c);
     JsonObject update = o["update"].to<JsonObject>();
     update["repo"] = c.update_repo;
-    update["auto_check"] = !c.update_check_off;
-    update["check_hours"] = c.update_check_hours;
 
     JsonArray zones = o["zones"].to<JsonArray>();
     for (uint8_t i = 0; i < c.num_zones; i++) {
@@ -535,10 +530,6 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
     }
     JsonObjectConst update = in["update"];
     if (!update.isNull()) {
-        if (update["auto_check"].is<bool>())
-            c.update_check_off = !update["auto_check"].as<bool>();
-        if (!read_int(update, "check_hours", 1, 168, c.update_check_hours, err))
-            return false;
     }
 
     JsonArrayConst zones = in["zones"];

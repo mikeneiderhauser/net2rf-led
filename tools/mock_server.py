@@ -18,20 +18,7 @@ LOG = []
 
 # MOCK_UPDATE=1 pretends a newer release exists (dashboard notice, Install button).
 FW = "0.0.4"
-LATEST = "v0.0.5" if os.environ.get("MOCK_UPDATE") else "v" + FW
-GH_JOB = {"tag": "", "started": 0.0}
-NETCHECK = {"started": 0.0}
-
-
-def gh_job():
-    """Fake a 6 s download, then report done for a while."""
-    if not GH_JOB["started"]:
-        return {"state": "idle"}
-    t = time.time() - GH_JOB["started"]
-    if t > 20:
-        GH_JOB["started"] = 0.0
-        return {"state": "idle"}
-    return {"state": "downloading" if t < 6 else "done", "tag": GH_JOB["tag"], "progress": min(100, int(t / 6 * 100))}
+LATEST = {"tag": "v0.0.5" if os.environ.get("MOCK_UPDATE") else "", "at": time.time()}  # what a browser last reported
 
 
 APP = {
@@ -40,10 +27,10 @@ APP = {
     "role": "controller",
     "rx_profile": "normal",
     "devices": {"protocol": 0, "mode": "pixel", "color_order": "RGB", "base_layer": True},
-    "radio": {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
+    "radio": {"type": "sx1278", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
               "lbt_enabled": True, "lbt_threshold_dbm": -75, "power": True},
-    "update": {"repo": "mikeneiderhauser/net2rf-led", "auto_check": True, "check_hours": 12},
+    "update": {"repo": "mikeneiderhauser/net2rf-led"},
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
               "e131_multicast": True, "start_channel": 1, "timeout_s": 300},
     "zones": [  # the firmware's defaults: every group, then groups 1-4; an address in both protocols
@@ -155,7 +142,7 @@ def receiver(up):
            {"age_ms": 9000, "p": 1, "pkt": "5500FF00FFAAFF", "n": 2, "rssi_dbm": -71, "checksum": "vendor"},
            {"age_ms": 12000, "p": 1, "pkt": "55000FFFFF55FF", "n": 3, "rssi_dbm": -80, "checksum": "legacy"}]
     return {"enabled": APP["role"] == "receiver", "active": APP["role"] == "receiver" and APP["radio"]["power"],
-            "supported": APP["radio"]["type"] == "cc1101", "error": False, "freq": 433904500,
+            "supported": True, "error": False, "freq": 433904500,
             "frames": 120 + t, "bad": 3, "updates": 31 + t // 3, "edges": 900000 + t * 4000, "dropped": 0,
             "rssi_dbm": -96, "rssi_peak_dbm": -71, "last_age_ms": (t % 3) * 1000 + 120, "zones": zones, "log": log,
             "profile": APP["rx_profile"], "bandwidth": {"normal": 162500, "near": 162500, "wide": 325000}[APP["rx_profile"]],
@@ -184,9 +171,9 @@ def status():
         "device": {"firmware": FW, "built": "Sep 28 2026 09:00:00", "uptime_s": int(up) + 3600,
                    "free_heap": 182344, "min_free_heap": 160112, "heap_bytes": 327680, "firmware_bytes": 1471297, "firmware_slot_bytes": 1966080, "chip": "ESP32-D0WD-V3", "chip_rev": 3,
                    "reset_reason": "power on", "display": True, "suffix": "3F2A", "name": APP["name"],
-                   "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False, "update_job": gh_job(),
-                   "update_check": {"auto_check": APP["update"]["auto_check"], "check_hours": APP["update"]["check_hours"],
-                                    "checking": False, "latest": LATEST, "available": LATEST != "v" + FW, "checked_ago_s": 840},
+                   "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False,
+                   "update_check": dict({"available": bool(LATEST["tag"]) and LATEST["tag"] != "v" + FW},
+                                        **({"latest": LATEST["tag"], "reported_ago_s": int(time.time() - LATEST["at"])} if LATEST["tag"] else {})),
                    "display_info": {"present": False, "type": "ssd1306", "sda_pin": 5, "scl_pin": 17, "asleep": False, "sleep_min": 10, "button": False}},
         "network": {"interface": "ethernet", "ip": "192.168.250.60", "hostname": NET["hostname"], "dhcp": NET["dhcp"],
                     "ethernet": {"enabled": True, "link": True, "mac": "A8:03:2A:11:3F:2A", "speed": 100,
@@ -297,15 +284,6 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/rssi":
             noise = random.randint(-90, -84)
             return self.send(200, {"peak_dbm": noise + random.choice([0, 1, 2, 30]), "avg_dbm": noise, "freq_hz": 433889000})
-        if path == "/api/net/check":
-            running = time.time() - NETCHECK["started"] < 2.5
-            out = {"host": "github.com", "running": running}
-            if not running and NETCHECK["started"]:
-                out.update(done_ago_s=int(time.time() - NETCHECK["started"] - 2.5), dns={"ok": True, "ms": 41, "ip": "140.82.112.4"},
-                           tcp={"ok": True, "ms": 38}, https={"ok": True, "ms": 1320, "status": 200})
-            return self.send(200, out)
-        if path == "/api/update/status":
-            return self.send(200, gh_job())
         if path == "/api/flash":
             return self.send(200, {"flash_bytes": 4194304, "flash_chip_bytes": 4194304, "flash_id": "EF4016", "flash_maker_id": 0xEF,
                                    "flash_speed_hz": 40000000, "flash_mode": "DIO", "partitions": [
@@ -315,6 +293,9 @@ class Handler(BaseHTTPRequestHandler):
                 {"label": "app1", "offset": 0x1F0000, "bytes": 0x1E0000, "kind": "firmware_next"},
                 {"label": "spiffs", "offset": 0x3D0000, "bytes": 0x20000, "kind": "files"},
                 {"label": "coredump", "offset": 0x3F0000, "bytes": 0x10000, "kind": "crash_dump"}]})
+        if path == "/api/heap":
+            return self.send(200, {"free": 148000, "largest_block": 110000, "min_free": 61000, "allocated": 164000, "blocks_used": 420,
+                                   "blocks_free": 9, "tasks": [{"name": "loopTask", "stack_unused": 3200}, {"name": "engine", "stack_unused": 2900}]})
         if path == "/api/store":
             return self.send(200, {"mounted": True, "partition": "spiffs", "total_bytes": 131072, "used_bytes": 24576, "boot_no": 14, "writes": 231,
                                    "record_seen": STORE_SEEN["recording"], "boot_log_paused": False,
@@ -356,15 +337,10 @@ class Handler(BaseHTTPRequestHandler):
             if body.get("what") in ("seen", "all"):
                 STORE_SEEN["entries"] = []
             return self.send(200, {"ok": True, "reboot": False})
-        if path == "/api/net/check":
-            NETCHECK["started"] = time.time()
-            return self.send(200, {"ok": True, "reboot": False})
         if path == "/api/identify":
             return self.send(200, {"ok": True, "reboot": False})
-        if path == "/api/update/check":
-            return self.send(200, {"ok": True, "reboot": False})
-        if path == "/api/update/github":
-            GH_JOB.update(tag=body.get("tag", ""), started=time.time())
+        if path == "/api/update/latest":
+            LATEST.update(tag=body.get("tag", ""), at=time.time())
             return self.send(200, {"ok": True, "reboot": False})
         if path == "/api/auth":
             AUTH["enabled"] = bool(body.get("password"))

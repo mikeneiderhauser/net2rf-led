@@ -53,10 +53,10 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
 - **Zones:** up to 16 groups per controller, each one RGB pixel in xLights (pixel mode), a DMX fixture with an
   effect channel (DMX mode), or the vendor transmitter's 5-channel layout (vendor mode).
 - **DDP and E1.31 input**, unicast or multicast; Ethernet or Wi-Fi, with a setup hotspot for first-time config.
-- **Built-in tools:** group tester, range walk, live input monitor, transmit log, 433 MHz channel meter,
-  connection check and identify, next to the protocol test and address probe.
+- **Built-in tools:** group tester, range walk, live input monitor, transmit log, 433 MHz channel meter
+  and identify, next to the protocol test and address probe.
 - **Web UI for everything:** live input rate and counters, last colour per zone, test mode, zone walk, address
-  probe ("which group is this bracelet in?"), xLights setup helper, network settings, firmware update (from GitHub releases or a file) with
+  probe ("which group is this bracelet in?"), xLights setup helper, network settings, firmware update (fetched by your browser from GitHub releases, or a file) with
   automatic rollback, settings export/import, optional admin password.
 - **Show-safe:** an RF output switch and an *All off* button; bracelets blank themselves when the show stops
   sending (5 minutes by default).
@@ -143,7 +143,7 @@ python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the netwo
 | `lib/cc1101_ook`, `lib/sx1278_ook` | Minimal radio drivers for OOK transmit and listen-before-talk |
 | `lib/net2rf_heartbeat`, `lib/net2rf_fpp` | Controller heartbeat and FPP discovery ping formats (unit tested) |
 | `lib/net2rf_wled` | The WLED config requests xLights' upload uses (unit tested) |
-| `lib/net2rf_version` | Release version comparison for the update check (unit tested) |
+| `lib/net2rf_version` | Release version comparison for the update notice (unit tested) |
 | `tools/xlights` | xLights models and controller definition, and the script that generates the models |
 
 ## License and legal
