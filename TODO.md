@@ -15,12 +15,13 @@ history.
 - [ ] **Listen before transmit** with two radios in range: check `lbt_waits` / `lbt_forced` while both run busy
   sequences, and that the SX1278 RX path (packet mode, DIO2 = TimeOut) doesn't disturb its TX data line. Then
   decide whether to turn it on by default. (Default threshold is -75 dBm: a quiet CC1101 read -84 to -87.)
-- [ ] **Protocol 1 on real devices** (Wally's Lights hat, pucks, bracelets, sticks on order): the vendor-matched
-  encoding (full 8-bit colour, checksum with the group), a group above 15, and the old Flipper-style packet for
-  comparison. Then a zone on both protocols, and more devices at once.
+- [ ] **Protocol 1 on real devices.** Wally's Lights bracelets follow the colour cycle test sent to all groups
+  (2026-10-10, Ra-02), and the one tested responds to group 0 (all) and group 1. The vendor's "Zone 1" is
+  group 1. Still to check: other zones (assumed zone N = group N); a group above 15; driving them from xLights; a zone on both protocols; more devices at once; idle
+  behaviour. Then the hat, pucks and sticks.
 - [ ] **Protocol 1 sync timing:** CrispyPyro's captures of the vendor transmitter suggest a long mark, a ~1000 µs
-  gap and two copies per burst; we send the Flipper app's 200 / 1600 µs sync. Try the vendor's only if devices
-  ignore ours; if both are needed, make it a setting.
+  gap and two copies per burst; we send the Flipper app's 200 / 1600 µs sync. Wally's Lights bracelets respond to
+  ours, so try the vendor's only if the hat, pucks or sticks ignore it; if both are needed, make it a setting.
 
 ## Needs hardware checks
 

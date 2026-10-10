@@ -39,18 +39,41 @@ What to know:
 
 Supported from the protocol as decoded from the Flipper Zero app and the vendor's DMX transmitter guide, with the
 colour and checksum bytes matched to off-air captures of the vendor's transmitter: full 8-bit RGB, group codes,
-group 0 = all. Not yet tested with a real device. This is the protocol the vendor's "DMX to RF transmitter" kits
+group 0 = all. Not yet tested with a LedGiftSupplier-branded device; Wally's Lights bracelets, which use the same
+protocol, follow it (below). This is the protocol the vendor's "DMX to RF transmitter" kits
 use.
 
 ### 🧪 Wally's Lights RF products (protocol 1)
 
 Wally's Lights' RF range (hats, pucks, bracelets and light sticks, sold with a "DMX to RF" transmitter) uses
-**protocol 1**, the same protocol as the LedGiftSupplier devices above. A hat, pucks, bracelets and sticks are
-on order to test here; until they arrive, nothing from this range has been driven by this controller. Only the
-receiving products are on order, not the vendor's transmitter.
+**protocol 1**, the same protocol as the LedGiftSupplier devices above.
 
-To be checked when they arrive: that they follow the controller's protocol 1 packets, how their groups (the
-vendor's zones) map to group codes, and how they behave when idle.
+- **Bracelets: first test passed (2026-10-10).** They follow the controller's protocol 1 packets: the colour
+  cycle test, sent to all groups from a Ra-02 (SX1278) radio, with the encoding and sync timing as they are.
+  These are the first real protocol 1 devices driven by this controller.
+- **Power switch, slow start.** The bracelet has a power switch (no button to press to wake it, unlike the
+  protocol 0 bracelets). After switching on it takes about 10 seconds before it follows the controller. The
+  cycle test sends a new colour every 2 seconds, so that is the bracelet starting up, not a wait for the next
+  packet: switch them on well before they are needed. Once running it kept up with the cycle test, so it looks
+  like a slow start, not a receiver that only listens now and then.
+- **Groups work, and the vendor's zone is the group code.** The bracelets tested are the
+  [5 Pack RF Bracelets (Zone 1)](https://wallyslights.com/collections/dmx-products/products/5-pack-rf-bracelets).
+  They respond to group 0 (everyone) and to group 1: the vendor's "Zone 1" is group 1, and group 0 is the
+  broadcast, as the protocol notes said. The zone is part of the product (it is sold by zone), so a bracelet's
+  group is fixed. Other zones have not been seen yet.
+- **From the product page:** 2 RGB LEDs, two CR1632 cells (replaceable) with a stated life of 5 to 8 hours.
+  The vendor recommends sequencing them like a flood light and warns of delay with fast colour changes and
+  strobes, which matches what this controller's airtime measurements say.
+- **Full-range colour, with flicker when dim.** Red, green, blue and white each dim through the whole range
+  (tested from 255 down to 1), so the 8-bit colour bytes are honoured. Colour changes at full brightness are
+  clean, whether each packet is sent once or 3 times. At low levels the bracelet visibly flickers, also while
+  a dim colour is simply held with nothing on air: that is the bracelet's own dimming, not the controller.
+  Prefer bright colours with these; avoid slow fades down to black.
+- **Still to check on the bracelets:** driving them from xLights, how they behave when idle, and how many LEDs
+  are inside (the product page says 2; it may be 3).
+- **Hat, pucks and light sticks:** not tested yet.
+
+Only the receiving products are here, not the vendor's transmitter.
 
 ### ❔ Other products
 
