@@ -32,10 +32,51 @@ update keeps its old colour until the next change.
   - **Counters:** `/api/stats` shows how often it waited (`lbt_waits`) and how often it gave up and sent anyway
     (`lbt_forced`). Waiting on almost every update means the threshold is too low.
   - **Status:** off by default until it has been tested with two radios in range of each other.
+- **Coverage group (several controllers, one show).** See [below](#coverage-group): the controllers take turns
+  in time slots scheduled by one master, instead of competing for the channel.
 - **Airtime per controller.** The dashboard's controller list shows each controller's airtime (`air`). Two
   neighbours that are both busy are competing for the channel.
 - **TX jitter** adds a random delay before each update. It stops the same two controllers colliding over and over,
   but doesn't prevent collisions; listen before transmit supersedes it.
+
+## Coverage group
+
+When one controller can't reach the whole yard, place a few around it and make them a **coverage group**: one
+show, several transmitters, taking turns on air.
+
+- **Set up (*Devices & Radio* → *Coverage group*).** Tick *Sync enabled* on every controller in the group. Make one
+  of them the **master** and point xLights at it; leave the others as **remotes**. Remotes need no input, no zones
+  of their own and nothing else: they find the master from its heartbeat, and the master finds them from theirs.
+  *Copies per controller* (1-3, master only) applies to every controller in the group.
+- **What happens.** Every colour change the master would transmit is shared out: the master plans one slot per
+  controller (itself and every synced remote), back to back, each `copies` frames long plus a guard gap, starting
+  a little ahead of now. It sends each remote its slot start, the protocol, frequency and packet as a small
+  unicast UDP message (port 4050), transmits its own slot, and waits for the plan to end before the next change.
+  The order rotates by one each time, so no controller is always first. Newest state still wins: changes that
+  arrive while a plan is on air are merged into the next one.
+- **Why slots, not everyone at once.** Two transmitters sending the same frame at the same moment don't add up:
+  their carriers beat against each other and a device between them can hear neither. Taking turns means every
+  device hears each controller cleanly; one in range of any of them gets the change. Listen before transmit and
+  TX jitter are skipped inside a slot (the slots already keep the controllers apart).
+- **Clock sync.** Each remote sends the master a timestamped request every second (four times a second while it
+  is joining) and keeps an NTP-style estimate of the master's clock, trusting the quickest round trips. Its error
+  estimate (half the best round trip plus drift) sets the guard gap and lead time; a remote whose error is above
+  10 ms is left out of the plans until it improves. Wired Ethernet syncs to well under a millisecond; Wi-Fi to a
+  few ms.
+- **Airtime.** One change costs `controllers × copies` frames of airtime, so a group of three at 2 copies takes
+  about 300 ms per change. Use fewer copies as you add controllers: the copies from the other controllers stand in
+  for the repeats a single controller needs. Final states (All off, input-timeout blanking) get one extra copy,
+  and the master sends each zone's last colour once more about a second after it stops changing, so a device that
+  missed the change catches up.
+- **Network.** Only the existing heartbeat is broadcast. Group traffic is unicast and small: one 40-byte message
+  per remote per change, and one sync exchange per remote per second, so it is harmless next to the DDP traffic
+  going to pixel controllers on 10/100 links.
+- **Without a master** a remote stays silent (its own web page's test buttons still work). A master with no synced
+  remote transmits on its own, like a standalone controller, with its normal repeats.
+- **One master.** Every controller tracks the masters it hears; two at once is a mistake (both would schedule the
+  air) and is shown in red on every controller's dashboard and OLED. Remotes keep following the master they
+  already had, or the one with the lowest MAC address.
+- Each remote keeps its own TX power: turn down the one nearest the audience if it drowns the others out.
 
 ## Car key fobs
 

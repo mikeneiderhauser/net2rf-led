@@ -71,7 +71,15 @@ struct AppConfig {
     uint8_t display_sleep;  // OLED sleep after this many minutes without a button press: 0 = default, 255 = never
     uint8_t receiver;       // 1 = receiver mode: listen on 433 MHz and show what the devices are told; never transmits
     uint8_t rx_profile;     // receiver mode: RxProfile
+    // ---- appended: config_load() also accepts the record without these (APP_PREV_SIZE) and defaults them ----
+    // Coverage group (lib/net2rf_group): controllers that share one show, taking turns on the air.
+    uint8_t sync_enabled;   // takes part in a coverage group
+    uint8_t sync_master;    // ... and leads it (takes the show input and schedules every transmission)
+    uint8_t sync_copies;    // master: frames each controller sends per transmission (1-3)
 };
+// Coverage group roles, from the two switches.
+inline bool sync_is_master(const AppConfig &c) { return c.sync_enabled && c.sync_master && !c.receiver; }
+inline bool sync_is_remote(const AppConfig &c) { return c.sync_enabled && !c.sync_master && !c.receiver; }
 // Receiver mode tuning (both radios): normal, near (gain capped: a transmitter within a few metres), wide band.
 enum RxProfile : uint8_t { RX_PROFILE_NORMAL = 0, RX_PROFILE_NEAR = 1, RX_PROFILE_WIDE = 2, NUM_RX_PROFILES };
 static const char *const RX_PROFILE_NAMES[NUM_RX_PROFILES] = {"normal", "near", "wide"};
@@ -156,3 +164,4 @@ bool parse_hex(const char *str, uint8_t *out, size_t len);
 
 String default_hostname();
 String device_suffix();  // last 2 MAC bytes, e.g. "3F2A"
+void device_mac(uint8_t *mac);  // the 6-byte MAC the suffix comes from (unique per board)

@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "engine.h"
+#include "group.h"
 #include "heartbeat.h"
 #include "net.h"
 
@@ -87,7 +88,12 @@ static void own_heartbeat(net2rf::Heartbeat &h) {
         StateLock lock;
         strlcpy(h.name, g_app.name, sizeof(h.name));
         strlcpy(h.host, g_net.hostname, sizeof(h.host));
+        h.sync = sync_is_master(g_app) || sync_is_remote(g_app);
+        h.master = sync_is_master(g_app);
     }
+    uint8_t mac[6];
+    device_mac(mac);
+    n2rgroup::mac_to_hex(mac, h.mac);
     strlcpy(h.id, device_suffix().c_str(), sizeof(h.id));
     strlcpy(h.fw, FW_VERSION, sizeof(h.fw));
     strlcpy(h.radio, radio_state_name(s.radio_state), sizeof(h.radio));
@@ -101,7 +107,7 @@ static void own_heartbeat(net2rf::Heartbeat &h) {
 }
 
 static String state_key(const net2rf::Heartbeat &h) {
-    return String(h.radio) + "|" + h.input + "|" + h.out + "|" + h.test + "|" + h.zones;
+    return String(h.radio) + "|" + h.input + "|" + h.out + "|" + h.test + "|" + h.zones + "|" + h.sync + "|" + h.master;
 }
 
 static void send_beat() {
@@ -215,6 +221,7 @@ static void on_packet(AsyncUDPPacket &packet) {
         p->up = h.up;
         p->last_udp_ms = now | 1;
     }
+    group::on_heartbeat(h, (uint32_t) packet.remoteIP());
     if (h.hello) {
         s_beat_now = true;  // a controller just started: let it see us immediately
         s_reply_to = (uint32_t) packet.remoteIP();

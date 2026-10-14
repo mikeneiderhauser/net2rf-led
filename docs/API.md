@@ -90,6 +90,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
   "radio":     {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000,
                 "repeats": 3, "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
                 "lbt_enabled": false, "lbt_threshold_dbm": -75, "power": true},
+  "sync":      {"enabled": false, "master": false, "copies": 1},
   "zones": [
     {"enabled": true, "name": "Bracelets", "protocols": [0], "addr_p0": "0002000F", "addr_p1": "01FF", "start": 1},
     {"enabled": true, "name": "Pucks", "protocols": [1], "addr_p0": "0004000F", "addr_p1": "05FF", "start": 4},
@@ -156,6 +157,16 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
   Otherwise it backs off a random 3-15 ms and listens again, for at most 250 ms, then sends anyway. Set the
   threshold about 10 dB above the quiet reading shown on *Devices & Radio* (`radio.lbt.last_rssi_dbm` in
   `/api/status`). See [RF.md](RF.md#multiple-controllers).
+- `sync`: coverage group ([RF.md](RF.md#coverage-group)). `enabled` takes part; `master` (with `enabled`) makes this
+  controller the one that receives the show and schedules every controller's slot; `copies` (1-3) is the frames each
+  controller sends per change, used by the master for the whole group. Ignored in receiver mode. `/api/status` →
+  `group`: `role` (`off`, `master`, `remote`), `mac`, `masters` (other masters alive: `name`, `mac`, `ip`), `conflict`
+  (more than one master). Master: `remotes` (`name`, `mac`, `ip`, `state` = `joining` / `synced` / `sync_poor` / `lost`,
+  `error_us`, `sync_age_ms`, `on_time`, `late`, `missed` as the remote reports them), `plans`, `last_plan` (`order`,
+  `copies`, `guard_us`, `lead_us`, `length_us`, `age_ms`). Remote: `following`, `master` (`name`, `mac`, `ip`,
+  `ack_age_ms`), `clock` (`synced`, `samples`, `offset_us`, `error_us`, `rtt_us`), `on_time`, `late`, `missed`,
+  `last_tx_age_ms`. `engine.output` adds `group_plans`, `group_settles` (master) and `group_slots`, `group_skipped`
+  (remote).
 - `input.timeout_s`: blank the bracelets after this long without input. 0 = hold the last colour. On protocol 1 the
   blank is one broadcast "off" to every group (so it also reaches bracelets in groups no zone uses).
 - Test mode (`/api/test`) on protocol 1 also uses one broadcast per colour change rather than one packet per zone.
@@ -208,7 +219,13 @@ Controllers find each other two ways:
   airtime over the last 10 s (%). A controller that has just started
   adds `"hello":true`; the others answer at once (broadcast, plus directly to the sender, which also works
   across subnets). A beat also goes out immediately when the radio, input, output or test state changes. The
-  sender's IP is taken from the packet, not the payload.
+  sender's IP is taken from the packet, not the payload. Firmware with coverage groups adds `"mac"` (12 hex digits,
+  the Ethernet MAC: a stable identity), `"sync"` (takes part in a coverage group) and, with `sync`, `"master"`.
+  The master lists every controller whose beat has `sync` and not `master`; a remote follows the one with both.
+- **Coverage group (UDP 4050, unicast only):** remote → master `SYNC` every second, master → remote `SYNC_ACK`
+  (NTP-style timestamps), and master → remote `TX` per change (slot start on the master's clock, copies,
+  protocol, frequency, packet). Binary, little-endian, starting `N2RG`, version 1; see
+  `lib/net2rf_group/group_sync.h`.
 - **mDNS** (`_net2rf._tcp`, every 60 s): finds controllers whose heartbeats can't reach this one, such as older
   firmware or Wi-Fi with client isolation. They're listed without live state.
 

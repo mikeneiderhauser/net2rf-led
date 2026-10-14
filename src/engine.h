@@ -33,6 +33,7 @@ struct ZoneLane {
     bool have_want{false};  // the zone is live on this protocol and has a colour
     bool have_sent{false};
     uint32_t last_tx_ms{0};
+    bool settle{false};  // coverage group master: send this packet once more when it has stayed put a while
 };
 
 struct ZoneState {
@@ -88,6 +89,11 @@ struct OutputStats {
     uint32_t lbt_waits{0};    // ... and found the channel busy at least once
     uint32_t lbt_forced{0};   // ... and gave up waiting (sent anyway)
     uint32_t lbt_wait_ms{0};  // total time spent waiting for a clear channel
+    // coverage group
+    uint32_t group_plans{0};    // master: transmissions shared out in slots
+    uint32_t group_settles{0};  // master: settle repeats
+    uint32_t group_slots{0};    // remote: slots transmitted for the master
+    uint32_t group_skipped{0};  // remote: slots dropped (too late, or the radio failed)
 };
 
 // Receiver mode, for the OLED.
@@ -170,6 +176,7 @@ class Engine {
         uint8_t packet[rfproto::PACKET_LEN];
         uint8_t repeats;
         bool manual;
+        bool important;  // a final state (all off, blanking): one extra copy in a coverage group
     };
 
     static void task_entry_(void *arg);
@@ -178,7 +185,7 @@ class Engine {
     // Protocol 1 has a confirmed "all groups" address (group 0), so fan-out actions to the protocol 1 zones can be
     // one packet. Only when some zone uses protocol 1: a protocol 0-only controller never sends one.
     bool can_broadcast_() const { return protocol_in_use(g_app, 1); }
-    void queue_broadcast_(rfproto::Action action, uint8_t r, uint8_t g, uint8_t b);
+    void queue_broadcast_(rfproto::Action action, uint8_t r, uint8_t g, uint8_t b, bool important = false);
     // Treat the zones' current packets in these protocols (rfproto::PROTOCOL_BIT set) as delivered.
     void mark_zones_sent_(uint32_t now, uint8_t protocols);
     void apply_input_(uint32_t offset, const uint8_t *data, size_t len, bool frame_end, uint32_t src_ip,
@@ -187,8 +194,12 @@ class Engine {
     bool pick_job_(uint32_t now, Job &job);
     bool zone_changed_(uint8_t zone, uint8_t protocol) const;
     bool held_back_(uint8_t zone, uint8_t protocol) const;  // a broader overlapping zone must be sent first
-    void take_lane_(uint8_t zone, uint8_t protocol, uint32_t now);  // record the lane's packet as sent
+    void take_lane_(uint8_t zone, uint8_t protocol, uint32_t now, bool settle);  // record the lane's packet as sent
     void transmit_(const Job &job);
+    bool tune_(uint32_t freq, int8_t power);  // false (and the radio is re-probed) if tuning failed
+    // Send `copies` frames now and record them (stats, transmission log). At `start_us` (esp_timer) if not 0.
+    bool send_frames_(const Job &job, uint8_t copies, int64_t start_us);
+    void run_remote_slot_();  // coverage group remote: transmit the next slot the master gave us, when it is due
     bool wait_for_clear_channel_(int8_t threshold);  // false if it gave up (busy too long)
     void tick_stats_(uint32_t now);
 
@@ -225,6 +236,8 @@ class Engine {
     // Base layer (protocol 0, AppConfig::base_layer): see p0_apply_base_layer(). Set by update_wants_().
     int8_t base_zone_{-1};     // the all-groups zone, or -1 when layering is not in effect
     uint16_t follows_{0};      // zones currently following the base (bit per zone)
+    bool group_master_{false};  // coverage group role, refreshed each engine loop
+    bool group_remote_{false};
     bool config_dirty_{true};
     bool output_was_enabled_{true};
     bool input_dirty_{false};

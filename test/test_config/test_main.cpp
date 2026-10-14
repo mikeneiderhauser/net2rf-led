@@ -197,6 +197,39 @@ void test_json_errors(void) {
 
 // The update settings are just the release source: the controller no longer checks for releases itself, so the
 // old check settings are gone from the JSON, and a file that still carries them imports without complaint.
+void test_sync_settings(void) {
+    // A record saved by the firmware before the coverage group fields still loads, zones and all.
+    AppConfig c;
+    config_defaults_app(c);
+    c.num_zones = 7;
+    strcpy(c.name, "Before");
+    Preferences::store().clear();
+    config_save_app(c);
+    Preferences::store()["rfb/app"].resize(APP_PREV_SIZE);
+    TEST_ASSERT_TRUE(APP_PREV_SIZE < sizeof(AppConfig));
+    config_load();
+    TEST_ASSERT_EQUAL_STRING("Before", g_app.name);
+    TEST_ASSERT_EQUAL_UINT8(7, g_app.num_zones);
+    TEST_ASSERT_EQUAL_UINT8(0, g_app.sync_enabled);
+    TEST_ASSERT_EQUAL_UINT8(1, g_app.sync_copies);
+
+    String err;
+    config_defaults_app(c);
+    TEST_ASSERT_TRUE(apply(c, R"({"sync":{"enabled":true,"master":true,"copies":2}})", err));
+    TEST_ASSERT_TRUE(sync_is_master(c));
+    TEST_ASSERT_FALSE(sync_is_remote(c));
+    TEST_ASSERT_EQUAL_UINT8(2, c.sync_copies);
+    JsonDocument out;
+    app_to_json(c, out.to<JsonObject>());
+    TEST_ASSERT_TRUE(out["sync"]["master"].as<bool>());
+    TEST_ASSERT_EQUAL(2, out["sync"]["copies"].as<int>());
+    TEST_ASSERT_TRUE(apply(c, R"({"sync":{"master":false}})", err));
+    TEST_ASSERT_TRUE(sync_is_remote(c));
+    TEST_ASSERT_TRUE(apply(c, R"({"role":"receiver"})", err));  // a receiver never transmits: no group role
+    TEST_ASSERT_FALSE(sync_is_remote(c));
+    TEST_ASSERT_FALSE(apply(c, R"({"sync":{"copies":4}})", err));
+}
+
 void test_update_settings(void) {
     AppConfig c;
     config_defaults_app(c);
@@ -229,6 +262,7 @@ int main(int, char **) {
     RUN_TEST(test_json_older_clients);
     RUN_TEST(test_export_import_roundtrip);
     RUN_TEST(test_json_errors);
+    RUN_TEST(test_sync_settings);
     RUN_TEST(test_update_settings);
     return UNITY_END();
 }

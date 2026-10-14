@@ -5,6 +5,10 @@
 
 #include <vector>
 
+// Named here so PlatformIO's library finder picks them up for src/group.h (included by engine.cpp).
+#include "group_sync.h"
+#include "heartbeat.h"
+
 // The scheduler's steps are private; the tests drive them directly.
 #define private public
 #include "../../src/engine.cpp"
@@ -21,7 +25,45 @@ uint32_t micros() { return s_now * 1000; }
 const char *radio_type_name(uint8_t) { return "cc1101"; }
 bool OokSender::begin() { return this->ready_ = true; }
 void OokSender::end() { this->ready_ = false; }
-bool OokSender::send(uint8_t, const uint8_t *, uint8_t) { return true; }
+static std::vector<uint8_t> s_sent_copies;    // frames per OokSender::send
+static std::vector<int64_t> s_sent_at;          // esp_timer time of each send
+bool OokSender::send(uint8_t, const uint8_t *, uint8_t repeats) {
+    s_sent_copies.push_back(repeats);
+    s_sent_at.push_back(esp_timer_get_time());
+    return true;
+}
+
+// ---- coverage group (src/group.cpp) stand-ins ----
+namespace group {
+static bool s_live = false;          // master: some remote is live
+static uint8_t s_plan_copies = 0;    // copies the engine asked for
+static int s_plans = 0;
+static bool s_following = false;     // remote
+static std::vector<n2rgroup::Pending> s_due;
+static int s_done_ok = 0, s_done_late = 0;
+bool plan(uint8_t, uint32_t, const uint8_t *, uint8_t copies, uint32_t frame_us, int64_t now, int64_t &own_start,
+          uint8_t &own_copies, int64_t &plan_end) {
+    if (!s_live)
+        return false;
+    s_plans++;
+    s_plan_copies = copies;
+    own_start = now + 20000;  // the master's slot second of two
+    own_copies = copies;
+    plan_end = own_start + 2 * (copies * frame_us + 3000);
+    return true;
+}
+bool following() { return s_following; }
+bool next_due(n2rgroup::Pending &out) {
+    if (s_due.empty())
+        return false;
+    out = s_due.front();
+    return true;
+}
+void done(bool sent) {
+    s_due.erase(s_due.begin());
+    (sent ? s_done_ok : s_done_late)++;
+}
+}  // namespace group
 struct FakeRadio : Radio {
     const char *name() const override { return "fake"; }
     bool init() override { return true; }
@@ -55,6 +97,13 @@ static void setup(uint8_t zones, uint8_t protocols, InputMode mode = MODE_PIXEL,
         z.p1_addr[0] = i;  // group code (0 = every group)
         z.p1_addr[1] = 0xFF;
     }
+    g_app.sync_copies = 1;
+    group::s_live = group::s_following = false;
+    group::s_plans = group::s_done_ok = group::s_done_late = 0;
+    group::s_due.clear();
+    s_sent_copies.clear();
+    s_sent_at.clear();
+    esp_timer_fake_us() = 1000000;
     g_engine = Engine();
     g_engine.radio_ = create_radio(RADIO_CC1101);
     g_engine.radio_state_ = RadioState::READY;
@@ -243,6 +292,86 @@ void test_status_lists_each_protocol(void) {
 void setUp(void) {}
 void tearDown(void) {}
 
+
+// ---- coverage group ----
+
+void test_group_master_plans_copies(void) {
+    setup(1, PROTOCOL_BIT[1]);
+    g_app.sync_enabled = g_app.sync_master = 1;
+    g_app.sync_copies = 2;
+    group::s_live = true;
+    ddp({255, 0, 0});
+    auto sent = drain();
+    TEST_ASSERT_EQUAL(1, sent.size());
+    Engine::Job job{};
+    job.protocol = 1;
+    g_engine.transmit_(job);
+    TEST_ASSERT_EQUAL(1, group::s_plans);
+    TEST_ASSERT_EQUAL_UINT8(2, group::s_plan_copies);  // the group copies, not the 3 repeats
+    TEST_ASSERT_EQUAL(1, s_sent_copies.size());
+    TEST_ASSERT_EQUAL_UINT8(2, s_sent_copies[0]);
+    TEST_ASSERT_EQUAL_INT64(1000000 + 20000, s_sent_at[0]);  // in its slot
+    TEST_ASSERT_TRUE(esp_timer_get_time() >= 1000000 + 20000 + 2 * (2 * frame_us(1) + 3000));  // waited the plan out
+    // a final state gets one more copy
+    job.important = true;
+    g_engine.transmit_(job);
+    TEST_ASSERT_EQUAL_UINT8(3, group::s_plan_copies);
+    // no remote live: standalone, with the repeats
+    group::s_live = false;
+    job.important = false;
+    job.repeats = 3;
+    g_engine.transmit_(job);
+    TEST_ASSERT_EQUAL(2, group::s_plans);
+    TEST_ASSERT_EQUAL_UINT8(3, s_sent_copies.back());
+}
+
+void test_group_master_settle_repeat(void) {
+    setup(2, PROTOCOL_BIT[1]);
+    g_app.sync_enabled = g_app.sync_master = 1;
+    g_engine.group_master_ = true;
+    ddp({255, 0, 0, 0, 255, 0});
+    TEST_ASSERT_EQUAL(2, drain().size());
+    s_now += 500;
+    TEST_ASSERT_EQUAL(0, drain().size());  // not yet
+    s_now += SETTLE_MS;
+    auto sent = drain();
+    TEST_ASSERT_EQUAL(2, sent.size());  // each lane once more, same packet
+    TEST_ASSERT_TRUE(sent[0].pkt == expect(1, g_app.zones[0].p1_addr, 255, 0, 0));
+    s_now += 5 * SETTLE_MS;
+    TEST_ASSERT_EQUAL(0, drain().size());  // only once
+    // not a master: no settle repeat
+    setup(1, PROTOCOL_BIT[1]);
+    ddp({255, 0, 0});
+    drain();
+    s_now += 2 * SETTLE_MS;
+    TEST_ASSERT_EQUAL(0, drain().size());
+}
+
+void test_group_remote_sends_slots(void) {
+    setup(1, PROTOCOL_BIT[1]);
+    g_app.sync_enabled = 1;
+    g_engine.group_remote_ = true;
+    n2rgroup::Pending p{};
+    p.local_us = esp_timer_get_time() + 10000;
+    p.copies = 2;
+    p.protocol = 1;
+    p.freq_hz = DEFAULT_FREQ_P1;
+    group::s_due.push_back(p);
+    p.local_us = esp_timer_get_time() + 500000;  // later: not touched yet
+    group::s_due.push_back(p);
+    g_engine.run_remote_slot_();
+    TEST_ASSERT_EQUAL(1, group::s_done_ok);
+    TEST_ASSERT_EQUAL_UINT8(2, s_sent_copies[0]);
+    TEST_ASSERT_EQUAL_INT64(p.local_us - 490000, s_sent_at[0]);
+    g_engine.run_remote_slot_();
+    TEST_ASSERT_EQUAL(1, s_sent_copies.size());  // too early
+    esp_timer_fake_us() = p.local_us + 10000;      // missed it
+    g_engine.run_remote_slot_();
+    TEST_ASSERT_EQUAL(1, group::s_done_late);
+    TEST_ASSERT_EQUAL(1, s_sent_copies.size());
+    TEST_ASSERT_EQUAL(1, g_engine.out_.group_skipped);
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_protocol0_only_sends_no_protocol1);
@@ -254,5 +383,8 @@ int main(int, char **) {
     RUN_TEST(test_dmx_effect_on_both);
     RUN_TEST(test_base_layer_with_both);
     RUN_TEST(test_status_lists_each_protocol);
+    RUN_TEST(test_group_master_plans_copies);
+    RUN_TEST(test_group_master_settle_repeat);
+    RUN_TEST(test_group_remote_sends_slots);
     return UNITY_END();
 }

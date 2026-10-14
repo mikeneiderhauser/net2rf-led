@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "engine.h"
+#include "group.h"
 #include "net.h"
 #include "pins.h"
 
@@ -431,7 +432,9 @@ static void draw_page(uint32_t now) {
                                                               : "starting";
         s_oled->drawString(0, 38, radio);
         const char *newer = updater::available_version();
-        s_oled->drawString(0, 50, newer ? fit(String("v" FW_VERSION " > ") + newer + " avail", 128) : String("v" FW_VERSION));
+        String grp = group::summary();
+        s_oled->drawString(0, 50, newer ? fit(String("v" FW_VERSION " > ") + newer + " avail", 128)
+                                  : grp.length() ? fit(grp, 128) : String("v" FW_VERSION));
     } else if (page.kind == PAGE_RECEIVER || page.kind == PAGE_HEARD) {
         draw_receiver(page.kind == PAGE_HEARD, page.first, s);
     } else if (page.kind == PAGE_INPUT) {

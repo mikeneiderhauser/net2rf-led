@@ -26,6 +26,8 @@ String device_suffix() {
     return String(buf);
 }
 
+void device_mac(uint8_t *mac) { esp_read_mac(mac, ESP_MAC_ETH); }
+
 String default_hostname() {
     String s = "net2rf-" + device_suffix();
     s.toLowerCase();
@@ -134,7 +136,14 @@ void config_defaults_app(AppConfig &c) {
     c.display_sleep = 0;  // the default (10 minutes)
     c.receiver = 0;
     c.rx_profile = RX_PROFILE_NORMAL;
+    c.sync_enabled = 0;
+    c.sync_master = 0;
+    c.sync_copies = 1;
 }
+
+// The record as saved by firmware before the coverage group fields were appended (same magic): accepted, and the
+// new fields keep their defaults.
+static const size_t APP_PREV_SIZE = (offsetof(AppConfig, sync_enabled) + alignof(AppConfig) - 1) & ~(alignof(AppConfig) - 1);
 
 void config_defaults_net(NetConfig &c) {
     memset(&c, 0, sizeof(c));
@@ -155,8 +164,12 @@ void config_defaults_net(NetConfig &c) {
 void config_load() {
     Preferences p;
     p.begin(NVS_NS, true);
-    bool app_ok = p.getBytesLength("app") == sizeof(AppConfig) && p.getBytes("app", &g_app, sizeof(g_app)) &&
-                  g_app.magic == APP_MAGIC;
+    size_t app_len = p.getBytesLength("app");
+    bool app_ok = false;
+    if (app_len == sizeof(AppConfig) || (app_len == APP_PREV_SIZE && APP_PREV_SIZE < sizeof(AppConfig))) {
+        config_defaults_app(g_app);  // fields a shorter record lacks keep their defaults
+        app_ok = p.getBytes("app", &g_app, app_len) == app_len && g_app.magic == APP_MAGIC;
+    }
     bool net_ok = p.getBytesLength("net") == sizeof(NetConfig) && p.getBytes("net", &g_net, sizeof(g_net)) &&
                   g_net.magic == NET_MAGIC;
     p.end();
@@ -170,6 +183,8 @@ void config_load() {
     }
     if (g_app.num_zones == 0 || g_app.num_zones > MAX_ZONES)
         g_app.num_zones = 1;
+    if (g_app.sync_copies < 1 || g_app.sync_copies > 3)
+        g_app.sync_copies = 1;
     if (g_app.radio_type >= NUM_RADIO_TYPES)
         g_app.radio_type = NET2RF_DEFAULT_RADIO;
     g_app.update_repo[sizeof(g_app.update_repo) - 1] = 0;
@@ -343,6 +358,10 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     o["output_enabled"] = (bool) c.output_enabled;
     o["role"] = c.receiver ? "receiver" : "controller";
     o["rx_profile"] = RX_PROFILE_NAMES[c.rx_profile < NUM_RX_PROFILES ? c.rx_profile : 0];
+    JsonObject sync = o["sync"].to<JsonObject>();
+    sync["enabled"] = (bool) c.sync_enabled;
+    sync["master"] = (bool) c.sync_master;
+    sync["copies"] = c.sync_copies;
 
     JsonObject br = o["devices"].to<JsonObject>();
     // "protocols": what every zone drives, or what the zones drive between them when they differ ("per_zone").
@@ -423,6 +442,16 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
             err = "rx_profile must be \"normal\", \"near\" or \"wide\"";
             return false;
         }
+    }
+
+    JsonObjectConst sync = in["sync"];
+    if (!sync.isNull()) {
+        if (sync["enabled"].is<bool>())
+            c.sync_enabled = sync["enabled"].as<bool>();
+        if (sync["master"].is<bool>())
+            c.sync_master = sync["master"].as<bool>();
+        if (!read_int(sync, "copies", 1, 3, c.sync_copies, err))
+            return false;
     }
 
     // devices.protocols sets every zone's protocols. devices.protocol (older clients) switches every zone to that
