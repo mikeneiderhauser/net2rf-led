@@ -64,10 +64,14 @@ constexpr int ETH_MDIO_PIN = 18;
 constexpr int ETH_POWER_PIN = 16;
 
 // Radio SPI bus (CC1101 / SX1278)
-constexpr int SPI_SCK = 4;
-constexpr int SPI_MOSI = 14;
-constexpr int SPI_MISO = 35;  // input-only
-constexpr int RADIO_CS = 15;  // strapping pin: wants to be high at reset, which the chip-select pull-up gives it
+// As routed on carrier R2.0 (J3): SCK IO15, MISO IO14, MOSI IO35, CS IO4. IO35 is input-only and cannot drive
+// MOSI, so R2.0 boards need J3 pins 9 and 10 bridged (IO12 to IO35) and MOSI is driven from IO12. IO12 is a
+// strapping pin (flash voltage): it must be low at reset, which its internal pull-down gives it, since nothing on
+// the MOSI line pulls up.
+constexpr int SPI_SCK = 15;   // strapping pin: high at reset by its internal pull-up (the radio's SCK input leaves it alone)
+constexpr int SPI_MOSI = 12;  // via the J3 9-10 bridge
+constexpr int SPI_MISO = 14;
+constexpr int RADIO_CS = 4;   // 10k pull-up R12 keeps the radio deselected at reset
 
 // OOK data in and out: CC1101 GDO0 or SX1278 DIO2
 constexpr int RADIO_DATA = 33;
