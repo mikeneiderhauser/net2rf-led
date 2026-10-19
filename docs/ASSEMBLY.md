@@ -52,12 +52,16 @@ what you fitted. The XIAO ESP32-S3 build starts on CC1101.
 |---|---|---|---|---|
 | 3V3 | 3V3 | Power | VCC | 3.3V |
 | GND | GND | Ground | GND | GND |
-| IO4 | IO4 | SPI SCK | SCK | SCK |
-| IO14 | IO14 | SPI MOSI | MOSI (SI) | MOSI |
-| IO35 | IO35 | SPI MISO | MISO (SO) | MISO |
-| IO15 | IO15 | Radio CS | CSN | NSS |
+| IO15 | IO15 | SPI SCK | SCK | SCK |
+| IO12 | IO12 | SPI MOSI | MOSI (SI) | MOSI |
+| IO14 | IO14 | SPI MISO | MISO (SO) | MISO |
+| IO4 | IO4 | Radio CS (10 kΩ pull-up to 3V3) | CSN | NSS |
 | IO33 | 485_EN | OOK data (via 330 Ω–1 kΩ) | GDO0 | DIO2 |
 | IO32 | CFG | Radio reset | not used | RESET |
+
+This is the carrier board R2.0's routing. On that board MOSI is routed to IO35, which is input-only, so
+**bridge J3 pins 9 and 10** (IO12 to IO35) on R2.0 boards (see the [hardware note](#hardware-note-carrier-board-r20)); the firmware drives MOSI from IO12. Wired by hand,
+take MOSI straight to IO12.
 
 The firmware checks the CC1101's GDO0 → IO33 connection at boot. A broken data wire shows as **data line fault**
 on the dashboard, instead of the radio silently keying up with nothing on it.
@@ -75,7 +79,8 @@ on the dashboard, instead of the radio silently keying up with nothing on it.
 | EN | EN | Reset | button to GND |
 | IO0 | IO0 | BOOT | button to GND |
 
-- Leave **IO12** unconnected: it must be low at boot.
+- **IO12** carries MOSI and is a strapping pin: it must be low at boot, which its internal pull-down gives it.
+  Put no pull-up on the MOSI line.
 - **IO2** drives the WT32-ETH01's onboard LED (the status LED). Don't wire anything else to it: pull-ups on
   IO2 break serial flashing.
 - **IO0** is also the Ethernet 50 MHz clock once running. Only press BOOT while resetting, and keep wiring
@@ -132,6 +137,23 @@ About 400 mA worst case, within the WT32-ETH01's regulator. Use a 5 V / 1 A supp
 > 🚧 **Under construction.** A carrier board the modules plug into is in the works. Details will follow once it
 > has been built and tested. Until then, use the [DIY build](#a-diy-build); the carrier board will use the same
 > firmware and pin assignment.
+
+### Hardware note: carrier board R2.0
+
+> ⚠️ **Bridge J3 pins 9 and 10 on every R2.0 board** before fitting the radio.
+>
+> On R2.0 the radio's MOSI is routed to the WT32-ETH01's IO35, which is input-only and cannot drive it. A solder
+> bridge (or a short wire) across **J3 pin 9 (IO12) and J3 pin 10 (IO35)**, on the underside, puts MOSI on IO12,
+> which is where the firmware drives it. Without the bridge the dashboard shows the radio as **not detected**.
+>
+> - Bridge only those two pins. Check with a meter that neither is shorted to pin 8 (MISO) or pin 11 (radio CS).
+> - IO12 is a strapping pin and must be low at power-up. Its internal pull-down does that, so put no pull-up on
+>   the MOSI line.
+> - R2.0's SPI routing: SCK IO15, MOSI IO35 (bridged to IO12), MISO IO14, CS IO4. The next revision moves MOSI to
+>   IO14 and MISO to IO35, and the bridge will not be needed.
+>
+> Also on R2.0: the controller does not always start at power-on. Press **EN** once if the OLED stays blank. A fix
+> is planned for the next revision.
 
 ---
 
