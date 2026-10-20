@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "engine.h"
+#include "group.h"
 #include "net.h"
 #include "ota_guard.h"
 #include "panel.h"
@@ -86,6 +87,7 @@ void setup() {
     store::begin();  // boot log first: a crash later in setup() is then already on record
     panel::begin();
     peers::begin();
+    group::begin();
     net::begin();  // network and web UI come up first...
     web::begin();
     g_engine.begin();  // ...the radio is probed in the background by the engine task
@@ -96,6 +98,7 @@ void loop() {
     web::loop();
     panel::loop();
     peers::loop();
+    group::loop();
     store::loop();
     ota_guard::loop(net::connected() || net::ap_active());  // web UI is up from setup()
     static uint32_t last_bind_check = 0;

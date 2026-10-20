@@ -12,6 +12,11 @@ history.
   transmitter comes and goes; otherwise fix the LNA gain or add an RSSI trigger.
 - [ ] **Raw captures:** check a real protocol 0 / protocol 1 burst against the bit guess, and an `.ook` export in
   rtl_433.
+- [ ] **Coverage group on real hardware** (master + 1-2 remotes): clock error over Ethernet and Wi-Fi
+  (`group.clock.error_us`), slot timing on air (receiver mode or an SDR: each controller's copies back to back,
+  no overlap), `late` / `missed` counts during a busy sequence, and a coverage walk. Then tune the guard
+  (3 ms + 2 × error), the lead (15 ms + 2 × round trip) and the settle repeat (1 s); check the master stays
+  responsive with 3+ remotes at 3 copies (a plan blocks the engine until it ends).
 - [ ] **Listen before transmit** with two radios in range: check `lbt_waits` / `lbt_forced` while both run busy
   sequences, and that the SX1278 RX path (packet mode, DIO2 = TimeOut) doesn't disturb its TX data line. Then
   decide whether to turn it on by default. (Default threshold is -75 dBm: a quiet CC1101 read -84 to -87.)

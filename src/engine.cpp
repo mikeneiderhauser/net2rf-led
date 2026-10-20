@@ -7,6 +7,7 @@
 #include <freertos/semphr.h>
 #include <hal/gpio_ll.h>
 
+#include "group.h"
 #include "pins.h"
 
 using namespace rfproto;
@@ -39,6 +40,12 @@ const char *radio_state_name(RadioState s) {
 static const uint32_t RADIO_RETRY_MS = 10000;
 static const uint8_t MAX_MANUAL_QUEUE = 32;
 static const uint32_t TEST_CYCLE_MS = 2000;
+// Coverage group master: a lane that has stayed put this long after its last change is sent once more, so a
+// controller (or device) that missed the change catches up.
+static const uint32_t SETTLE_MS = 1000;
+// Coverage group remote: start working on a slot this long before it is due (tune, enter TX).
+static const int64_t SLOT_PREP_US = 25000;
+static const int64_t SLOT_TX_SETUP_US = 2000;  // ... and enter TX this long before it
 // Listen before transmit: sample the channel for longer than the longest gap inside a device frame
 // (1.6 ms after a protocol 1 sync pulse), so a frame already on the air can't slip between samples.
 static const uint32_t LBT_WINDOW_US = 2500;
@@ -261,7 +268,7 @@ void Engine::update_wants_(uint32_t now) {
     }
 }
 
-void Engine::queue_broadcast_(Action action, uint8_t r, uint8_t g, uint8_t b) {
+void Engine::queue_broadcast_(Action action, uint8_t r, uint8_t g, uint8_t b, bool important) {
     // Called with StateLock held. Protocol 1, group 0 = all groups; byte 6 as normally sent (FF).
     static const uint8_t ALL_GROUPS[4] = {0x00, 0xFF, 0x00, 0x00};
     if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE)
@@ -270,6 +277,7 @@ void Engine::queue_broadcast_(Action action, uint8_t r, uint8_t g, uint8_t b) {
     job.protocol = 1;
     job.repeats = g_app.repeats;
     job.manual = false;
+    job.important = important;
     build_packet(1, ALL_GROUPS, action, r, g, b, g_app.off_threshold, job.packet);
     this->manual_.push_back(job);
 }
@@ -316,11 +324,12 @@ bool Engine::held_back_(uint8_t i, uint8_t p) const {
     return false;
 }
 
-void Engine::take_lane_(uint8_t i, uint8_t p, uint32_t now) {
+void Engine::take_lane_(uint8_t i, uint8_t p, uint32_t now, bool settle) {
     ZoneLane &l = this->zones_[i].lane[p];
     memcpy(l.sent, l.want, PACKET_LEN);
     l.have_sent = true;
     l.last_tx_ms = now;
+    l.settle = settle;
     this->zones_[i].tx_count++;
 }
 
@@ -332,8 +341,12 @@ bool Engine::pick_job_(uint32_t now, Job &job) {
     }
     // Lanes in the order zone 0 / protocol 0, zone 0 / protocol 1, zone 1 / protocol 0, ... taking turns.
     uint8_t n = g_app.num_zones, lanes = (uint8_t) (n * NUM_PROTOCOLS);
-    // Pass 0: lanes whose packet changed (newest state wins). Pass 1: periodic refresh.
-    for (int pass = 0; pass < 2; pass++) {
+    // Pass 0: lanes whose packet changed (newest state wins). Pass 1: coverage group master, the settle repeat of a
+    // lane that has stopped changing. Pass 2: periodic refresh.
+    bool settle = this->group_master_;
+    for (int pass = 0; pass < 3; pass++) {
+        if (pass == 1 && !settle)
+            continue;
         for (uint8_t k = 0; k < lanes; k++) {
             uint8_t idx = (uint8_t) ((this->rr_ + k) % lanes), i = idx / NUM_PROTOCOLS, p = idx % NUM_PROTOCOLS;
             // For one change, a zone on both protocols sends protocol 0 first, then protocol 1.
@@ -343,6 +356,20 @@ bool Engine::pick_job_(uint32_t now, Job &job) {
             if (!l.have_want)
                 continue;
             bool changed = this->zone_changed_(i, p);
+            if (pass == 1) {
+                if (changed || !l.settle || now - l.last_tx_ms < SETTLE_MS)
+                    continue;
+                job.protocol = p;
+                memcpy(job.packet, l.sent, PACKET_LEN);
+                job.repeats = g_app.repeats;
+                job.manual = false;
+                job.important = false;
+                l.settle = false;
+                l.last_tx_ms = now;
+                this->out_.group_settles++;
+                this->rr_ = (uint8_t) ((idx + 1) % lanes);
+                return true;
+            }
             bool refresh = g_app.refresh_ms > 0 && now - l.last_tx_ms >= g_app.refresh_ms;
             if (pass == 0 ? !changed || this->held_back_(i, p) : !refresh)
                 continue;
@@ -350,7 +377,8 @@ bool Engine::pick_job_(uint32_t now, Job &job) {
             memcpy(job.packet, l.want, PACKET_LEN);
             job.repeats = g_app.repeats;
             job.manual = false;
-            this->take_lane_(i, p, now);
+            job.important = false;
+            this->take_lane_(i, p, now, settle && pass == 0);
             this->rr_ = (uint8_t) ((idx + 1) % lanes);
             if (p == 0 && pass == 0 && g_app.base_layer && i != this->base_zone_) {
                 // One packet per colour, not per zone: every other protocol 0 zone waiting to send this same
@@ -361,7 +389,7 @@ bool Engine::pick_job_(uint32_t now, Job &job) {
                         !p0_can_merge(job.packet, other.want))
                         continue;
                     p0_merge(job.packet, other.want);
-                    this->take_lane_(j, 0, now);
+                    this->take_lane_(j, 0, now, settle);
                 }
             }
             if (p == 0 && i == this->base_zone_) {
@@ -394,41 +422,43 @@ void Engine::try_init_radio_() {
         log_w("%s not ready, retrying in %us", this->radio_->name(), RADIO_RETRY_MS / 1000);
 }
 
-void Engine::transmit_(const Job &job) {
-    uint32_t freq, jitter;
-    int8_t power, lbt_threshold;
-    bool lbt;
-    {
+bool Engine::tune_(uint32_t freq, int8_t power) {
+    if (this->tuned_ && freq == this->tuned_freq_ && power == this->tuned_power_)
+        return true;
+    if (!this->radio_->tune(freq, power)) {
+        log_w("%s tune to %lu Hz failed", this->radio_->name(), (unsigned long) freq);
         StateLock lock;
-        freq = g_app.freq[job.protocol];
-        power = constrain(g_app.tx_power, this->radio_->min_power(), this->radio_->max_power());
-        jitter = g_app.tx_jitter_ms;
-        lbt = g_app.lbt_enabled && this->radio_->lbt_supported();
-        lbt_threshold = g_app.lbt_threshold;
+        this->out_.errors++;
+        this->radio_state_ = RadioState::NOT_DETECTED;  // re-probe
+        this->next_init_ms_ = millis() + 1000;
+        return false;
     }
-    if (jitter > 0)
-        delay(esp_random() % (jitter + 1));
+    this->tuned_freq_ = freq;
+    this->tuned_power_ = power;
+    this->tuned_ = true;
+    log_d("Tuned %lu Hz, %d dBm", (unsigned long) freq, power);
+    return true;
+}
 
-    if (!this->tuned_ || freq != this->tuned_freq_ || power != this->tuned_power_) {
-        if (!this->radio_->tune(freq, power)) {
-            log_w("%s tune to %lu Hz failed", this->radio_->name(), (unsigned long) freq);
-            StateLock lock;
-            this->out_.errors++;
-            this->radio_state_ = RadioState::NOT_DETECTED;  // re-probe
-            this->next_init_ms_ = millis() + 1000;
+// Sleep until shortly before `at_us`, then spin to it.
+static void wait_until_us(int64_t at_us) {
+    for (;;) {
+        int64_t left = at_us - esp_timer_get_time();
+        if (left <= 0)
             return;
-        }
-        this->tuned_freq_ = freq;
-        this->tuned_power_ = power;
-        this->tuned_ = true;
-        log_d("Tuned %lu Hz, %d dBm", (unsigned long) freq, power);
+        if (left > 3000)
+            vTaskDelay(pdMS_TO_TICKS((left - 2000) / 1000));
+        else
+            delayMicroseconds((uint32_t) left);
     }
+}
 
-    if (lbt)
-        this->wait_for_clear_channel_(lbt_threshold);
-
+bool Engine::send_frames_(const Job &job, uint8_t copies, int64_t start_us) {
+    bool ok = this->radio_->begin_tx();
+    if (start_us)
+        wait_until_us(start_us);
     uint32_t start = micros();
-    bool ok = this->radio_->begin_tx() && this->sender_.send(job.protocol, job.packet, job.repeats);
+    ok = ok && this->sender_.send(job.protocol, job.packet, copies);
     this->radio_->end_tx();
     uint32_t elapsed = micros() - start;
 
@@ -437,7 +467,7 @@ void Engine::transmit_(const Job &job) {
     TxLogEntry &entry = this->tx_log_[this->tx_log_head_];
     entry.ms = millis();
     entry.protocol = job.protocol;
-    entry.repeats = job.repeats;
+    entry.repeats = copies;
     memcpy(entry.packet, job.packet, PACKET_LEN);
     entry.manual = job.manual;
     entry.ok = ok;
@@ -447,12 +477,96 @@ void Engine::transmit_(const Job &job) {
     this->tx_log_total_++;
     if (ok) {
         this->out_.updates++;
-        this->out_.frames += job.repeats;
+        this->out_.frames += copies;
         if (job.manual)
             this->out_.manual++;
     } else {
         this->out_.errors++;
     }
+    return ok;
+}
+
+void Engine::transmit_(const Job &job) {
+    uint32_t freq, jitter;
+    int8_t power, lbt_threshold;
+    bool lbt, master;
+    uint8_t copies;
+    {
+        StateLock lock;
+        freq = g_app.freq[job.protocol];
+        power = constrain(g_app.tx_power, this->radio_->min_power(), this->radio_->max_power());
+        jitter = g_app.tx_jitter_ms;
+        lbt = g_app.lbt_enabled && this->radio_->lbt_supported();
+        lbt_threshold = g_app.lbt_threshold;
+        master = sync_is_master(g_app);
+        copies = g_app.sync_copies;
+    }
+
+    if (master) {
+        // Coverage group: every controller sends `copies` frames in its own slot (the group copies replace the
+        // repeats). No jitter or listen-before-talk: the slots keep the controllers apart.
+        if (job.important)
+            copies++;
+        int64_t own_start = 0, plan_end = 0;
+        uint8_t own_copies = copies;
+        if (group::plan(job.protocol, freq, job.packet, copies, frame_us(job.protocol), esp_timer_get_time(), own_start,
+                        own_copies, plan_end)) {
+            {
+                StateLock lock;
+                this->out_.group_plans++;
+            }
+            if (this->tune_(freq, power)) {
+                wait_until_us(own_start - SLOT_TX_SETUP_US);
+                this->send_frames_(job, own_copies, own_start);
+            }
+            wait_until_us(plan_end);  // the remotes' slots: the air is theirs until the plan ends
+            return;
+        }
+        // no remote live: transmit on our own, as a standalone controller
+    }
+
+    if (jitter > 0)
+        delay(esp_random() % (jitter + 1));
+    if (!this->tune_(freq, power))
+        return;
+    if (lbt)
+        this->wait_for_clear_channel_(lbt_threshold);
+    this->send_frames_(job, job.repeats, 0);
+}
+
+void Engine::run_remote_slot_() {
+    n2rgroup::Pending p;
+    if (!group::next_due(p))
+        return;
+    int64_t left = p.local_us - esp_timer_get_time();
+    if (left > SLOT_PREP_US)
+        return;  // not yet
+    if (left < -(int64_t) n2rgroup::RemoteQueue::LATE_US) {
+        group::done(false);
+        StateLock lock;
+        this->out_.group_skipped++;
+        return;
+    }
+    int8_t power;
+    {
+        StateLock lock;
+        power = constrain(g_app.tx_power, this->radio_->min_power(), this->radio_->max_power());
+    }
+    Job job{};
+    job.protocol = p.protocol ? 1 : 0;
+    memcpy(job.packet, p.packet, PACKET_LEN);
+    job.repeats = p.copies;
+    bool ok = this->tune_(p.freq_hz, power);
+    if (ok) {
+        wait_until_us(p.local_us - SLOT_TX_SETUP_US);
+        ok = this->send_frames_(job, constrain(p.copies, 1, n2rgroup::MAX_COPIES + 1), p.local_us);
+    }
+    group::done(ok);
+    StateLock lock;
+    if (ok)
+        this->out_.group_slots++;
+    else
+        this->out_.group_skipped++;
 }
 
 bool Engine::wait_for_clear_channel_(int8_t threshold) {
@@ -557,11 +671,17 @@ void Engine::run_() {
         if (this->rx_active_)
             this->poll_rx_(now);
 
+        // Coverage group remote: while it follows a master, it transmits only the slots the master gives it.
+        // Without a master it stays silent (test buttons on its own web page still work).
+        bool following = group::following();
+
         Job job;
-        bool have_job = false;
+        bool have_job = false, remote_slot = false;
         {
             StateLock lock;
             this->tick_stats_(now);
+            this->group_master_ = sync_is_master(g_app);
+            this->group_remote_ = sync_is_remote(g_app);
 
             uint32_t timeout_ms = (uint32_t) g_app.input_timeout_s * 1000;
             if (timeout_ms > 0 && this->in_.seen && !this->in_.timed_out && now - this->in_.last_rx_ms > timeout_ms) {
@@ -597,7 +717,7 @@ void Engine::run_() {
                 // Protocol 0 zones are blanked zone by zone (their colours have just gone to black).
                 this->blank_broadcast_ = false;
                 if (tx_allowed(g_app)) {
-                    this->queue_broadcast_(ACTION_OFF, 0, 0, 0);
+                    this->queue_broadcast_(ACTION_OFF, 0, 0, 0, true);
                     this->mark_zones_sent_(now, PROTOCOL_BIT[1]);
                 }
             }
@@ -631,12 +751,30 @@ void Engine::run_() {
                         }
                     }
                 }
+            } else if (this->group_remote_) {
+                // The master transmits the show: its colours are what counts here, not this controller's input.
+                for (uint8_t i = 0; i < g_app.num_zones; i++)
+                    for (ZoneLane &l : this->zones_[i].lane)
+                        if (l.have_want) {
+                            memcpy(l.sent, l.want, PACKET_LEN);
+                            l.have_sent = true;
+                        }
+                bool ready = this->radio_state_ == RadioState::READY && !this->suspended_;
+                if (following) {
+                    this->manual_.clear();
+                    remote_slot = ready;
+                } else if (ready && !this->manual_.empty()) {
+                    have_job = this->pick_job_(now, job);
+                }
             } else if (this->radio_state_ == RadioState::READY && !this->suspended_) {
                 have_job = this->pick_job_(now, job);
             }
         }
 
-        if (have_job)
+        if (remote_slot) {
+            this->run_remote_slot_();
+            vTaskDelay(1);
+        } else if (have_job)
             this->transmit_(job);
         else if (this->rssi_request_)
             this->sample_rssi_();
@@ -713,11 +851,12 @@ bool Engine::all_off() {
         job.protocol = 0;
         job.repeats = g_app.repeats;
         job.manual = true;
+        job.important = true;
         build_packet(0, g_app.zones[i].addr, ACTION_OFF, 0, 0, 0, g_app.off_threshold, job.packet);
         this->manual_.push_back(job);
     }
     if (this->can_broadcast_()) {
-        this->queue_broadcast_(ACTION_OFF, 0, 0, 0);
+        this->queue_broadcast_(ACTION_OFF, 0, 0, 0, true);
         if (!this->manual_.empty())
             this->manual_.back().manual = true;
     }
@@ -926,6 +1065,10 @@ void Engine::status_json(JsonObject o) {
     out["lbt_waits"] = this->out_.lbt_waits;
     out["lbt_forced"] = this->out_.lbt_forced;
     out["lbt_wait_ms"] = this->out_.lbt_wait_ms;
+    out["group_plans"] = this->out_.group_plans;
+    out["group_settles"] = this->out_.group_settles;
+    out["group_slots"] = this->out_.group_slots;
+    out["group_skipped"] = this->out_.group_skipped;
 
     static const char *const TEST_NAMES[] = {"off", "solid", "cycle"};
     JsonObject test = o["test"].to<JsonObject>();

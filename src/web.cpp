@@ -16,6 +16,7 @@
 
 #include "config.h"
 #include "engine.h"
+#include "group.h"
 #include "net.h"
 #include "ota_guard.h"
 #include "panel.h"
@@ -297,6 +298,7 @@ static void handle_status() {
     }
     net::status_json(doc["network"].to<JsonObject>());
     g_engine.status_json(doc["engine"].to<JsonObject>());
+    group::status_json(doc["group"].to<JsonObject>());
     send_json(200, doc);
 }
 
@@ -841,6 +843,7 @@ static void handle_store_bundle() {
     dev["flash_bytes"] = ESP.getFlashChipSize();
     net::status_json(doc["network"].to<JsonObject>());
     g_engine.status_json(doc["engine"].to<JsonObject>());
+    group::status_json(doc["group"].to<JsonObject>());
     heap_json(doc["heap"].to<JsonObject>());
     crash_json(doc["crash"].to<JsonObject>());
     store::status_json(doc["store"].to<JsonObject>());
@@ -1168,6 +1171,7 @@ void begin() {
     s_server.on("/api/radio", HTTP_POST, protect(handle_radio));
     s_server.on("/api/stats/reset", HTTP_POST, protect([]() {
                     g_engine.reset_stats();
+                    group::reset_stats();
                     send_ok();
                 }));
     s_server.on("/api/wifi/scan", HTTP_POST, protect([]() {

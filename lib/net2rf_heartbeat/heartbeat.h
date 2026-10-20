@@ -9,6 +9,9 @@
 // "air" = share of the last 10 s spent transmitting (%), so controllers in RF range of each other can see when
 // they compete for the 433 MHz channel.
 //
+// Coverage group (lib/net2rf_group): "mac" is the full MAC (unique, unlike "id"); "sync": true marks a controller
+// that takes part in a group, "master": true the one that leads it. Older firmware sends neither (and ignores them).
+//
 // "p" + "v" identify the format (anything else is ignored). The sender's IP is taken from the packet's
 // source address, not from the payload. "hello" asks every receiver to answer with a beat right away.
 
@@ -36,6 +39,9 @@ struct Heartbeat {
     uint8_t air;     // RF airtime over the last 10 s, %
     uint32_t up;     // uptime, s
     bool hello;      // sender just started: please answer now
+    char mac[13];    // full MAC, 12 hex digits ("" from older firmware)
+    bool sync;       // in a coverage group
+    bool master;     // ... and leads it
 };
 
 namespace detail {
@@ -45,6 +51,12 @@ inline void copy_str(char *dst, size_t size, const char *src) {
         for (; src[i] && i + 1 < size; i++)
             dst[i] = (unsigned char) src[i] < 0x20 ? '_' : src[i];
     dst[i] = '\0';
+}
+inline bool is_hex(const char *s) {
+    for (; *s; s++)
+        if (!((*s >= '0' && *s <= '9') || (*s >= 'A' && *s <= 'F') || (*s >= 'a' && *s <= 'f')))
+            return false;
+    return true;
 }
 inline bool is_id(const char *s) {
     size_t n = strlen(s);
@@ -77,6 +89,13 @@ inline size_t encode_heartbeat(const Heartbeat &h, char *buf, size_t size) {
     doc["up"] = h.up;
     if (h.hello)
         doc["hello"] = true;
+    if (h.mac[0])
+        doc["mac"] = h.mac;
+    if (h.sync) {
+        doc["sync"] = true;
+        if (h.master)
+            doc["master"] = true;
+    }
     size_t need = measureJson(doc);
     if (need + 1 > size)
         return 0;
@@ -112,6 +131,11 @@ inline bool decode_heartbeat(const uint8_t *data, size_t len, Heartbeat &out) {
     out.air = doc["air"] | 0;
     out.up = doc["up"] | 0;
     out.hello = doc["hello"] | false;
+    const char *mac = doc["mac"] | "";
+    if (strlen(mac) == 12 && detail::is_hex(mac))
+        detail::copy_str(out.mac, sizeof(out.mac), mac);
+    out.sync = doc["sync"] | false;
+    out.master = out.sync && (doc["master"] | false);
     return true;
 }
 

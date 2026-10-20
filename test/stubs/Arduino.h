@@ -1,5 +1,6 @@
 #pragma once
 // Minimal Arduino-ESP32 stand-ins so src/engine.cpp builds on the host (test_engine only).
+#include "esp_timer.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -81,7 +82,7 @@ class IPAddress {
 uint32_t millis();
 uint32_t micros();
 inline void delay(uint32_t) {}
-inline void delayMicroseconds(uint32_t) {}
+inline void delayMicroseconds(uint32_t us) { esp_timer_fake_us() += us ? us : 1; }
 inline void attachInterrupt(int, void (*)(), int) {}
 inline void detachInterrupt(int) {}
 template<typename T, typename L, typename H> T constrain(T v, L lo, H hi) { return v < lo ? lo : v > hi ? hi : v; }

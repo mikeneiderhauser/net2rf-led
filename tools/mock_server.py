@@ -31,6 +31,7 @@ APP = {
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
               "lbt_enabled": True, "lbt_threshold_dbm": -75, "power": True},
     "update": {"repo": "mikeneiderhauser/net2rf-led"},
+    "sync": {"enabled": True, "master": True, "copies": 2},
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
               "e131_multicast": True, "start_channel": 1, "timeout_s": 300},
     "zones": [  # the firmware's defaults: every group, then groups 1-4; an address in both protocols
@@ -152,6 +153,27 @@ def receiver(up):
                          for c in sorted(CAPTURES.values(), key=lambda c: -c["id"])]}
 
 
+def group_status():
+    """/api/status "group" for the current sync settings (a master with two remotes, or a remote following one)."""
+    g = APP["sync"]
+    role = "off" if not g["enabled"] or APP["role"] == "receiver" else "master" if g["master"] else "remote"
+    out = {"role": role, "mac": "A8032A113F2B", "port": 4050, "listening": role != "off", "masters": [], "conflict": False}
+    if role == "master":
+        out.update(plans=640, remotes=[
+            {"name": "Garage", "mac": "A8032A1140C3", "ip": "192.168.250.61", "state": "synced", "error_us": 1240,
+             "sync_age_ms": 420, "on_time": 638, "late": 2, "missed": 0},
+            {"name": "Back Fence", "mac": "A8032A1188E7", "ip": "192.168.250.74", "state": "sync_poor", "error_us": 14200,
+             "sync_age_ms": 910, "on_time": 590, "late": 31, "missed": 6}],
+            last_plan={"age_ms": 180, "copies": g["copies"], "guard_us": 5480, "lead_us": 20000,
+                       "length_us": 2 * (g["copies"] * 46600 + 5480), "order": ["Garage", "(master)"]})
+    elif role == "remote":
+        out["masters"] = [{"name": "Front Yard", "mac": "A8032A113F2B", "ip": "192.168.250.60"}]
+        out.update(following=True, master={"name": "Front Yard", "mac": "A8032A113F2B", "ip": "192.168.250.60", "ack_age_ms": 380},
+                   clock={"synced": True, "samples": 8, "offset_us": 81234567, "error_us": 640, "rtt_us": 1100},
+                   on_time=638, late=2, missed=0, last_tx_age_ms=220)
+    return out
+
+
 def status():
     up = time.time() - T0
     STATS["packets"] += 40
@@ -181,6 +203,7 @@ def status():
                                  "subnet": "255.255.255.0"},
                     "wifi": {"ssid": NET["wifi_ssid"], "active": False, "connected": False, "mac": "A8:03:2A:11:3F:28"},
                     "ap": {"active": False}},
+        "group": group_status(),
         "engine": {
             "role": APP["role"],
             "receiver": receiver(up),
@@ -195,7 +218,8 @@ def status():
                       "source": "192.168.250.20", "timeout_s": APP["input"]["timeout_s"]},
             "output": {"enabled": APP["output_enabled"], "suppressed": 0 if APP["output_enabled"] else 57,
                        "updates": 812, "frames": 2436, "errors": 0, "manual": 4, "airtime_pct": 38.5,
-                       "lbt_checks": 812, "lbt_waits": 9, "lbt_forced": 0, "lbt_wait_ms": 61},
+                       "lbt_checks": 812, "lbt_waits": 9, "lbt_forced": 0, "lbt_wait_ms": 61,
+                       "group_plans": 640, "group_settles": 151, "group_slots": 0, "group_skipped": 0},
             "test": TEST,
             "zones": zones,
         },
@@ -366,7 +390,7 @@ class Handler(BaseHTTPRequestHandler):
                 APP["role"] = body["role"]
             if "rx_profile" in body:
                 APP["rx_profile"] = body["rx_profile"]
-            for key in ("devices", "radio", "input", "update"):
+            for key in ("devices", "radio", "input", "update", "sync"):
                 if key in body:
                     if key == "radio" and body[key].get("type") != APP["radio"]["type"]:
                         reboot = True

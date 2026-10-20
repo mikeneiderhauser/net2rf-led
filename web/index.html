@@ -170,6 +170,12 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="scroll"><table class="tbl"><thead><tr><th>#</th><th>Zone</th><th>Channels</th><th>Colour</th><th></th><th>Sent packet</th><th>Updates</th><th>Last sent</th></tr></thead><tbody id="d_zones"></tbody></table></div>
       <div class="actions"><button id="resetStats">Reset counters</button><span class="dim small" id="d_timeoutNote"></span></div>
     </div>
+    <div class="card hide" id="d_grpCard"><h2>Coverage group</h2>
+      <div id="d_grpHead" class="small"></div>
+      <div class="note hide" id="d_grpConflict"></div>
+      <div class="scroll" id="d_grpRemotesWrap"><table class="tbl"><thead><tr><th>Remote</th><th>IP</th><th>State</th><th>Sync error</th><th>On time</th><th>Late</th><th>Missed</th></tr></thead><tbody id="d_grpRemotes"></tbody></table></div>
+      <dl class="kv" id="d_grpKv"></dl>
+    </div>
     <div class="card"><h2>Controllers on this network</h2>
       <div class="scroll"><table class="tbl"><thead><tr><th>Name</th><th>Address</th><th>IP</th><th>State</th><th>Last seen</th><th>Firmware</th><th></th></tr></thead><tbody id="d_peers"></tbody></table></div>
       <div class="actions"><button id="d_peersRefresh">Refresh</button><span class="dim small" id="d_alias"></span></div>
@@ -230,6 +236,15 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
           <span class="hint" id="r_lbtHint">set it ~10 dB above the quiet reading</span></label>
       </div>
       <div class="note">Strong 433&nbsp;MHz signals can stop some <b>car key fobs</b> working nearby. Use the lowest TX power that reaches your audience, keep refresh at 0, and don't keep the devices busy all show long.</div>
+    </div>
+    <div class="card"><h2>Coverage group</h2>
+      <p class="dim small" style="margin-top:0">Several controllers around the yard share one show. xLights sends to the <b>master</b> only; the master gives every remote a time slot for each change, so they take turns on air instead of talking over each other. Remotes are found automatically.</p>
+      <div class="form">
+        <label class="inline"><input type="checkbox" id="g_on"> Sync enabled</label>
+        <label>Role<select id="g_role"><option value="remote">Remote</option><option value="master">Master</option></select><span class="hint" id="g_roleHint"></span></label>
+        <label id="g_copiesWrap">Copies per controller<input id="g_copies" type="number" min="1" max="3"><span class="hint">frames each controller sends per change, in place of "Frames per update"; final states (all off, blanking) get one more</span></label>
+      </div>
+      <div class="note hide" id="g_rxNote">Receiver mode is on: this controller takes no part in the group until it is switched off.</div>
     </div>
     <div class="card"><h2>Input</h2>
       <div class="form">
@@ -546,6 +561,26 @@ window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
 async function poll(){try{S=await api('status');render();if(location.hash==='#tools'){gUi();rwTick();toolsLive()}}catch(e){$('pills').innerHTML=pill('bad','offline')}}
 function inputState(i){if(S.engine.test.mode!=='off')return['warn','Test mode'];if(i.out_of_range_channel)return['bad','Wrong channels'];if(!i.seen)return['','No DDP yet'];if(i.timed_out)return['warn','Timed out (blank)'];return i.age_ms<3000?['good','Receiving']:['','Idle']}
 function radioState(r){return r.state==='ready'&&r.data_line==='fault'?['bad','data line fault']:r.state==='ready'?['good','ready']:r.state==='not_detected'?['bad','not detected']:r.state==='off'?['','shut down']:['warn','initializing']}
+// coverage group
+function groupPill(g){if(!g||g.role==='off')return'';if(g.conflict)return pill('bad','2+ group masters');
+  if(g.role==='master'){const rs=g.remotes||[],ok=rs.filter(x=>x.state==='synced').length;return pill(rs.length&&ok<rs.length?'warn':'good',`group master · ${ok}/${rs.length} remotes`)}
+  return pill(g.following?'good':'warn',g.following?'group remote · '+((g.master&&g.master.name)||'master'):g.master?'group remote · syncing':'group remote · no master')}
+const GSTATE={joining:['warn','joining'],synced:['good','synced'],sync_poor:['warn','sync poor'],lost:['bad','lost']};
+function renderGroup(g){const on=g&&g.role!=='off';$('d_grpCard').classList.toggle('hide',!on);if(!on)return;
+  const cf=$('d_grpConflict');cf.classList.toggle('hide',!g.conflict);
+  if(g.conflict)cf.innerHTML=`<b>More than one master on the network:</b> ${(g.masters||[]).map(m=>esc(m.name)+' ('+m.ip+')').join(', ')}${g.role==='master'?' and this controller':''}. Each schedules the air on its own, so they talk over each other. Make only one controller the master.`;
+  const isM=g.role==='master';$('d_grpRemotesWrap').classList.toggle('hide',!isM);
+  if(isM){const rs=g.remotes||[];$('d_grpHead').innerHTML=`<span class="badge good">master</span> <span class="dim">${rs.length?rs.length+' remote'+(rs.length>1?'s':'')+' heard':'no remotes yet: turn on sync on the other controllers'}</span>`;
+    $('d_grpRemotes').innerHTML=rs.length?rs.map(x=>{const [c,t]=GSTATE[x.state]||['warn',x.state];return `<tr><td>${esc(x.name||x.mac)}</td><td class="mono small">${x.ip}</td><td><span class="badge ${c}">${t}</span></td><td>${x.error_us?(x.error_us/1000).toFixed(1)+' ms':'–'}</td><td>${fmtN(x.on_time)}</td><td>${fmtN(x.late)}</td><td>${fmtN(x.missed)}</td></tr>`}).join(''):'<tr><td colspan="7" class="dim">None</td></tr>';
+    const p=g.last_plan,o=S.engine.output,rows=[['Changes shared out',fmtN(o.group_plans||0)],['Settle repeats',fmtN(o.group_settles||0)]];
+    if(p)rows.push(['Last plan',`${p.order.map(esc).join(' → ')} · ${p.copies} cop${p.copies>1?'ies':'y'} each · ${(p.length_us/1000).toFixed(0)} ms (guard ${(p.guard_us/1000).toFixed(1)} ms, lead ${(p.lead_us/1000).toFixed(0)} ms) · ${fmtAge(p.age_ms)}`]);
+    kv($('d_grpKv'),rows)}
+  else{const m=g.master,c=g.clock||{},o=S.engine.output;
+    $('d_grpHead').innerHTML=`<span class="badge ${g.following?'good':'warn'}">remote</span> <span class="dim">${g.following?'following '+esc(m.name):m?'syncing with '+esc(m.name)+'…':'no master heard: silent until one appears'}</span>`;
+    const rows=[];if(m)rows.push(['Master',`${esc(m.name)} · ${m.ip} · answered ${fmtAge(m.ack_age_ms)}`]);
+    rows.push(['Clock',c.synced?`±${(c.error_us/1000).toFixed(1)} ms (round trip ${(c.rtt_us/1000).toFixed(1)} ms, ${c.samples} samples)`:'not synced yet']);
+    rows.push(['Slots sent',fmtN(o.group_slots||0)],['On time / late / missed',`${fmtN(g.on_time)} / ${fmtN(g.late)} / ${fmtN(g.missed)}`]);
+    kv($('d_grpKv'),rows)}}
 function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.toggle('hide',!(ap&&CNA));
   {const L=S.engine.radio.lbt,o=S.engine.output;if(L)$('r_lbtHint').textContent=!L.supported?'not supported by this radio':
     !L.enabled||L.last_rssi_dbm<=-127?'set it ~10 dB above the quiet reading (shown here once enabled)':
@@ -555,7 +590,7 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
   $('zoneLabel').textContent=d.name;$('verLabel').textContent='v'+d.firmware;
   const [ic,it]=inputState(i),[rc,rt]=radioState(r);
   const rx=e.receiver||{},rxOn=e.role==='receiver';
-  $('pills').innerHTML=(rxOn?pill(rx.active?'good':'warn','receiver mode'):o.enabled?'':pill('bad','RF output off'))+(d.update_rolled_back?pill('bad','update rolled back'):'')+pill(rc,r.name+' '+rt)+pill(ic,it)+pill(n.interface==='none'?'bad':n.interface==='ap'?'warn':'good',n.interface+' · '+n.ip);
+  $('pills').innerHTML=(rxOn?pill(rx.active?'good':'warn','receiver mode'):o.enabled?'':pill('bad','RF output off'))+(d.update_rolled_back?pill('bad','update rolled back'):'')+groupPill(S.group)+pill(rc,r.name+' '+rt)+pill(ic,it)+pill(n.interface==='none'?'bad':n.interface==='ap'?'warn':'good',n.interface+' · '+n.ip);
   $('d_fps').innerHTML=i.fps+'<span class="unit">fps</span>';
   $('d_inState').innerHTML=`<span class="badge ${ic}">${it}</span> <span class="dim">${i.seen?(i.last_source==='e131'?'E1.31':'DDP')+' · last packet '+fmtAge(i.age_ms):''}</span>`;
   $('d_pk').textContent=`${fmtN(i.ddp_packets)} / ${fmtN(i.e131_packets)}`;$('d_fr').textContent=fmtN(i.frames);$('d_bad').textContent=fmtN(i.malformed);
@@ -572,6 +607,7 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
   $('d_rxCard').classList.toggle('hide',!rxOn);if(rxOn)renderRx(rx);
   $('d_outState').textContent=o.enabled?(pw?'on':'on, but the radio is shut down'):'off: show data is received, nothing is sent';
   $('d_radioSwState').textContent=pw?'on':'shut down: nothing is sent until it is switched on';
+  renderGroup(S.group);
   $('d_radio').textContent=r.name;$('d_radioState').innerHTML=`<span class="badge ${rc}">${rt}</span>`;
   $('d_rdet').textContent=r.detail||'–';
   if(C){const a=C.app.radio;$('d_pw').textContent=Math.max(r.min_power,Math.min(r.max_power,a.tx_power))+' dBm';
@@ -660,7 +696,12 @@ function fillOutput(){const a=C.app;$('b_name').value=a.name;$('b_proto').value=
   $('r_type').value=a.radio.type;$('r_power').value=a.radio.tx_power;$('r_f0').value=a.radio.freq_p0;$('r_f1').value=a.radio.freq_p1;
   $('r_rep').value=a.radio.repeats;$('r_ref').value=a.radio.refresh_ms;$('r_jit').value=a.radio.tx_jitter_ms;$('r_thr').value=a.radio.off_threshold;
   $('r_lbt').checked=a.radio.lbt_enabled;$('r_lbtThr').value=a.radio.lbt_threshold_dbm;
-  $('i_port').value=a.input.ddp_port;$('i_to').value=a.input.timeout_s;radioTypeUi()}
+  $('i_port').value=a.input.ddp_port;$('i_to').value=a.input.timeout_s;radioTypeUi();
+  const g=a.sync||{enabled:false,master:false,copies:1};$('g_on').checked=g.enabled;$('g_role').value=g.master?'master':'remote';$('g_copies').value=g.copies;groupUi()}
+function groupUi(){const on=$('g_on').checked,m=$('g_role').value==='master';$('g_role').disabled=!on;$('g_copiesWrap').classList.toggle('hide',!(on&&m));
+  $('g_roleHint').textContent=!on?'off: this controller transmits on its own':m?'point xLights at this controller; copies here apply to every controller in the group':'no input needed: it follows the master it hears on the network, and stays silent without one';
+  $('g_rxNote').classList.toggle('hide',!(on&&C.app.role==='receiver'))}
+$('g_on').onchange=groupUi;$('g_role').onchange=groupUi;
 const POWER={cc1101:[-30,10],sx1278:[2,17]};
 function radioTypeUi(){const t=$('r_type').value,[lo,hi]=POWER[t]||POWER.cc1101;$('r_power').min=lo;$('r_power').max=hi;$('r_powerHint').textContent=`${lo} to ${hi} dBm for this module`}
 $('r_type').onchange=radioTypeUi;
@@ -679,6 +720,7 @@ $('o_save').onclick=async()=>{const t=$('r_type').value,[lo,hi]=POWER[t];
   const body={name:$('b_name').value,devices,
     radio:{type:t,tx_power:Math.max(lo,Math.min(hi,+$('r_power').value||0)),freq_p0:+$('r_f0').value,freq_p1:+$('r_f1').value,repeats:+$('r_rep').value,refresh_ms:+$('r_ref').value,tx_jitter_ms:+$('r_jit').value,off_threshold:+$('r_thr').value,
       lbt_enabled:$('r_lbt').checked,lbt_threshold_dbm:Math.max(-120,Math.min(-30,+$('r_lbtThr').value||-75))},
+    sync:{enabled:$('g_on').checked,master:$('g_role').value==='master',copies:Math.max(1,Math.min(3,+$('g_copies').value||1))},
     input:{ddp_enabled:$('i_ddp').checked,ddp_port:+$('i_port').value,e131_enabled:$('i_e131').checked,e131_universe:+$('i_univ').value,e131_multicast:$('i_mcast').checked,start_channel:+$('i_start').value,timeout_s:+$('i_to').value}};
   if(!body.input.ddp_enabled&&!body.input.e131_enabled&&!await ask('Both DDP and E1.31 are off: the controller will ignore all input. Continue?'))return;
   const j=await api('config',body);afterSave(j,'Settings');if(!j.reboot)loadConfig()};

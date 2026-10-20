@@ -31,6 +31,28 @@ static bool decode(const std::string &s, Heartbeat &h) {
     return decode_heartbeat((const uint8_t *) s.data(), s.size(), h);
 }
 
+void test_group_fields() {
+    char buf[HEARTBEAT_MAX];
+    Heartbeat in = sample(), out{};
+    strcpy(in.mac, "A8032A113F2A");
+    in.sync = true;
+    in.master = true;
+    size_t n = encode_heartbeat(in, buf, sizeof(buf));
+    TEST_ASSERT_TRUE(n > 0 && n < HEARTBEAT_MAX);
+    TEST_ASSERT_TRUE(decode_heartbeat((const uint8_t *) buf, n, out));
+    TEST_ASSERT_EQUAL_STRING("A8032A113F2A", out.mac);
+    TEST_ASSERT_TRUE(out.sync);
+    TEST_ASSERT_TRUE(out.master);
+    // older firmware: no group fields
+    TEST_ASSERT_TRUE(decode(R"({"p":"net2rf","v":1,"id":"24DB"})", out));
+    TEST_ASSERT_EQUAL_STRING("", out.mac);
+    TEST_ASSERT_FALSE(out.sync);
+    // "master" without "sync" means nothing; a bad MAC is dropped
+    TEST_ASSERT_TRUE(decode(R"({"p":"net2rf","v":1,"id":"24DB","master":true,"mac":"XYZ"})", out));
+    TEST_ASSERT_FALSE(out.master);
+    TEST_ASSERT_EQUAL_STRING("", out.mac);
+}
+
 void test_round_trip() {
     char buf[HEARTBEAT_MAX];
     Heartbeat in = sample(), out{};
@@ -106,6 +128,7 @@ void test_encode_reports_small_buffer() {
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_round_trip);
+    RUN_TEST(test_group_fields);
     RUN_TEST(test_hello_omitted_when_false);
     RUN_TEST(test_rejects_foreign_packets);
     RUN_TEST(test_newer_version_and_minimal_packet_accepted);

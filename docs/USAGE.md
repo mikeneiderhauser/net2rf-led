@@ -250,6 +250,12 @@ Each controller lists the others on its dashboard, with their state and airtime,
 at `net2rf.local`. Controllers in radio range of each other share the 433 MHz channel: see
 [RF.md](RF.md#multiple-controllers) before running more than one.
 
+To cover a big yard with one show, make them a **coverage group** (*Devices & Radio* → *Coverage group*): tick
+*Sync enabled* on each, make the one xLights sends to the master, and the rest remotes. The dashboard then shows
+a *Coverage group* card (the master lists each remote and how well its clock is synced; a remote shows the master
+it follows), a pill at the top, and the OLED's status page shows the group on its last line. See
+[RF.md](RF.md#coverage-group).
+
 ## Recovering a controller
 
 | Problem | Fix |
