@@ -13,6 +13,55 @@
 - The bracelets **hold** their last colour, so the controller only transmits when a colour changes (*Refresh
   unchanged* = 0). Re-sending unchanged colours only adds airtime and interference.
 
+## Airtime: how many changes fit
+
+The channel, not the controller, sets the limit. One bracelet packet is about **46.6 ms on air** (56 bits at 750-800
+µs each, plus the start pulses), and only one transmitter can use the channel at a time.
+
+**Filling the airwave** means transmitting back to back with no idle time: 1 s ÷ 46.6 ms ≈ **21 frames a second**
+at most, on one channel, from all transmitters combined. Nothing else on 433 MHz gets a look in at that point, so
+treat it as a wall, not a target.
+
+**A single controller.** Each colour change is sent `repeats` times (default 3, *Devices & Radio*), so:
+
+| Repeats | On air per change | Changes per second at 100% airtime |
+|---|---|---|
+| 1 | ~47 ms | ~21 |
+| 2 | ~93 ms | ~10 |
+| 3 (default) | ~140 ms | ~7 |
+| 5 | ~233 ms | ~4 |
+
+- Counts are **per transmission**: zones changing to different colours are separate transmissions (zones changing
+  to the same colour share one on protocol 0 with the base layer on). A frame where three zones change to three
+  different colours costs three times the airtime of a frame where they all change to one colour.
+- When the show asks for changes faster than this, the controller does not queue them: the newest state wins and
+  the in-between ones are dropped. The bracelets show what got through, slightly late.
+- Fewer repeats buy speed at the cost of reliability: a device that misses its only copy keeps its old colour until
+  the next change.
+
+**A coverage group** (below) multiplies this: every controller sends its own copies in turn, so one change takes
+
+    lead + controllers × (copies × 46.6 ms + guard)
+
+where the guard is 3 ms plus twice the worst remote's clock error (about 5 ms on a good network) and the lead is
+15 ms or more. With 1 copy and good sync, each controller in the group costs about 50 ms per change:
+
+| Group (1 copy each) | Per change | Changes per second |
+|---|---|---|
+| 1 controller | ~50 ms | ~20 |
+| 2 | ~120 ms | ~8 |
+| 4 | ~220 ms | ~4.5 |
+| 9 (the most a group allows: master + 8) | ~480 ms | ~2 |
+
+**What to plan on.** Real airwaves are shared with weather stations, doorbells and key fobs, and the rules limit how
+continuously an unlicensed device may transmit (see [Legal](#legal)). Budget roughly **30-50% airtime**, about
+**6-10 transmissions a second** in total. For sequencing:
+
+- favour bold, slow effects: holds, fades in a few steps, chases of a few zones per second;
+- keep the number of different colours changing at once small;
+- one well-placed controller (with an amplifier if needed) gets far more changes per second than a group: a group
+  spends its airtime on coverage, not speed.
+
 ## Multiple controllers
 
 All controllers, and both bracelet protocols, share one 433 MHz channel: the bracelets' receivers are wide enough
