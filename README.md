@@ -18,8 +18,6 @@ tested on hardware).
 **▶ See it working:** [prototype demo on YouTube](https://youtube.com/shorts/mfn99Rj19TI): breadboard build,
 a bracelet following an xLights sequence, and the web UI.
 
-[![Prototype demo: a bracelet following an xLights sequence](https://img.youtube.com/vi/mfn99Rj19TI/hqdefault.jpg)](https://youtube.com/shorts/mfn99Rj19TI)
-
 ![Dashboard](docs/images/dashboard.png)
 
 **The carrier board, in its printed case:** WT32-ETH01, Ra-02 radio, OLED and buttons on one board
