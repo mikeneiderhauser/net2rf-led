@@ -25,9 +25,6 @@ history.
   group 1. Still to check: other zones (assumed zone N = group N); a group above 15; driving them from xLights; a zone on both protocols; more devices at once; idle
   behaviour. Wristbands, pucks, a wand and the Santa hat all follow protocol 1 (2026-10-31); the same checks
   apply to them.
-- [ ] **Protocol 1 sync timing:** CrispyPyro's captures of the vendor transmitter suggest a long mark, a ~1000 µs
-  gap and two copies per burst; we send the Flipper app's 200 / 1600 µs sync. Wally's Lights wristbands, pucks,
-  wand and Santa hat all respond to ours, so the vendor's is only needed if another device ignores it.
 
 ## Needs hardware checks
 
@@ -40,11 +37,10 @@ history.
 - [ ] **OLED wake** on a network address change, hotspot start / stop and a radio fault.
 - [ ] **Group tester** and **Range walk** from a real browser with devices awake (checked against the mock only).
 - [ ] **FPP:** how its MultiSync page shows the controller.
-- [x] **Carrier board R2.0**: built and tested with the Ra-02, in both case variants (R28 in `hardware/case`).
 - [ ] **SSD1315 OLED lids**: from the seller's drawing only. Print `test-pieces/oled-test-ssd1315.stl` with a module.
 - [ ] **Amplifier power switch** (`/api/amp`, IO2): no switch has been wired yet. Check the buck's EN polarity, that
   the amp follows the switch, and that serial flashing still works with the gate pull-down on IO2.
-- [ ] **Fade and flicker**: run on two puck lights (Halloween 2026); check them on bracelets of both protocols.
+- [ ] **Fade and flicker** on bracelets of both protocols (fade has run on Wally's Lights pucks).
 
 ## xLights and FPP
 
