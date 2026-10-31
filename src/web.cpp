@@ -14,6 +14,7 @@
 #include <nvs.h>
 #include <mbedtls/base64.h>
 
+#include "amp.h"
 #include "config.h"
 #include "engine.h"
 #include "group.h"
@@ -287,6 +288,7 @@ static void handle_status() {
     dev["reset_reason"] = reset_reason();
     dev["display"] = panel::display_present();
     panel::display_json(dev["display_info"].to<JsonObject>());
+    amp::json(dev["amp"].to<JsonObject>());
     dev["suffix"] = device_suffix();
     dev["update_pending"] = ota_guard::pending();
     dev["update_rolled_back"] = ota_guard::rolled_back();
@@ -444,15 +446,52 @@ static void handle_stats() {
     send_json(200, doc);
 }
 
+// {"mode": "off" | "solid" | "cycle" | "fade" | "flicker", "rgb": "FF8020"}; fade also takes "palette", "fade_s" and
+// "hold_s" (anything left out keeps the Halloween default). "boot": true also starts this mode at every boot, false
+// stops that (as does "off" with "boot": false).
 static void handle_test() {
     JsonDocument doc;
     if (!parse_body(doc))
         return;
     String mode = doc["mode"] | "off";
-    uint8_t rgb[3] = {255, 255, 255};
-    parse_hex(doc["rgb"] | "FFFFFF", rgb, 3);
-    TestMode m = mode == "solid" ? TestMode::SOLID : mode == "cycle" ? TestMode::CYCLE : TestMode::OFF;
-    g_engine.set_test(m, rgb[0], rgb[1], rgb[2]);
+    BootTest t{};
+    t.rgb[0] = t.rgb[1] = t.rgb[2] = 255;
+    parse_hex(doc["rgb"] | "FFFFFF", t.rgb, 3);
+    TestMode m = mode == "solid"     ? TestMode::SOLID
+                 : mode == "cycle"   ? TestMode::CYCLE
+                 : mode == "fade"    ? TestMode::FADE
+                 : mode == "flicker" ? TestMode::FLICKER
+                                     : TestMode::OFF;
+    t.mode = (uint8_t) m;
+    t.fade = DEFAULT_FADE;
+    if (m == TestMode::FADE) {
+        FadePalette &p = t.fade;
+        JsonArrayConst pal = doc["palette"].as<JsonArrayConst>();
+        if (!pal.isNull()) {
+            p.n = 0;
+            for (JsonVariantConst c : pal)
+                if (p.n < MAX_FADE_COLORS && parse_hex(c | "", p.rgb[p.n], 3))
+                    p.n++;
+            if (p.n == 0) {
+                send_error(400, "palette needs at least one RRGGBB colour");
+                return;
+            }
+        }
+        float fade_s = doc["fade_s"] | p.fade_ms / 1000.0f, hold_s = doc["hold_s"] | p.hold_ms / 1000.0f;
+        if (!(fade_s >= 0 && fade_s <= 600 && hold_s >= 0 && hold_s <= 600)) {
+            send_error(400, "fade_s and hold_s must be 0-600");
+            return;
+        }
+        p.fade_ms = (uint32_t) (fade_s * 1000), p.hold_ms = (uint32_t) (hold_s * 1000);
+        g_engine.set_fade(p);
+    } else {
+        g_engine.set_test(m, t.rgb[0], t.rgb[1], t.rgb[2]);
+    }
+    if (doc["boot"].is<bool>()) {
+        bool boot = doc["boot"].as<bool>() && m != TestMode::OFF;
+        config_save_boot_test(boot ? &t : nullptr);
+        g_engine.set_boot_test(boot);
+    }
     send_ok();
 }
 
@@ -1134,6 +1173,25 @@ void begin() {
     s_server.on("/api/network", HTTP_POST, protect(handle_post_network));
     s_server.on("/api/auth", HTTP_POST, protect(handle_auth));
     s_server.on("/api/test", HTTP_POST, protect(handle_test));
+    s_server.on("/api/amp", HTTP_GET, []() {  // amplifier power switch (src/amp.h)
+        JsonDocument doc;
+        amp::json(doc.to<JsonObject>());
+        send_json(200, doc);
+    });
+    s_server.on("/api/amp", HTTP_POST, protect([]() {  // {"fitted": true, "active_low": true, "on": false}
+                    JsonDocument doc;
+                    if (!parse_body(doc))
+                        return;
+                    String err;
+                    if (!amp::apply_json(doc.as<JsonObjectConst>(), err)) {
+                        send_error(400, err);
+                        return;
+                    }
+                    JsonDocument out;
+                    out["ok"] = true;
+                    amp::json(out["amp"].to<JsonObject>());
+                    send_json(200, out);
+                }));
     s_server.on("/api/send", HTTP_POST, protect(handle_send));
     s_server.on("/api/all-off", HTTP_POST, protect(handle_all_off));
     s_server.on("/api/display", HTTP_POST, protect([]() {

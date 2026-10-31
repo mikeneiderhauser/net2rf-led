@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <AsyncUDP.h>
 
+#include "amp.h"
 #include "config.h"
 #include "engine.h"
 #include "group.h"
@@ -85,12 +86,22 @@ void setup() {
     state_lock_init();
     config_load();
     store::begin();  // boot log first: a crash later in setup() is then already on record
+    amp::begin();    // before the panel: the amp switch may own the status LED's pin
     panel::begin();
     peers::begin();
     group::begin();
     net::begin();  // network and web UI come up first...
     web::begin();
     g_engine.begin();  // ...the radio is probed in the background by the engine task
+    BootTest t;
+    if (config_load_boot_test(t)) {
+        log_i("Starting the saved test mode %u", t.mode);
+        if ((TestMode) t.mode == TestMode::FADE)
+            g_engine.set_fade(t.fade);
+        else
+            g_engine.set_test((TestMode) t.mode, t.rgb[0], t.rgb[1], t.rgb[2]);
+        g_engine.set_boot_test(true);
+    }
 }
 
 void loop() {

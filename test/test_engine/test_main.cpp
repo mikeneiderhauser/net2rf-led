@@ -169,6 +169,76 @@ void test_protocol0_only_sends_no_protocol1(void) {
     TEST_ASSERT_FALSE(g_engine.can_broadcast_());
 }
 
+void test_fade_color(void) {
+    FadePalette p{};
+    p.n = 2;
+    p.rgb[0][0] = 200;  // red -> blue
+    p.rgb[1][2] = 200;
+    p.hold_ms = 1000;
+    p.fade_ms = 3000;  // 10 steps of 300 ms
+    uint8_t c[3];
+    fade_color(p, 0, c);
+    TEST_ASSERT_EQUAL_UINT8(200, c[0]);
+    TEST_ASSERT_EQUAL_UINT8(0, c[2]);
+    fade_color(p, 999, c);  // still holding
+    TEST_ASSERT_EQUAL_UINT8(200, c[0]);
+    fade_color(p, 1000, c);  // first step
+    TEST_ASSERT_EQUAL_UINT8(180, c[0]);
+    TEST_ASSERT_EQUAL_UINT8(20, c[2]);
+    fade_color(p, 1000 + 1350, c);  // half way
+    TEST_ASSERT_EQUAL_UINT8(100, c[0]);
+    TEST_ASSERT_EQUAL_UINT8(100, c[2]);
+    fade_color(p, 3999, c);  // ends exactly on the next colour
+    TEST_ASSERT_EQUAL_UINT8(0, c[0]);
+    TEST_ASSERT_EQUAL_UINT8(200, c[2]);
+    fade_color(p, 4000, c);  // holding blue
+    TEST_ASSERT_EQUAL_UINT8(200, c[2]);
+    fade_color(p, 4000 + 1000 + 2999, c);  // back round to red
+    TEST_ASSERT_EQUAL_UINT8(200, c[0]);
+    fade_color(p, 8000, c);
+    TEST_ASSERT_EQUAL_UINT8(200, c[0]);
+    p.n = 1;  // one colour just holds
+    fade_color(p, 2500, c);
+    TEST_ASSERT_EQUAL_UINT8(200, c[0]);
+}
+
+void test_fade_mode_broadcasts_steps(void) {
+    setup(2, PROTOCOL_BIT[1]);
+    s_now = 0;
+    g_engine.set_fade(DEFAULT_FADE);
+    auto sent = drain();
+    TEST_ASSERT_EQUAL(1, sent.size());  // one broadcast: orange
+    TEST_ASSERT_EQUAL_HEX8(0x00, sent[0].pkt[1]);
+    s_now = 2000;  // holding: nothing new
+    TEST_ASSERT_EQUAL(0, drain().size());
+    s_now = DEFAULT_FADE.hold_ms + 10;  // fading: one broadcast per step
+    TEST_ASSERT_EQUAL(1, drain().size());
+    TEST_ASSERT_EQUAL(0, drain().size());
+    s_now += FADE_STEP_MS;
+    TEST_ASSERT_EQUAL(1, drain().size());
+    g_engine.set_test(TestMode::OFF, 0, 0, 0);
+}
+
+void test_flicker_color(void) {
+    const uint8_t base[3] = {255, 120, 16};
+    int changes = 0;
+    uint8_t prev[3] = {0, 0, 0};
+    for (uint32_t step = 0; step < 500; step++) {
+        uint8_t c[3];
+        flicker_color(base, step, c);
+        TEST_ASSERT_TRUE(c[0] >= 140 && c[0] <= 255);  // 55-100 %, never near the devices' dim flicker
+        TEST_ASSERT_TRUE(c[1] <= 120 && c[2] <= 16);
+        if (step && memcmp(c, prev, 3))
+            changes++;
+        memcpy(prev, c, 3);
+        uint8_t again[3];
+        flicker_color(base, step, again);  // pure
+        TEST_ASSERT_EQUAL_MEMORY(c, again, 3);
+    }
+    // a step every 200 ms with holds: roughly 2-4 changes a second
+    TEST_ASSERT_TRUE(changes > 200 && changes < 450);
+}
+
 void test_protocol1_only_sends_no_protocol0(void) {
     setup(3, PROTOCOL_BIT[1]);
     ddp({255, 0, 0, 0, 255, 0, 0, 0, 255});
@@ -386,5 +456,8 @@ int main(int, char **) {
     RUN_TEST(test_group_master_plans_copies);
     RUN_TEST(test_group_master_settle_repeat);
     RUN_TEST(test_group_remote_sends_slots);
+    RUN_TEST(test_fade_color);
+    RUN_TEST(test_fade_mode_broadcasts_steps);
+    RUN_TEST(test_flicker_color);
     return UNITY_END();
 }

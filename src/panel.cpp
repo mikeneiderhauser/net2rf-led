@@ -7,6 +7,7 @@
 #include <SSD1306Wire.h>
 #include <Wire.h>
 
+#include "amp.h"
 #include "config.h"
 #include "engine.h"
 #include "group.h"
@@ -254,8 +255,10 @@ void i2c_scan_json(JsonObject o) {
 }
 
 void begin() {
-    pinMode(pins::STATUS_LED, OUTPUT);
-    digitalWrite(pins::STATUS_LED, pins::STATUS_LED_ACTIVE_LOW ? HIGH : LOW);
+    if (!amp::owns_led_pin()) {
+        pinMode(pins::STATUS_LED, OUTPUT);
+        digitalWrite(pins::STATUS_LED, pins::STATUS_LED_ACTIVE_LOW ? HIGH : LOW);
+    }
 
     pinMode(pins::USER_BUTTON, INPUT);  // input-only pin, external pull-up required
     bool high = true;
@@ -507,7 +510,8 @@ static void update_led(uint32_t now) {
         on = (now % 1000) < 100 || ((now % 1000) > 200 && (now % 1000) < 300);  // double blink: AP mode
     else
         on = (now % 2000) < 80;  // heartbeat
-    digitalWrite(pins::STATUS_LED, on != pins::STATUS_LED_ACTIVE_LOW);
+    if (!amp::owns_led_pin())  // the pin switches the amplifier instead (src/amp.h)
+        digitalWrite(pins::STATUS_LED, on != pins::STATUS_LED_ACTIVE_LOW);
 }
 
 void loop() {

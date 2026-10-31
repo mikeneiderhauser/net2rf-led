@@ -22,7 +22,21 @@ class StateLock {
 };
 
 enum class RadioState : uint8_t { INITIALIZING, READY, NOT_DETECTED, OFF };
-enum class TestMode : uint8_t { OFF, SOLID, CYCLE };
+enum class TestMode : uint8_t { OFF, SOLID, CYCLE, FADE, FLICKER };
+
+// Fade test mode (FadePalette, config.h): holds each palette colour, then fades to the next, round and round. The
+// colour moves in steps (FADE_STEP_MS) so the radio sends a few changes a second, not one per frame.
+static const uint32_t FADE_STEP_MS = 300;
+// Halloween: orange, purple, green, blood red, candle yellow; 3 s fades, 4 s holds.
+extern const FadePalette DEFAULT_FADE;
+// The colour at time t (ms): pure, for the tests.
+void fade_color(const FadePalette &p, uint32_t t, uint8_t out[3]);
+
+// Flicker test mode: a candle. Every FLICKER_STEP_MS the colour may jump to a new random level of the base colour
+// (55-100 %, redder when dimmer), held for 1-3 steps. About 3 changes a second: what the radio can carry, so it's
+// a slow, guttering candle rather than a fast flame. Pure (a hash of the step number), for the tests.
+static const uint32_t FLICKER_STEP_MS = 200;
+void flicker_color(const uint8_t base[3], uint32_t step, uint8_t out[3]);
 
 const char *radio_state_name(RadioState s);
 
@@ -145,6 +159,11 @@ class Engine {
     bool send_zone(int zone, rfproto::Action action, uint8_t r, uint8_t g, uint8_t b);  // -1 = all enabled
 
     void set_test(TestMode mode, uint8_t r, uint8_t g, uint8_t b);
+    void set_fade(const FadePalette &palette);  // fade test mode with this palette
+    void set_boot_test(bool saved) {             // for the status: a test mode is saved to start at boot
+        StateLock lock;
+        this->boot_test_ = saved;
+    }
     // Panic button: leave test mode and switch every device off (one broadcast on protocol 1).
     // Devices then stay off until the input actually changes a colour. False if output is disabled.
     bool all_off();
@@ -245,6 +264,8 @@ class Engine {
 
     TestMode test_mode_{TestMode::OFF};
     uint8_t test_rgb_[3]{};
+    FadePalette fade_ = DEFAULT_FADE;
+    bool boot_test_{false};  // a test mode is saved to start at boot (shown in the status)
     uint8_t test_last_rgb_[3]{};
     bool test_sent_{false};        // broadcast test colour already queued (protocol 1)
     bool blank_broadcast_{false};  // input timeout: send one broadcast "off" after update_wants_

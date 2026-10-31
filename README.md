@@ -32,7 +32,7 @@ a bracelet following an xLights sequence, and the web UI.
 |---|---|
 | ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · group-mask addressing, the All Zones base layer and one packet per colour · bracelet fade in / fade out · xLights custom model, *Upload Output* and *Discover* · update check and install from GitHub releases · controller list and `net2rf.local` election (against simulated controllers) |
 | 🧪 **Built, not yet tested on hardware** | **XIAO ESP32-S3** build (Wi-Fi only) · **Receiver mode** (decoder tested against the encoder with timing errors and noise) · **LedGiftSupplier** bracelets (protocol 1, full 8-bit RGB + group codes, matched to off-air captures of the vendor's transmitter) · **vendor DMX** input mode · E1.31 multicast · **Ra-02 / SX1278** radio · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
-| 🛠 **Coming soon** | A carrier board and enclosure |
+| 🛠 **Coming soon** | The carrier board (its printed case is ready: [hardware/case](hardware/case/README.md)) |
 
 Full list of what's been tried: [docs/DEVICES.md](docs/DEVICES.md). What we know about the bracelets
 themselves (one model tested so far, a giveaway bracelet from a Banana Ball game):
@@ -58,6 +58,8 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
 - **Web UI for everything:** live input rate and counters, last colour per zone, test mode, zone walk, address
   probe ("which group is this bracelet in?"), xLights setup helper, network settings, firmware update (fetched by your browser from GitHub releases, or a file) with
   automatic rollback, settings export/import, optional admin password.
+- **Stand-alone light modes:** fade through a colour palette (Halloween, Christmas and red, white & blue presets)
+  or a candle flicker, optionally started at every power-up, with no show running.
 - **Show-safe:** an RF output switch and an *All off* button; bracelets blank themselves when the show stops
   sending (5 minutes by default).
 - **Discoverable:** answers Falcon Player's discovery ping, so FPP and xLights can find it on the network.
@@ -68,6 +70,7 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
 - **Receiver mode:** one switch turns the controller into a listener that decodes both bracelet protocols from
 any transmitter in range and shows what every group was told, with signal strength, on the web UI and the OLED.
 Raw captures of anything it can't decode, with a waveform view, bit guess and rtl_433 export.
+- **Amplifier power switch:** an optional output that powers an external RF amplifier up and down.
 - **JSON API:** for Home Assistant, Grafana or scripts.
 
 ## Hardware
@@ -109,11 +112,13 @@ Full parts list, with where to buy: [ASSEMBLY.md, Parts](docs/ASSEMBLY.md#parts)
 | [API.md](docs/API.md) | HTTP API, settings, stats, controller discovery |
 | [HOME_ASSISTANT.md](docs/HOME_ASSISTANT.md) | Sensors, switches and automations |
 | [tools/xlights](tools/xlights/) | xLights custom models and controller definition |
+| [hardware/case](hardware/case/README.md) | 3D-printed case for the carrier board: STLs and OpenSCAD source |
 | [TODO.md](TODO.md) | Open items and things waiting for hardware tests |
 
 ## Roadmap
 
-- **Carrier board and enclosure:** in the works; details once it has been built and tested.
+- **Carrier board:** in the works; details once it has been built and tested. Its case is in
+  [hardware/case](hardware/case/README.md).
 - **Broader testing:** LedGiftSupplier bracelets, vendor mode, the Ra-02, range across a yard, two real
   controllers with listen before transmit.
 - **Bracelet behaviour:** more bracelets and batches; idle and sleep (e.g. a keep-alive so bracelets don't

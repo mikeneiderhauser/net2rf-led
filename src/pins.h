@@ -44,6 +44,8 @@ constexpr int USER_BUTTON = 0;
 // Status LED: the board's orange user LED, wired to 3V3 (on when the pin is low).
 constexpr int STATUS_LED = 21;
 constexpr bool STATUS_LED_ACTIVE_LOW = true;
+// Amplifier power switch (optional, see src/amp.h): D1, otherwise unused.
+constexpr int AMP_EN = 2;
 
 }  // namespace pins
 
@@ -88,6 +90,10 @@ constexpr int USER_BUTTON = 39;
 // Status LED (optional): LED + resistor to GND only.
 constexpr int STATUS_LED = 2;
 constexpr bool STATUS_LED_ACTIVE_LOW = false;
+// Amplifier power switch (optional, see src/amp.h): IO2 is the only free output, so it shares the status LED's pin
+// and the LED is not driven while the switch is fitted. IO2 must be low at reset (serial flashing): give the switch
+// a pull-down, e.g. 100k on its FET's gate.
+constexpr int AMP_EN = 2;
 
 }  // namespace pins
 

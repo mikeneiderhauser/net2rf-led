@@ -155,6 +155,36 @@ About 400 mA worst case, within the WT32-ETH01's regulator. Use a 5 V / 1 A supp
 > Also on R2.0: the controller does not always start at power-on. Press **EN** once if the OLED stays blank. A fix
 > is planned for the next revision.
 
+### Case
+
+A printed base and snap-on lid for the carrier board, in two variants: one with room for an external amplifier
+and its buck, and a slim one without. STLs, the OpenSCAD source and assembly notes are in
+[hardware/case](../hardware/case/README.md).
+
+### Amplifier power switch
+
+The firmware can power an external RF amplifier up and down from **IO2**, the WT32-ETH01's only free output (on
+the XIAO, D1). It's optional: until you enable it, IO2 stays the status LED's pin.
+
+The simplest switch uses the amp's 12 V → 5 V buck module, if it has an **EN** pin:
+
+- A small N-channel FET (2N7002 or similar): **drain to the buck's EN, source to GND, gate to IO2** through about
+  100 Ω, with **100k from the gate to GND**.
+- IO2 high pulls EN low and the buck, so the amp, switches off. IO2 low lets the buck's own pull-up switch it on.
+- Check the module first: power it from 12 V and measure EN. About 12 V or 5-6 V means it is pulled up, so this
+  circuit is right. Near 0 V means an active-low EN (LM2596 type), which needs a different circuit.
+
+Don't connect IO2 to EN directly: EN is usually pulled up to the 12 V input, and IO2 must be low at reset for
+serial flashing. The FET and its gate pull-down take care of both.
+
+For an amp or buck without EN, switch its supply with a high-side P-FET (e.g. AO3401, 10k gate to source) whose
+gate a 2N7002 on IO2 pulls low. Never switch the amp's ground: its RF ground also runs through the coax.
+
+Then, on the web UI's **Tools** page, open **Amplifier power → Switch wiring** and tick *A power switch is wired to
+IO2*. Leave **Active low** ticked for the EN circuit above, and untick it for the P-FET one. The **Amplifier**
+switch then turns the amp on and off, and the setting is kept across restarts. Over HTTP it's `/api/amp`
+([API](API.md#amplifier-power-switch)).
+
 ---
 
 ## C. XIAO ESP32-S3
@@ -184,6 +214,7 @@ Optional parts:
 | SX1278 (Ra-02) reset, instead of a CC1101 | D0 | 1 |
 | USER button | the board's **B** (BOOT) button | 0 |
 | Status LED | the board's orange LED | 21 |
+| Amplifier power switch ([see above](#amplifier-power-switch)) | D1 | 2 |
 
 The BOOT button works as USER once the firmware runs (short press = next OLED page, hold 5 s / 15 s = network /
 factory reset). Holding it while the board resets still enters the USB bootloader.
