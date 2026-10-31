@@ -116,7 +116,7 @@ Which protocol is my device?* and report the result.
 | Test mode, zone walk, address probe, group tester, range walk | ✅ |
 | Range across a yard | ✅ Ra-02 on the carrier board, with and without the external amplifier. Mount it high and away from things. |
 | Reset settings, reset network, factory reset (System page and USER button) | ✅ |
-| Fade and flicker test modes, started at power-up | ✅ run on the controller, and restarted by themselves after a power cut; 🧪 how they look on devices |
+| Fade and flicker test modes, started at power-up | ✅ run on the controller, and restarted by themselves after a power cut; ✅ fade on Wally's Lights pucks; 🧪 flicker on devices, and both on bracelets |
 | Amplifier power switch (`/api/amp`) | 🧪 no switch wired yet |
 | Several controllers (live list, `net2rf.local` election) | ✅ against simulated controllers (`tools/peer_sim.py`); 🧪 with two real ones |
 | Listen before transmit | 🧪 channel sensing works (quiet CC1101 reads -84 to -87 dBm); backing off needs two radios in range |
