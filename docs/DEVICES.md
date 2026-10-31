@@ -94,6 +94,7 @@ Which protocol is my device?* and report the result.
 | CC1101 433 MHz module, blue 2×4 header + SMA (AOICRIE, see [parts](ASSEMBLY.md#parts)) | ✅ | Reports chip version `0x14`; data-line self-test passes; drives the Banana Ball bracelet. |
 | Ai-Thinker Ra-02 (SX1278) on a breakout | ✅ | On the carrier board R2.0 (needs the J3 bridge, see [ASSEMBLY.md, part B](ASSEMBLY.md#b-carrier-board)). |
 | SSD1306 0.96" I²C OLED | ✅ | Including detection of swapped SDA/SCL. |
+| SSD1315 0.96" I²C OLED (24.7 x 27 mm board) | ✅ | Same driver as the SSD1306; fits the case's SSD1315 lids. Its header is GND, VCC, SCL, SDA, as J7. |
 | SH1106 1.3" I²C OLED | 🧪 | Selectable under *System → Display*. |
 | 3.3 V USB-serial adapter (FTDI-style) | ✅ | First flash; updates are then over the network. |
 | Carrier board R2.0 | ✅ | WT32-ETH01 + Ra-02, in both printed cases. Bridge J3 pins 9-10; press EN if it doesn't start at power-on ([ASSEMBLY.md, part B](ASSEMBLY.md#b-carrier-board)). |

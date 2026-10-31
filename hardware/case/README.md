@@ -27,7 +27,7 @@ Printed and built (more in the [main README](../../README.md#carrier-board-photo
 | `net2rf_case.scad` | Parametric source (OpenSCAD 2021.01). Every dimension is at the top. |
 | `amp/base.stl`, `amp/lid.stl` | Amp case. |
 | `slim/base-slim.stl`, `slim/lid-slim.stl` | Slim case. |
-| `*/lid-ssd1315.stl`, `slim/lid-slim-ssd1315.stl` | Lids for the smaller SSD1315 OLED (24.7 x 27 mm board) instead of the 27.9 x 28.3 mm SSD1306 one. From the seller's drawing; print `test-pieces/oled-test-ssd1315.stl` first. |
+| `amp/lid-ssd1315.stl`, `slim/lid-slim-ssd1315.stl` | Lids for the smaller SSD1315 OLED (24.7 x 27 mm board) instead of the 27.9 x 28.3 mm SSD1306 one. Printed and fitted. |
 | `slim/antenna-plug.stl` | Blanks the antenna hole of a slim case fitted with an internal antenna. |
 | `amp/bracket.stl`, `slim/bracket-slim.stl` | Snap-in bracket that mounts the closed case inside a weatherproof enclosure. |
 | `test-pieces/` | Quick fit tests: the SSD1315 OLED pocket, and the amp bay corner of the base. |
