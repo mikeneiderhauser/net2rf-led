@@ -40,6 +40,53 @@ const char *radio_state_name(RadioState s) {
 static const uint32_t RADIO_RETRY_MS = 10000;
 static const uint8_t MAX_MANUAL_QUEUE = 32;
 static const uint32_t TEST_CYCLE_MS = 2000;
+
+const FadePalette DEFAULT_FADE = {
+    {{0xFF, 0x50, 0x00}, {0x70, 0x00, 0xFF}, {0x40, 0xFF, 0x00}, {0xFF, 0x00, 0x00}, {0xFF, 0xA0, 0x20}},
+    5, 3000, 4000};
+
+static uint32_t mix32(uint32_t x) {
+    x ^= x >> 16;
+    x *= 0x7FEB352D;
+    x ^= x >> 15;
+    x *= 0x846CA68B;
+    x ^= x >> 16;
+    return x;
+}
+
+void flicker_color(const uint8_t base[3], uint32_t step, uint8_t out[3]) {
+    // hold: a step whose hash says so keeps the previous step's level (at most 2 in a row)
+    for (int k = 0; k < 2 && step > 0 && (mix32(step) & 0xFF) < 110; k++)
+        step--;
+    uint32_t level = 140 + (mix32(step) >> 8) % 116;  // 140-255
+    out[0] = (uint8_t) (base[0] * level / 255);
+    out[1] = (uint8_t) (base[1] * level * level / (255 * 255));  // green and blue drop faster: redder when dim
+    out[2] = (uint8_t) (base[2] * level * level / (255 * 255));
+}
+
+void fade_color(const FadePalette &p, uint32_t t, uint8_t out[3]) {
+    if (p.n == 0) {
+        out[0] = out[1] = out[2] = 0;
+        return;
+    }
+    uint32_t period = p.hold_ms + p.fade_ms;
+    if (period == 0)
+        period = 1;
+    uint32_t at = t % (period * p.n);
+    uint8_t i = at / period, j = (i + 1) % p.n;
+    uint32_t in = at % period;
+    if (in < p.hold_ms || p.fade_ms == 0) {
+        memcpy(out, p.rgb[i], 3);
+        return;
+    }
+    // quantised to the steps the radio sends, ending exactly on the next colour
+    uint32_t steps = (p.fade_ms + FADE_STEP_MS - 1) / FADE_STEP_MS;
+    uint32_t k = (in - p.hold_ms) / FADE_STEP_MS + 1;
+    if (k > steps)
+        k = steps;
+    for (int c = 0; c < 3; c++)
+        out[c] = (uint8_t) ((p.rgb[i][c] * (steps - k) + p.rgb[j][c] * k + steps / 2) / steps);
+}
 // Coverage group master: a lane that has stayed put this long after its last change is sent once more, so a
 // controller (or device) that missed the change catches up.
 static const uint32_t SETTLE_MS = 1000;
@@ -173,10 +220,14 @@ void Engine::on_e131(const uint8_t *buf, size_t len, uint32_t src_ip) {
 // ---------------------------------------------------------------------------------------------
 
 void Engine::update_wants_(uint32_t now) {
-    uint8_t cycle[3] = {0, 0, 0};
+    uint8_t cycle[3] = {0, 0, 0};  // the cycle or fade colour
     if (this->test_mode_ == TestMode::CYCLE) {
         static const uint8_t COLORS[4][3] = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}, {255, 255, 255}};
         memcpy(cycle, COLORS[(now / TEST_CYCLE_MS) % 4], 3);
+    } else if (this->test_mode_ == TestMode::FADE) {
+        fade_color(this->fade_, now, cycle);
+    } else if (this->test_mode_ == TestMode::FLICKER) {
+        flicker_color(this->test_rgb_, now / FLICKER_STEP_MS, cycle);
     }
     uint8_t width = zone_width(g_app);
     for (uint8_t i = 0; i < g_app.num_zones; i++) {
@@ -192,7 +243,8 @@ void Engine::update_wants_(uint32_t now) {
         zs.gated = false;
         if (this->test_mode_ == TestMode::SOLID) {
             zs.r = this->test_rgb_[0], zs.g = this->test_rgb_[1], zs.b = this->test_rgb_[2], zs.fx = 0;
-        } else if (this->test_mode_ == TestMode::CYCLE) {
+        } else if (this->test_mode_ == TestMode::CYCLE || this->test_mode_ == TestMode::FADE ||
+                   this->test_mode_ == TestMode::FLICKER) {
             zs.r = cycle[0], zs.g = cycle[1], zs.b = cycle[2], zs.fx = 0;
         } else if (g_app.mode == MODE_VENDOR) {
             // Vendor transmitter layout: [boot code][group][R][G][B]. Only transmit while the boot code is 85,
@@ -701,9 +753,12 @@ void Engine::run_() {
                 this->input_dirty_ = true;
                 this->blank_broadcast_ = this->can_broadcast_();
             }
-            bool cycle_step = this->test_mode_ == TestMode::CYCLE && now / TEST_CYCLE_MS != last_cycle_step;
+            uint32_t step_ms = this->test_mode_ == TestMode::CYCLE ? TEST_CYCLE_MS
+                               : this->test_mode_ == TestMode::FADE ? FADE_STEP_MS
+                               : this->test_mode_ == TestMode::FLICKER ? FLICKER_STEP_MS : 0;
+            bool cycle_step = step_ms && now / step_ms != last_cycle_step;
             if (cycle_step)
-                last_cycle_step = now / TEST_CYCLE_MS;
+                last_cycle_step = now / step_ms;
             if (this->config_dirty_) {
                 for (auto &zs : this->zones_)
                     zs.resend();  // push new addressing/protocols out immediately
@@ -877,6 +932,16 @@ void Engine::set_test(TestMode mode, uint8_t r, uint8_t g, uint8_t b) {
     this->test_sent_ = false;
     this->input_dirty_ = true;
     log_i("Test mode %d", (int) mode);
+}
+
+void Engine::set_fade(const FadePalette &palette) {
+    {
+        StateLock lock;
+        this->fade_ = palette;
+        if (this->fade_.n > MAX_FADE_COLORS)
+            this->fade_.n = MAX_FADE_COLORS;
+    }
+    this->set_test(TestMode::FADE, 0, 0, 0);
 }
 
 void Engine::reset_stats() {
@@ -1070,12 +1135,21 @@ void Engine::status_json(JsonObject o) {
     out["group_slots"] = this->out_.group_slots;
     out["group_skipped"] = this->out_.group_skipped;
 
-    static const char *const TEST_NAMES[] = {"off", "solid", "cycle"};
+    static const char *const TEST_NAMES[] = {"off", "solid", "cycle", "fade", "flicker"};
     JsonObject test = o["test"].to<JsonObject>();
     test["mode"] = TEST_NAMES[(int) this->test_mode_];
     char rgb[7];
     hex_into(rgb, this->test_rgb_, 3);
     test["rgb"] = rgb;
+    test["boot"] = this->boot_test_;
+    JsonObject fade = test["fade"].to<JsonObject>();
+    JsonArray pal = fade["palette"].to<JsonArray>();
+    for (uint8_t i = 0; i < this->fade_.n; i++) {
+        hex_into(rgb, this->fade_.rgb[i], 3);
+        pal.add(rgb);
+    }
+    fade["fade_s"] = this->fade_.fade_ms / 1000.0f;
+    fade["hold_s"] = this->fade_.hold_ms / 1000.0f;
 
     JsonArray zones = o["zones"].to<JsonArray>();
     for (uint8_t i = 0; i < g_app.num_zones; i++) {

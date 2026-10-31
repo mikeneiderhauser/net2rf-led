@@ -45,7 +45,7 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 
 | Page | What's there |
 |---|---|
-| **Dashboard** | Input rate and packet counters, RF airtime and counters, radio status, device info with free memory and flash; a notice when newer firmware is available; the last colour sent to each zone; other controllers on the network with their live state; **Test mode** (off, solid colour, or cycle R/G/B/W); the **RF output** and **Radio power** switches, and **All off** |
+| **Dashboard** | Input rate and packet counters, RF airtime and counters, radio status, device info with free memory and flash; a notice when newer firmware is available; the last colour sent to each zone; other controllers on the network with their live state; **Test mode** (off, solid colour, cycle R/G/B/W, a palette **fade** or a candle **flicker**, optionally started at every power-up); the **RF output** and **Radio power** switches, and **All off** |
 | **Zones** | Add, name, enable and address zones; choose whether All Zones is a base layer under the others; send a colour, off, a fade in or a fade out to one zone; **Zone walk** lights one zone at a time so you can see which bracelets belong where |
 | **Devices & Radio** | Controller name, bracelet protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
 | **Network** | Current connection and the settings above |
@@ -58,23 +58,40 @@ The pill row at the top of every page shows the radio, input and network state a
 
 ### Tools
 
+The everyday tools are always shown:
+
 | Tool | What it's for |
 |---|---|
 | **Which protocol is my device?** | Alternates the two bracelet protocols: the device lights red for protocol 0, green for protocol 1 |
+| **Range walk** | Cycles red, green, blue, white every 2 s on all zones while you walk the area with a device, with the TX power setting next to it |
+| **Identify** | Flickers the status LED and flashes *THIS ONE* on the OLED for 15 s, to tell controllers apart |
+| **Amplifier power** | Switches an external RF amplifier on and off, once a power switch is wired to IO2 (tick *Switch wiring* first). See the [assembly guide](ASSEMBLY.md#amplifier-power-switch). |
+| **Input monitor** | The channel values arriving from xLights / FPP right now, per zone: shows a wrong start channel or colour order at a glance |
+| **xLights setup** | The exact controller and model settings for the current zones |
+
+**Advanced tools**, folded away at the bottom (the browser remembers whether you left them open):
+
+| Tool | What it's for |
+|---|---|
+| **Group tester** | Tick any combination of the 16 groups and send a colour, off, fade in or fade out to exactly those. Shows the address it uses (`00FBFF0F` = all except group 2). |
 | **Send raw packet** | Send any 7-byte packet, with presets |
 | **Address probe** | Steps through the groups one by one, to find which group a device is on |
-| **Group tester** | Tick any combination of the 16 groups and send a colour, off, fade in or fade out to exactly those. Shows the address it uses (`00FBFF0F` = all except group 2). |
-| **Range walk** | Cycles red, green, blue, white every 2 s on all zones while you walk the area with a device, with the TX power setting next to it |
-| **Input monitor** | The channel values arriving from xLights / FPP right now, per zone: shows a wrong start channel or colour order at a glance |
 | **Transmit log** | The last 24 RF packets: when, to which groups, what command. Shows the base layer at work (for example *all except groups 2, 3*: red). |
 | **Channel meter** | Live signal strength on the bracelet frequency, measured between transmissions: spot other transmitters and pick the listen-before-transmit threshold |
-| **Identify** | Flickers the status LED and flashes *THIS ONE* on the OLED for 15 s, to tell controllers apart |
-| **xLights setup** | The exact controller and model settings for the current zones |
 
 ### Controlling output
 
 - **Test mode** overrides the show input for every enabled zone until it's switched off. Use it to check range
-  and wiring without running xLights.
+  and wiring without running xLights, or to run lights on their own with no show:
+  - **Solid**: the colour picker's colour. **Cycle**: red, green, blue, white, a change every 2 s.
+  - **Fade**: holds each colour of a palette, then fades to the next, round and round. Up to 8 colours, with the
+    fade and hold times. **Presets** fill in Halloween (orange, purple, green, red, candle yellow), Christmas
+    (red, green, warm white, gold) or red, white & blue. It sends a step about every 0.3 s while fading.
+  - **Flicker**: a candle in the colour picker's colour (orange, `#ff7a10`, works well). It changes about 3
+    times a second, as much as the radio carries, so it's a slow, guttering flame rather than a fast one.
+  - **Start this mode at power-up**: the mode running now, with its colours, starts on its own after every
+    power-up or restart: lights in pumpkins or a window come back after a power cut. Press **Off** with it ticked,
+    or untick it, to stop that.
 - **RF output off** stops all transmission while still receiving and counting the show data. Turning it back on
   re-sends the current colours. The radio already sits idle between updates, so this changes nothing on air
   beyond stopping the updates.
@@ -144,6 +161,9 @@ The WT32-ETH01's onboard LED (IO2):
 | Double blink | Setup hotspot active, no network connection |
 | Rapid flicker | *Identify* is running (Tools page) |
 | Steady on, then slow blink, then rapid blink | USER is being held: see [Buttons](#buttons) |
+
+When an [amplifier power switch](ASSEMBLY.md#amplifier-power-switch) is fitted, IO2 switches the amplifier
+instead and the LED is not driven.
 
 ### OLED
 
@@ -231,6 +251,10 @@ Each part is exported, imported and reset by itself, under **System**:
   everything else. The controller may come up on another address or on its setup hotspot. Holding USER for
   5 s does the same.
 - **Factory reset** clears both. Holding USER for 15 s does the same.
+
+Two small settings are kept apart from both parts: the test mode that **starts at power-up**, and the
+**amplifier power switch** (Tools page). They are not in the export files and *Reset settings* leaves them, but a
+factory reset clears them.
 
 Settings are not converted between firmware versions with a different settings layout: after such an update
 the affected part starts from its defaults. Export before updating if you want to restore it.

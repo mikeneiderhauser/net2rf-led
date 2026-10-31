@@ -59,7 +59,9 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/auth` | `{"password": "..."}`: set or change the admin password (8-64 characters); `""` removes it |
 | POST 🔒 | `/api/output` | `{"enabled": true\|false}`: global RF switch (persisted). Disabled = DDP is consumed and counted, nothing is transmitted. |
 | POST 🔒 | `/api/radio` | `{"power": true\|false}`: radio chip power (persisted). `false` puts the chip to sleep: `radio.state` reads `off`, show data is still counted, and sends return 409 (`radio is shut down`). `true` re-initialises it and re-sends the current colours. |
-| POST 🔒 | `/api/test` | `{"mode": "off"\|"solid"\|"cycle", "rgb": "FF0000"}`: override DDP input |
+| POST 🔒 | `/api/test` | `{"mode": "off"\|"solid"\|"cycle"\|"fade"\|"flicker", "rgb": "FF0000"}`: override DDP input. **fade** holds each colour of a palette, then fades to the next, round and round: `"palette": ["FF5000", "7000FF", ...]` (1-8 colours), `"fade_s"`, `"hold_s"` (0-600); anything left out keeps the Halloween default (orange, purple, green, red, candle yellow; 3 s / 4 s). It sends a step about every 0.3 s while fading and nothing while holding. **flicker** is a candle in the `rgb` colour: a random level (55-100 %, redder when dimmer) about 3 times a second. `"boot": true` also starts this mode, with its colours, at every power-up; `false` (or `"off"` with `"boot": false`) stops that. The status shows `engine.test` = `{mode, rgb, boot, fade: {palette, fade_s, hold_s}}`. |
+| GET | `/api/amp` | Amplifier power switch (see *Amplifier power switch* below): `{fitted, active_low, on, pin, shares_status_led}`. Also in `/api/status` as `device.amp`. Always open. |
+| POST 🔒 | `/api/amp` | Any of `{"fitted": true, "active_low": true, "on": false}`, saved and kept across restarts. Returns `{"ok": true, "amp": {...}}`. 400 for a value that isn't true/false. |
 | POST 🔒 | `/api/send` | `{"zone": 0, "action": "color"\|"off"\|"fxa"\|"fxb"\|"fxc", "rgb": "FF0000"}` (protocol 0: `fxa` = fade in to the last colour, `fxb` = fade out, `fxc` = a third effect packet with no known result); `"zone": "all"` (or -1) = every bracelet: one broadcast packet on protocol 1, one per enabled zone on protocol 0. `"all"` + `"off"` behaves like `/api/all-off`. 400 for a zone that isn't saved; 409 when output is disabled. |
 | POST 🔒 | `/api/all-off` | Leave test mode and switch every bracelet off. Bracelets then stay off until the input changes a colour. 409 when output is disabled. |
 | GET | `/api/tools` | Live data for the Tools page: `tx` = the last 24 transmissions, newest first (`age_ms`, `p` protocol, `pkt` hex, `n` repeats, `manual`, `ok`), `tx_total`, and `input` (`start`, `width`, `channels`: the raw values the zones read). Always open. |
@@ -76,6 +78,22 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/factory-reset` | Same as `/api/reset` with `all` |
 | POST 🔒 | `/api/update/latest` | `{"tag": "v1.2.3"}`: the web UI reports the latest release it found on GitHub, so the dashboard and the OLED can show that a newer version exists. Kept in memory only. The controller never contacts GitHub for updates itself. |
 | POST 🔒 | `/update` | `multipart/form-data` firmware upload (`firmware.bin`). Origin and credentials are checked before anything is written to flash. Reboots when done; see *Update rollback*. |
+
+## Amplifier power switch
+
+An optional output that powers an external RF amplifier up and down, e.g. through its 12 V → 5 V buck's EN pin
+([assembly guide](ASSEMBLY.md#amplifier-power-switch)). It uses `pin` (IO2 on the WT32-ETH01, D1 on the XIAO).
+
+- `fitted`: a switch is wired to the pin. Until then the firmware leaves the pin alone (default `false`). On the
+  WT32-ETH01, IO2 is also the status LED's pin (`shares_status_led`), and the LED is not driven while a switch is
+  fitted.
+- `active_low`: the pin is low while the amp is on (default `true`): an N-FET that pulls the buck's EN low when the
+  pin goes high. `false` for a switch that is on while the pin is high (e.g. a high-side P-FET driven through an
+  N-FET).
+- `on`: the amp is powered. Kept across restarts. Reads `false` while no switch is fitted.
+
+Before the firmware starts, IO2 is low (it must be, for serial flashing), so with an active-low switch the amp is
+powered during boot.
 
 ## Settings (`/api/config` → `app`)
 
@@ -186,6 +204,8 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
   "zones":  [{"name": "Left side", "enabled": true, "rgb": "FF0000", "updates": 40617, "last_tx_age_ms": 120}]
 }
 ```
+
+`test_mode` is `off`, `solid`, `cycle`, `fade` or `flicker`.
 
 `input.packets`/`frames` count every valid DDP or E1.31 packet and frame (`ddp_packets` / `e131_packets` split
 them; `last_source` is the protocol of the last one, `source` its sender's IP); `output.suppressed` counts zone updates that

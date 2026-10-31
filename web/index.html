@@ -182,8 +182,19 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
     </div>
     <div class="card" id="d_testCard"><h2>Test mode</h2>
       <p class="dim small" style="margin-top:0">Overrides DDP input for every enabled zone until switched off.</p>
-      <div class="actions" style="margin-top:0"><div class="seg" id="testSeg"><button data-m="off">Off</button><button data-m="solid">Solid</button><button data-m="cycle">Cycle R/G/B/W</button></div>
-      <input type="color" id="testColor" value="#ffffff"></div>
+      <div class="actions" style="margin-top:0"><div class="seg" id="testSeg"><button data-m="off">Off</button><button data-m="solid">Solid</button><button data-m="cycle">Cycle R/G/B/W</button><button data-m="fade">Fade</button><button data-m="flicker">Flicker</button></div>
+      <input type="color" id="testColor" value="#ffffff" title="Solid and Flicker colour"></div>
+      <label class="inline" style="margin-top:8px" title="The mode running now, with its colours, starts again by itself after every power-up or restart"><input type="checkbox" id="testBoot"> Start this mode at power-up</label>
+      <p class="dim small" style="margin:4px 0 0">Flicker: a candle in the Solid colour (try orange, #ff7a10), changing about 3 times a second &mdash; the most the radio carries, so a slow, guttering flame.</p>
+      <div id="fadeBox" style="margin-top:10px">
+        <p class="dim small" style="margin:0 0 6px">Fade: holds each colour, then fades to the next, round and round. Up to 8 colours; the radio gets a step about every 0.3 s while fading.</p>
+        <div class="actions" style="margin-top:0;flex-wrap:wrap"><span id="fadePal" style="display:inline-flex;gap:4px;flex-wrap:wrap"></span>
+          <button id="fadeAdd" title="Add a colour">+</button><button id="fadeDel" title="Remove the last colour">&minus;</button></div>
+        <div class="actions" style="flex-wrap:wrap"><label class="small">Fade <input type="number" id="fadeS" min="0" max="600" step="0.5" style="width:70px"> s</label>
+          <label class="small">Hold <input type="number" id="holdS" min="0" max="600" step="0.5" style="width:70px"> s</label>
+          <button id="fadeGo">Start fade</button></div>
+        <div class="actions" style="flex-wrap:wrap"><span class="small dim">Presets:</span><span id="fadePresets" style="display:inline-flex;gap:6px;flex-wrap:wrap"></span></div>
+      </div>
     </div>
   </section>
 
@@ -306,44 +317,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
         <span class="small" id="id_now"></span></div>
       <div class="actions"><span class="small dim">Device showed:</span><button id="id_p0">Red → use protocol 0</button><button id="id_p1">Green → use protocol 1</button></div>
       <p class="dim small">Nothing at all? Check the device's power switch and battery, bring it closer, raise TX power, and confirm the radio shows <i>ready</i> on the dashboard.
-        If it only reacts to protocol 1 once you pick a group, use the Address probe below on <i>Group (byte 1)</i> in sweep mode.</p>
-    </div>
-    <div class="card"><h2>Send raw packet</h2>
-      <div class="form">
-        <label>Protocol<select id="t_p"><option value="0">0 &middot; 433.889 MHz</option><option value="1" selected>1 &middot; 433.920 MHz</option></select></label>
-        <label>Preset<select id="t_pre"><option value="">&mdash;</option></select></label>
-        <label>Packet (7 bytes hex)<input id="t_hex" class="mono" value="55000FFFFF55FF"></label>
-        <label>Frames<input id="t_rep" type="number" min="1" max="20" value="3"></label>
-        <label class="inline"><input type="checkbox" id="t_fix" checked> Fix checksum</label>
-      </div>
-      <div class="actions"><button class="primary" id="t_send">Send</button><span class="mono small dim" id="t_prev"></span></div>
-    </div>
-    <div class="card"><h2>Address probe</h2>
-      <p class="dim small" style="margin-top:0">Steps through candidate address values while you watch the devices. Mark the steps where a device reacts, then enter that value as a zone address.</p>
-      <div class="form">
-        <label>Protocol<select id="p_p"><option value="0">0</option><option value="1" selected>1</option></select></label>
-        <label>Base address<input id="p_base" class="mono"></label>
-        <label>Field<select id="p_field"></select></label>
-        <label>Mode<select id="p_mode"><option value="bits">Walk single bits</option><option value="sweep">Sweep a range</option></select></label>
-        <label>From<input id="p_from" type="number" value="0"></label>
-        <label>To<input id="p_to" type="number" value="255"></label>
-        <label>Colour<input id="p_col" type="color" value="#ff0000"></label>
-        <label>Step time (ms)<input id="p_dwell" type="number" value="1500" min="300"></label>
-        <label class="inline"><input type="checkbox" id="p_off" checked> Send off between steps</label>
-      </div>
-      <div class="actions"><button class="primary" id="p_start">Start</button><button id="p_pause">Pause</button><button id="p_prev">&larr; Back</button><button id="p_next">Next &rarr;</button><button id="p_stop">Stop</button><button id="p_mark">&#9733; Device reacted</button></div>
-      <div style="margin-top:12px"><span class="dim small">Current address</span> <span class="big mono" id="p_cur">&mdash;</span> <b id="p_grp"></b> <span class="dim small" id="p_step"></span></div>
-      <div class="mono small" id="p_log" style="margin-top:6px"></div>
-    </div>
-    <div class="card"><h2>Group tester</h2>
-      <p class="dim small" style="margin-top:0">Send one command to any combination of groups, without touching the zones. Wake the devices first (press their button).</p>
-      <div class="form" style="margin-bottom:6px"><label>Protocol<select id="g_proto"><option value="0">0 &middot; Shenzen New Dody</option><option value="1">1 &middot; LedGiftSupplier.com</option></select></label></div>
-      <div id="g_p0">
-        <div class="actions" id="g_boxes" style="margin-top:0"></div>
-        <div class="actions"><button id="g_all">All</button><button id="g_none">None</button><button id="g_inv">Invert</button><span class="small dim">address</span> <span class="mono" id="g_addr"></span> <span class="small dim" id="g_desc"></span></div>
-      </div>
-      <div class="form hide" id="g_p1"><label>Group code (0 = every group)<input id="g_grp" type="number" min="0" max="255" value="0"></label></div>
-      <div class="actions"><input id="g_col" type="color" value="#ff0000"><button class="primary" id="g_send">Send colour</button><button id="g_off">Off</button><button id="g_fin">Fade in</button><button id="g_fout">Fade out</button></div>
+        If it only reacts to protocol 1 once you pick a group, use the Address probe (under <i>Advanced tools</i>) on <i>Group (byte 1)</i> in sweep mode.</p>
     </div>
     <div class="card"><h2>Range walk</h2>
       <p class="dim small" style="margin-top:0">Cycles red, green, blue and white on every zone, one change every 2&nbsp;s. Walk the area with a device in hand: where it stops following, you are out of range. Show input is overridden while it runs.</p>
@@ -351,26 +325,76 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="form"><label>TX power (dBm)<input id="rw_pow" type="number"><span class="hint" id="rw_hint"></span></label></div>
       <div class="actions"><button id="rw_setpow">Set power</button></div>
     </div>
+    <div class="card"><h2>Identify</h2>
+      <p class="dim small" style="margin-top:0">Flickers the status LED and flashes &ldquo;THIS ONE&rdquo; on the OLED for 15&nbsp;s, to tell this controller apart from others.</p>
+      <div class="actions" style="margin-top:0"><button class="primary" id="idn_go">Identify this controller</button><button id="idn_stop">Stop</button></div>
+    </div>
+    <div class="card" id="amp_card"><h2>Amplifier power</h2>
+      <p class="dim small" style="margin-top:0">Powers an external RF amplifier up and down through a switch on IO<span class="amp_pin">2</span> (e.g. a FET on its buck's EN pin; see the assembly guide). <span id="amp_note"></span></p>
+      <label class="tog"><input type="checkbox" id="amp_on" role="switch"><i></i><span><b>Amplifier</b> <span class="dim small" id="amp_state"></span></span></label>
+      <details class="adv" style="margin-top:8px"><summary>Switch wiring</summary>
+        <label class="inline" style="display:block;margin-top:8px"><input type="checkbox" id="amp_fitted"> A power switch is wired to IO<span class="amp_pin">2</span></label>
+        <label class="inline" style="display:block;margin-top:4px"><input type="checkbox" id="amp_low"> Active low: the pin is low while the amp is on (an N-FET pulling the buck's EN low when the pin is high)</label>
+        <p class="dim small" id="amp_led" style="margin-bottom:0"></p>
+      </details>
+    </div>
     <div class="card"><h2>Input monitor</h2>
       <p class="dim small" style="margin-top:0">The channel values arriving from xLights / FPP right now, as each zone reads them.</p>
       <div class="scroll"><table class="tbl"><thead><tr><th>Zone</th><th>Channels</th><th>Values</th><th>Read as</th></tr></thead><tbody id="im_rows"></tbody></table></div>
       <div class="small dim" id="im_note" style="margin-top:6px"></div>
     </div>
-    <div class="card"><h2>Transmit log</h2>
-      <p class="dim small" style="margin-top:0">The last RF packets sent, newest first: who each one was addressed to and what it said. <span id="tl_total"></span></p>
-      <div class="scroll"><table class="tbl"><thead><tr><th>When</th><th>To</th><th>Command</th><th>Packet</th><th></th></tr></thead><tbody id="tl_rows"></tbody></table></div>
-    </div>
-    <div class="card"><h2>Channel meter</h2>
-      <p class="dim small" style="margin-top:0">Signal strength on the device frequency, measured between transmissions. Use it to spot other transmitters and to pick the listen-before-transmit threshold (about 10&nbsp;dB above the quiet level).</p>
-      <div class="actions" style="margin-top:0"><button class="primary" id="cm_start">Start</button><button id="cm_stop">Stop</button><span class="big" id="cm_now">–</span><span class="dim small">dBm peak</span></div>
-      <div class="util" id="cm_bar" style="height:14px"><i style="width:0"></i></div>
-      <div class="small dim" id="cm_info"></div>
-    </div>
-    <div class="card"><h2>Identify</h2>
-      <p class="dim small" style="margin-top:0">Flickers the status LED and flashes &ldquo;THIS ONE&rdquo; on the OLED for 15&nbsp;s, to tell this controller apart from others.</p>
-      <div class="actions" style="margin-top:0"><button class="primary" id="idn_go">Identify this controller</button><button id="idn_stop">Stop</button></div>
-    </div>
     <div class="card"><h2>xLights setup</h2><pre id="t_xl"></pre></div>
+    <details class="adv" id="t_adv" style="margin:4px 0 14px"><summary style="padding:6px 2px">Advanced tools: group tester, raw packets, address probe, transmit log, channel meter</summary>
+      <div style="margin-top:12px">
+        <div class="card"><h2>Group tester</h2>
+          <p class="dim small" style="margin-top:0">Send one command to any combination of groups, without touching the zones. Wake the devices first (press their button).</p>
+          <div class="form" style="margin-bottom:6px"><label>Protocol<select id="g_proto"><option value="0">0 &middot; Shenzen New Dody</option><option value="1">1 &middot; LedGiftSupplier.com</option></select></label></div>
+          <div id="g_p0">
+            <div class="actions" id="g_boxes" style="margin-top:0"></div>
+            <div class="actions"><button id="g_all">All</button><button id="g_none">None</button><button id="g_inv">Invert</button><span class="small dim">address</span> <span class="mono" id="g_addr"></span> <span class="small dim" id="g_desc"></span></div>
+          </div>
+          <div class="form hide" id="g_p1"><label>Group code (0 = every group)<input id="g_grp" type="number" min="0" max="255" value="0"></label></div>
+          <div class="actions"><input id="g_col" type="color" value="#ff0000"><button class="primary" id="g_send">Send colour</button><button id="g_off">Off</button><button id="g_fin">Fade in</button><button id="g_fout">Fade out</button></div>
+        </div>
+        <div class="card"><h2>Send raw packet</h2>
+          <div class="form">
+            <label>Protocol<select id="t_p"><option value="0">0 &middot; 433.889 MHz</option><option value="1" selected>1 &middot; 433.920 MHz</option></select></label>
+            <label>Preset<select id="t_pre"><option value="">&mdash;</option></select></label>
+            <label>Packet (7 bytes hex)<input id="t_hex" class="mono" value="55000FFFFF55FF"></label>
+            <label>Frames<input id="t_rep" type="number" min="1" max="20" value="3"></label>
+            <label class="inline"><input type="checkbox" id="t_fix" checked> Fix checksum</label>
+          </div>
+          <div class="actions"><button class="primary" id="t_send">Send</button><span class="mono small dim" id="t_prev"></span></div>
+        </div>
+        <div class="card"><h2>Address probe</h2>
+          <p class="dim small" style="margin-top:0">Steps through candidate address values while you watch the devices. Mark the steps where a device reacts, then enter that value as a zone address.</p>
+          <div class="form">
+            <label>Protocol<select id="p_p"><option value="0">0</option><option value="1" selected>1</option></select></label>
+            <label>Base address<input id="p_base" class="mono"></label>
+            <label>Field<select id="p_field"></select></label>
+            <label>Mode<select id="p_mode"><option value="bits">Walk single bits</option><option value="sweep">Sweep a range</option></select></label>
+            <label>From<input id="p_from" type="number" value="0"></label>
+            <label>To<input id="p_to" type="number" value="255"></label>
+            <label>Colour<input id="p_col" type="color" value="#ff0000"></label>
+            <label>Step time (ms)<input id="p_dwell" type="number" value="1500" min="300"></label>
+            <label class="inline"><input type="checkbox" id="p_off" checked> Send off between steps</label>
+          </div>
+          <div class="actions"><button class="primary" id="p_start">Start</button><button id="p_pause">Pause</button><button id="p_prev">&larr; Back</button><button id="p_next">Next &rarr;</button><button id="p_stop">Stop</button><button id="p_mark">&#9733; Device reacted</button></div>
+          <div style="margin-top:12px"><span class="dim small">Current address</span> <span class="big mono" id="p_cur">&mdash;</span> <b id="p_grp"></b> <span class="dim small" id="p_step"></span></div>
+          <div class="mono small" id="p_log" style="margin-top:6px"></div>
+        </div>
+        <div class="card"><h2>Transmit log</h2>
+          <p class="dim small" style="margin-top:0">The last RF packets sent, newest first: who each one was addressed to and what it said. <span id="tl_total"></span></p>
+          <div class="scroll"><table class="tbl"><thead><tr><th>When</th><th>To</th><th>Command</th><th>Packet</th><th></th></tr></thead><tbody id="tl_rows"></tbody></table></div>
+        </div>
+        <div class="card"><h2>Channel meter</h2>
+          <p class="dim small" style="margin-top:0">Signal strength on the device frequency, measured between transmissions. Use it to spot other transmitters and to pick the listen-before-transmit threshold (about 10&nbsp;dB above the quiet level).</p>
+          <div class="actions" style="margin-top:0"><button class="primary" id="cm_start">Start</button><button id="cm_stop">Stop</button><span class="big" id="cm_now">–</span><span class="dim small">dBm peak</span></div>
+          <div class="util" id="cm_bar" style="height:14px"><i style="width:0"></i></div>
+          <div class="small dim" id="cm_info"></div>
+        </div>
+      </div>
+    </details>
   </section>
 
   <!-- SYSTEM -->
@@ -621,6 +645,9 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
     return `<tr class="${cfg.enabled?'':'dim'}"><td class="dim">${k+1}</td><td class="nw">${esc(cfg.name)}</td><td class="dim nw">${cfg.start}-${cfg.start+w-1}</td><td class="nw"><span class="sw" style="background:#${g.rgb}"></span> <span class="mono">#${g.rgb}</span></td><td class="small dim nw">${w===4?'fx '+g.fx:w===5?(g.gated?'<span class="badge warn">held: ch1 ≠ 85</span>':'group '+g.group):''}</td><td class="mono nw">${(g.packets&&g.packets.length?g.packets:g.packet?[{p:'',pkt:g.packet}]:[]).map(e=>(g.packets&&g.packets.length>1?`<span class="dim">P${e.p}</span> `:'')+e.pkt.match(/../g).join(' ')).join('<br>')||'–'}</td><td>${fmtN(g.tx)}</td><td class="dim">${fmtAge(g.tx_age_ms)}</td></tr>`}).join('');
   $('d_zones').innerHTML=rows;
   document.querySelectorAll('#testSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===e.test.mode));
+  if(!fadeEdited&&e.test.fade)fadeFill(e.test.fade.palette,e.test.fade.fade_s,e.test.fade.hold_s);
+  $('testBoot').checked=!!e.test.boot;
+  ampRender(d.amp);
   renderNetStatus();sysInfo();if(location.hash==='#tools')xlights();
 }
 
@@ -1010,8 +1037,45 @@ async function swChange(el,off,path,body,done){swBusy=true;const on=el.checked;
 $('d_outSw').onchange=e=>swChange(e.target,'Stop all RF transmission? Show data will be received but ignored until output is switched back on.','output',on=>({enabled:on}),on=>on?'RF output on':'RF output off');
 $('d_radioSw').onchange=e=>swChange(e.target,'Shut down the radio chip? Nothing is transmitted until you switch it on again. This setting survives a reboot.','radio',on=>({power:on}),on=>on?'Radio powered on':'Radio shut down');
 $('resetStats').onclick=()=>api('stats/reset',{}).then(()=>toast('Counters reset'));
-document.querySelectorAll('#testSeg button').forEach(b=>b.onclick=()=>api('test',{mode:b.dataset.m,rgb:$('testColor').value.slice(1)}).then(poll));
-$('testColor').oninput=()=>{if(S&&S.engine.test.mode==='solid')api('test',{mode:'solid',rgb:$('testColor').value.slice(1)})};
+function testBody(m){const b=m==='fade'&&$('fadePal').children.length?fadeBody():{mode:m,rgb:$('testColor').value.slice(1)};if($('testBoot').checked)b.boot=m!=='off';return b}
+document.querySelectorAll('#testSeg button').forEach(b=>b.onclick=()=>api('test',testBody(b.dataset.m)).then(()=>{if(b.dataset.m==='fade')fadeEdited=false;poll()}));
+$('testBoot').onchange=async e=>{const m=S?S.engine.test.mode:'off';
+  if(e.target.checked&&m==='off'){e.target.checked=false;toast('Start a test mode first, then tick this');return}
+  const b=testBody(m);b.boot=e.target.checked;await api('test',b);toast(e.target.checked?'Starts at power-up':'Nothing starts at power-up');poll()};
+// live while dragging; saved for power-up (flash) only once the colour is picked
+$('testColor').oninput=()=>{const m=S&&S.engine.test.mode;if(m==='solid'||m==='flicker'){const b=testBody(m);delete b.boot;api('test',b)}};
+$('testColor').onchange=()=>{const m=S&&S.engine.test.mode;if((m==='solid'||m==='flicker')&&$('testBoot').checked)api('test',testBody(m))};
+// tools page: the Advanced section stays open or closed per browser
+try{$('t_adv').open=localStorage.getItem('n2r_tools_adv')==='1'}catch(e){}
+$('t_adv').ontoggle=()=>{try{localStorage.setItem('n2r_tools_adv',$('t_adv').open?'1':'0')}catch(e){}};
+// amplifier power switch (/api/amp)
+var ampBusy=false;
+function ampRender(a){if(!a||ampBusy)return;document.querySelectorAll('.amp_pin').forEach(x=>x.textContent=a.pin);
+  $('amp_fitted').checked=a.fitted;$('amp_low').checked=a.active_low;$('amp_on').checked=a.on;$('amp_on').disabled=!a.fitted;
+  $('amp_state').textContent=a.fitted?(a.on?'on':'off'):'no switch fitted';
+  $('amp_note').textContent=a.fitted?'':'Tick the wiring box below once a switch is fitted.';
+  $('amp_led').textContent=a.shares_status_led?'This pin also drives the status LED, which stays dark while a switch is fitted.':''}
+async function ampSet(b){ampBusy=true;try{const r=await api('amp',b);ampBusy=false;ampRender(r.amp);toast(r.amp.fitted?'Amplifier '+(r.amp.on?'on':'off'):'No amp switch fitted')}catch(e){}finally{ampBusy=false;poll()}}
+$('amp_on').onchange=e=>ampSet({on:e.target.checked});
+$('amp_fitted').onchange=async e=>{const want=e.target.checked;ampBusy=true;  // the status poll must not reset the box while asking
+  const ok=!want||await ask('Drive IO'+$('amp_fitted').parentNode.querySelector('.amp_pin').textContent+' as the amplifier switch? Only do this if a switch is wired to it.');
+  ampBusy=false;if(!ok){e.target.checked=false;return}ampSet({fitted:want})};
+$('amp_low').onchange=e=>ampSet({active_low:e.target.checked});
+// fade palette: filled from the controller until edited here
+// presets: [name, colours, fade s, hold s]. Picking one fills the editor; Start fade sends it.
+const FADE_PRESETS=[['Halloween',['FF5000','7000FF','40FF00','FF0000','FFA020'],3,4],
+  ['Christmas',['FF0000','00C000','FFB060','FF9000'],3,4],
+  ['Red, white & blue',['FF0000','FFFFFF','0030FF'],2,4]];
+var fadeEdited=false;
+function fadeFill(pal,f,h){$('fadePal').innerHTML=pal.map(c=>`<input type="color" value="#${c.toLowerCase()}">`).join('');$('fadeS').value=f;$('holdS').value=h}
+function fadeBody(){return{mode:'fade',palette:[...$('fadePal').querySelectorAll('input')].map(i=>i.value.slice(1).toUpperCase()),fade_s:+$('fadeS').value||0,hold_s:+$('holdS').value||0}}
+$('fadeBox').addEventListener('input',()=>fadeEdited=true);
+$('fadeAdd').onclick=()=>{if($('fadePal').children.length<8){$('fadePal').insertAdjacentHTML('beforeend','<input type="color" value="#ff5000">');fadeEdited=true}};
+$('fadeDel').onclick=()=>{const p=$('fadePal');if(p.children.length>1){p.lastElementChild.remove();fadeEdited=true}};
+$('fadePresets').innerHTML=FADE_PRESETS.map((p,k)=>`<button data-k="${k}" title="${p[1].map(c=>'#'+c).join(' ')}">${p[1].map(c=>`<span class="sw" style="width:12px;height:12px;background:#${c}"></span>`).join('')} ${esc(p[0])}</button>`).join('');
+$('fadePresets').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=FADE_PRESETS[b.dataset.k];fadeFill(p[1],p[2],p[3]);fadeEdited=true;
+  if(S&&S.engine.test.mode==='fade')api('test',testBody('fade')).then(()=>{fadeEdited=false;poll()})};
+$('fadeGo').onclick=()=>api('test',testBody('fade')).then(()=>{fadeEdited=false;poll()});
 
 // system
 function authUi(){const on=!!S.device.auth;

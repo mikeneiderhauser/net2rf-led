@@ -251,6 +251,36 @@ void test_update_settings(void) {
 void setUp(void) {}
 void tearDown(void) {}
 
+void test_amp_record(void) {
+    Preferences::store().clear();
+    AmpConfig a;
+    config_load_amp(a);  // nothing saved: not fitted, active low, on
+    TEST_ASSERT_EQUAL_UINT8(0, a.fitted);
+    TEST_ASSERT_EQUAL_UINT8(1, a.active_low);
+    TEST_ASSERT_EQUAL_UINT8(1, a.on);
+    config_save_amp(AmpConfig{1, 0, 0});
+    config_load_amp(a);
+    TEST_ASSERT_EQUAL_UINT8(1, a.fitted);
+    TEST_ASSERT_EQUAL_UINT8(0, a.active_low);
+    TEST_ASSERT_EQUAL_UINT8(0, a.on);
+}
+
+void test_boot_test_record(void) {
+    Preferences::store().clear();
+    BootTest t{};
+    TEST_ASSERT_FALSE(config_load_boot_test(t));
+    t.mode = 4;  // flicker
+    t.rgb[0] = 0xFF, t.rgb[1] = 0x7A, t.rgb[2] = 0x10;
+    t.fade.n = 1;
+    config_save_boot_test(&t);
+    BootTest back{};
+    TEST_ASSERT_TRUE(config_load_boot_test(back));
+    TEST_ASSERT_EQUAL_UINT8(4, back.mode);
+    TEST_ASSERT_EQUAL_UINT8(0x7A, back.rgb[1]);
+    config_save_boot_test(nullptr);
+    TEST_ASSERT_FALSE(config_load_boot_test(back));
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_defaults);
@@ -264,5 +294,7 @@ int main(int, char **) {
     RUN_TEST(test_json_errors);
     RUN_TEST(test_sync_settings);
     RUN_TEST(test_update_settings);
+    RUN_TEST(test_boot_test_record);
+    RUN_TEST(test_amp_record);
     return UNITY_END();
 }

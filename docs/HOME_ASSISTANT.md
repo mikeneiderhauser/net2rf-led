@@ -70,7 +70,22 @@ rest_command:
     url: http://net2rf-3f2a.local/api/test
     method: POST
     content_type: "application/json"
-    payload: '{"mode": "{{ mode }}", "rgb": "{{ rgb }}"}'   # mode: off / solid / cycle
+    payload: '{"mode": "{{ mode }}", "rgb": "{{ rgb }}"}'   # mode: off / solid / cycle / fade / flicker
+    username: admin
+    password: !secret bracelets_admin_password
+
+  bracelets_fade:                          # a colour palette, faded round and round (no show needed)
+    url: http://net2rf-3f2a.local/api/test
+    method: POST
+    content_type: "application/json"
+    payload: '{"mode": "fade", "palette": {{ palette | tojson }}, "fade_s": {{ fade_s | default(3) }}, "hold_s": {{ hold_s | default(4) }}}'
+    username: admin
+    password: !secret bracelets_admin_password
+  bracelets_amp:                           # the amplifier power switch, if one is fitted (Tools → Amplifier power)
+    url: http://net2rf-3f2a.local/api/amp
+    method: POST
+    content_type: "application/json"
+    payload: '{"on": {{ on }}}'
     username: admin
     password: !secret bracelets_admin_password
 
@@ -124,6 +139,30 @@ automation:
       - delay: "00:00:10"
       - action: rest_command.bracelets_color
         data: { mode: "off", rgb: "000000" }
+```
+
+Christmas colours at sunset, off at 23:00, with the amplifier powered only while they run:
+
+```yaml
+automation:
+  - alias: "Bracelets holiday fade"
+    triggers:
+      - trigger: sun
+        event: sunset
+    actions:
+      - action: rest_command.bracelets_amp
+        data: { on: "true" }
+      - action: rest_command.bracelets_fade
+        data: { palette: ["FF0000", "00C000", "FFB060", "FF9000"] }
+  - alias: "Bracelets holiday fade off"
+    triggers:
+      - trigger: time
+        at: "23:00:00"
+    actions:
+      - action: rest_command.bracelets_color
+        data: { mode: "off", rgb: "000000" }
+      - action: rest_command.bracelets_amp
+        data: { on: "false" }
 ```
 
 Notify when a controller stops receiving from xLights during show hours:

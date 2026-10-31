@@ -93,6 +93,32 @@ inline uint8_t display_sleep_minutes(const AppConfig &c) {
 inline bool tx_allowed(const AppConfig &c) { return c.output_enabled && !c.radio_off && !c.receiver; }
 static const int8_t LBT_DEFAULT_THRESHOLD = -75;
 
+// Fade test mode palette (engine.h).
+static const uint8_t MAX_FADE_COLORS = 8;
+struct FadePalette {
+    uint8_t rgb[MAX_FADE_COLORS][3];
+    uint8_t n;
+    uint32_t fade_ms, hold_ms;
+};
+// A test mode to start at every boot (e.g. a Halloween fade or candle flicker with no show running). Its own
+// "boot_test" record, so it never changes the AppConfig layout.
+struct BootTest {
+    uint8_t mode;    // TestMode, never OFF
+    uint8_t rgb[3];  // solid / flicker colour
+    FadePalette fade;
+};
+bool config_load_boot_test(BootTest &out);  // false when none is saved
+void config_save_boot_test(const BootTest *t);  // nullptr: start nothing at boot
+
+// Amplifier power switch (src/amp.h). Its own "amp" record, so it never changes the AppConfig layout.
+struct AmpConfig {
+    uint8_t fitted;      // a switch is wired to pins::AMP_EN; 0: the pin is left alone (status LED)
+    uint8_t active_low;  // pin low = amp on (e.g. an N-FET pulling the buck's EN low when the pin is high)
+    uint8_t on;          // the amp is powered (kept across restarts)
+};
+void config_load_amp(AmpConfig &out);  // defaults when none is saved: not fitted, active low, on
+void config_save_amp(const AmpConfig &c);
+
 struct NetConfig {
     uint32_t magic;
     char hostname[33];

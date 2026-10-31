@@ -33,6 +33,7 @@ class Preferences {
         store()[this->ns_ + "/" + k].assign((const uint8_t *) buf, (const uint8_t *) buf + len);
         return len;
     }
+    bool remove(const char *k) { return store().erase(this->ns_ + "/" + k) > 0; }
     uint8_t getUChar(const char *, uint8_t d = 0) { return d; }
     size_t putUChar(const char *, uint8_t) { return 1; }
     bool clear() {

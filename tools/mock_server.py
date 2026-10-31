@@ -44,7 +44,9 @@ APP = {
 }
 NET = {"hostname": "net2rf-3f2a", "eth_enabled": True, "wifi_ssid": "", "wifi_pass_set": False, "dhcp": True,
        "ip": "", "gateway": "", "subnet": "255.255.255.0", "dns": "", "ap_mode": "no_connection"}
-TEST = {"mode": "off", "rgb": "FFFFFF"}
+AMP = {"fitted": False, "active_low": True, "on": False, "pin": 2, "shares_status_led": True}
+TEST = {"mode": "off", "rgb": "FFFFFF", "boot": False,
+        "fade": {"palette": ["FF5000", "7000FF", "40FF00", "FF0000", "FFA020"], "fade_s": 3, "hold_s": 4}}
 AUTH = {"enabled": False}
 STATS = {"packets": 0, "frames": 0}
 
@@ -196,7 +198,8 @@ def status():
                    "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False,
                    "update_check": dict({"available": bool(LATEST["tag"]) and LATEST["tag"] != "v" + FW},
                                         **({"latest": LATEST["tag"], "reported_ago_s": int(time.time() - LATEST["at"])} if LATEST["tag"] else {})),
-                   "display_info": {"present": False, "type": "ssd1306", "sda_pin": 5, "scl_pin": 17, "asleep": False, "sleep_min": 10, "button": False}},
+                   "display_info": {"present": False, "type": "ssd1306", "sda_pin": 5, "scl_pin": 17, "asleep": False, "sleep_min": 10, "button": False},
+                   "amp": AMP},
         "network": {"interface": "ethernet", "ip": "192.168.250.60", "hostname": NET["hostname"], "dhcp": NET["dhcp"],
                     "ethernet": {"enabled": True, "link": True, "mac": "A8:03:2A:11:3F:2A", "speed": 100,
                                  "full_duplex": True, "ip": "192.168.250.60", "gateway": "192.168.250.1",
@@ -317,6 +320,8 @@ class Handler(BaseHTTPRequestHandler):
                 {"label": "app1", "offset": 0x1F0000, "bytes": 0x1E0000, "kind": "firmware_next"},
                 {"label": "spiffs", "offset": 0x3D0000, "bytes": 0x20000, "kind": "files"},
                 {"label": "coredump", "offset": 0x3F0000, "bytes": 0x10000, "kind": "crash_dump"}]})
+        if path == "/api/amp":
+            return self.send(200, AMP)
         if path == "/api/heap":
             return self.send(200, {"free": 148000, "largest_block": 110000, "min_free": 61000, "allocated": 164000, "blocks_used": 420,
                                    "blocks_free": 9, "tasks": [{"name": "loopTask", "stack_unused": 3200}, {"name": "engine", "stack_unused": 2900}]})
@@ -408,8 +413,17 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/network":
             NET.update({k: v for k, v in body.items() if k not in ("wifi_pass", "ap_pass")})
             reboot = True
+        elif path == "/api/amp":
+            AMP.update({k: v for k, v in body.items() if k in ("fitted", "active_low", "on")})
+            return self.send(200, {"ok": True, "amp": AMP})
         elif path == "/api/test":
-            TEST.update(body)
+            TEST.update({k: v for k, v in body.items() if k in ("mode", "rgb")})
+            if isinstance(body.get("boot"), bool):
+                TEST["boot"] = body["boot"] and body.get("mode") != "off"
+            if body.get("mode") == "fade":
+                TEST["fade"] = {"palette": body.get("palette", TEST["fade"]["palette"]),
+                                "fade_s": body.get("fade_s", TEST["fade"]["fade_s"]),
+                                "hold_s": body.get("hold_s", TEST["fade"]["hold_s"])}
         elif path in ("/api/reboot", "/api/factory-reset", "/api/import", "/api/reset"):
             reboot = True
         self.send(200, {"ok": True, "reboot": reboot})

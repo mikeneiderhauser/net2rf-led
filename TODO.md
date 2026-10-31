@@ -20,26 +20,14 @@ history.
 - [ ] **Listen before transmit** with two radios in range: check `lbt_waits` / `lbt_forced` while both run busy
   sequences, and that the SX1278 RX path (packet mode, DIO2 = TimeOut) doesn't disturb its TX data line. Then
   decide whether to turn it on by default. (Default threshold is -75 dBm: a quiet CC1101 read -84 to -87.)
-- [ ] **Protocol 1 on real devices.** Wally's Lights bracelets follow the colour cycle test sent to all groups
-  (2026-10-10, Ra-02), and the one tested responds to group 0 (all) and group 1. The vendor's "Zone 1" is
-  group 1. Still to check: other zones (assumed zone N = group N); a group above 15; driving them from xLights; a zone on both protocols; more devices at once; idle
-  behaviour. Then the hat, pucks and sticks.
-- [ ] **Protocol 1 sync timing:** CrispyPyro's captures of the vendor transmitter suggest a long mark, a ~1000 µs
-  gap and two copies per burst; we send the Flipper app's 200 / 1600 µs sync. Wally's Lights bracelets respond to
-  ours, so try the vendor's only if the hat, pucks or sticks ignore it; if both are needed, make it a setting.
 
 ## Needs hardware checks
 
-- [ ] **Range test** across the yard (CC1101 at +10 dBm; Ra-02 as the long-range option), with *Tools → Range walk*.
 - [ ] **XIAO ESP32-S3 build** on a real board: boot, Wi-Fi, CC1101 on the documented pins, BOOT as the USER button,
   the per-board firmware file in the updater and the browser flasher.
-- [ ] **USER button** on a board that has one: the status LED stages while it is held (steady, slow blink, rapid
-  blink), and the network and factory resets it triggers.
-- [ ] **Reset network** and **Factory reset** from the System page (only *Reset settings* was run on hardware).
-- [ ] **OLED wake** on a network address change, hotspot start / stop and a radio fault.
-- [ ] **Group tester** and **Range walk** from a real browser with devices awake (checked against the mock only).
-- [ ] **FPP:** how its MultiSync page shows the controller.
-- [ ] **Carrier board and enclosure** (in progress, tracked outside the repo for now).
+- [ ] **Amplifier power switch** (`/api/amp`, IO2): no switch has been wired yet. Check the buck's EN polarity, that
+  the amp follows the switch, and that serial flashing still works with the gate pull-down on IO2.
+- [ ] **Fade and flicker** on bracelets of both protocols (fade has run on Wally's Lights pucks).
 
 ## xLights and FPP
 

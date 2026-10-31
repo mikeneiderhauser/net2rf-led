@@ -206,6 +206,60 @@ void config_save_net(const NetConfig &c) {
     p.end();
 }
 
+static const uint32_t BOOT_TEST_MAGIC = 0x4E325431;  // "N2T1"
+struct BootTestRecord {
+    uint32_t magic;
+    BootTest t;
+};
+
+bool config_load_boot_test(BootTest &out) {
+    Preferences p;
+    p.begin(NVS_NS, true);
+    BootTestRecord r{};
+    bool ok = p.getBytesLength("boot_test") == sizeof(r) && p.getBytes("boot_test", &r, sizeof(r)) == sizeof(r) &&
+              r.magic == BOOT_TEST_MAGIC && r.t.mode != 0 && r.t.fade.n >= 1 && r.t.fade.n <= MAX_FADE_COLORS;
+    p.end();
+    if (ok)
+        out = r.t;
+    return ok;
+}
+
+void config_save_boot_test(const BootTest *t) {
+    Preferences p;
+    p.begin(NVS_NS, false);
+    if (t) {
+        BootTestRecord r{BOOT_TEST_MAGIC, *t};
+        p.putBytes("boot_test", &r, sizeof(r));
+    } else {
+        p.remove("boot_test");
+    }
+    p.end();
+}
+
+static const uint32_t AMP_MAGIC = 0x4E324131;  // "N2A1"
+struct AmpRecord {
+    uint32_t magic;
+    AmpConfig c;
+};
+
+void config_load_amp(AmpConfig &out) {
+    out = AmpConfig{0, 1, 1};
+    Preferences p;
+    p.begin(NVS_NS, true);
+    AmpRecord r{};
+    if (p.getBytesLength("amp") == sizeof(r) && p.getBytes("amp", &r, sizeof(r)) == sizeof(r) && r.magic == AMP_MAGIC)
+        out = r.c;
+    p.end();
+}
+
+void config_save_amp(const AmpConfig &c) {
+    Preferences p;
+    p.begin(NVS_NS, false);
+    AmpRecord r{AMP_MAGIC, c};
+    p.putBytes("amp", &r, sizeof(r));
+    p.end();
+}
+
 void config_factory_reset() {
     Preferences p;
     p.begin(NVS_NS, false);

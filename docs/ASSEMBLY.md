@@ -4,7 +4,8 @@ Two ways to build a controller:
 
 - **[A. DIY build](#a-diy-build)**: a WT32-ETH01 and a radio module wired together. Available now; this is
   what the firmware has been tested on.
-- **[B. Carrier board](#b-carrier-board-coming-soon)**: coming soon.
+- **[B. Carrier board](#b-carrier-board)**: the WT32-ETH01 and a Ra-02 plug into one board with the OLED and
+  buttons, in a printed case. R2.0 is built and tested.
 - **[C. XIAO ESP32-S3](#c-xiao-esp32-s3)**: a small Wi-Fi-only alternative, wired like
   [CrispyPyro/Wireless_DMX_Receiver](https://github.com/CrispyPyro/Wireless_DMX_Receiver). Builds; not yet tested
   on hardware.
@@ -23,7 +24,7 @@ connecting and everyday use, and [SETUP.md](SETUP.md) covers adding the bracelet
 | **WT32-ETH01** ([Amazon](https://www.amazon.com/dp/B09Z298QJQ)) | ESP32 + LAN8720 Ethernet. Power it with 5 V; its own 3.3 V regulator also supplies the radio and OLED. (Not the "WT32-ETH01-EVO", which is a different chip and pinout.) |
 | **Radio, one of:** | Chosen in the web UI (*Devices & Radio → Radio module*), no recompiling. Fit only one. |
 | CC1101 module, **433 MHz** | The blue 2×4-header board with an SMA jack, e.g. [AOICRIE CC1101 + antenna](https://www.amazon.com/dp/B0D2TMTV5Z). −30 to +10 dBm. **Tested.** Multi-band listings ("315/433/868/915") are only tuned for one band: make sure yours is 433 MHz. |
-| Ai-Thinker Ra-02 (SX1278, 433 MHz) | [Ra-02 module](https://www.amazon.com/SX1278-Ai-Thinker-Wireless-Spectrum-Transmission/dp/B0CP778J3T): +2 to +17 dBm, the long-range option. **Supported, not yet tested on hardware.** It has a u.FL antenna connector and 2 mm pads, so use a breakout: [ACROBOTIC Ra-02 breakout](https://www.amazon.com/ACROBOTIC-Breakout-Arduino-ESP8266-Raspberry/dp/B07MNH5W65), or [Adafruit RFM96W 433 MHz](https://www.adafruit.com/product/3073) (equivalent chip, 0.1" header). |
+| Ai-Thinker Ra-02 (SX1278, 433 MHz) | [Ra-02 module](https://www.amazon.com/SX1278-Ai-Thinker-Wireless-Spectrum-Transmission/dp/B0CP778J3T): +2 to +17 dBm, the long-range option, and the radio on the carrier board (tested). It has a u.FL antenna connector and 2 mm pads, so use a breakout: [ACROBOTIC Ra-02 breakout](https://www.amazon.com/ACROBOTIC-Breakout-Arduino-ESP8266-Raspberry/dp/B07MNH5W65), or [Adafruit RFM96W 433 MHz](https://www.adafruit.com/product/3073) (equivalent chip, 0.1" header). |
 | 433 MHz antenna | Included with the linked CC1101. For the Ra-02: a u.FL→SMA pigtail + 433 MHz SMA whip. Mount it high. |
 | 128×64 I²C OLED (optional) | SSD1306 (0.96", e.g. [this one](https://www.amazon.com/dp/B09T6SJBV5)) or SH1106 (1.3"), selectable under *System → Display*. Shows IP, radio status, input rate, zone colours. Everything works without it. |
 | 3 × tactile buttons ([Amazon](https://www.amazon.com/dp/B01E38OS7K)) | EN (reset), BOOT (IO0), and an optional USER button on IO39. |
@@ -81,8 +82,8 @@ on the dashboard, instead of the radio silently keying up with nothing on it.
 
 - **IO12** carries MOSI and is a strapping pin: it must be low at boot, which its internal pull-down gives it.
   Put no pull-up on the MOSI line.
-- **IO2** drives the WT32-ETH01's onboard LED (the status LED). Don't wire anything else to it: pull-ups on
-  IO2 break serial flashing.
+- **IO2** drives the WT32-ETH01's onboard LED (the status LED). The only other thing to wire to it is an
+  [amplifier power switch](#amplifier-power-switch), with a pull-down: a pull-up on IO2 breaks serial flashing.
 - **IO0** is also the Ethernet 50 MHz clock once running. Only press BOOT while resetting, and keep wiring
   on it short.
 - The OLED pins are labelled `RXD`/`TXD`, not `TXD0`/`RXD0`, which is easy to mix up. If SDA and SCL are
@@ -132,11 +133,11 @@ About 400 mA worst case, within the WT32-ETH01's regulator. Use a 5 V / 1 A supp
 
 ---
 
-## B. Carrier board (coming soon)
+## B. Carrier board
 
-> 🚧 **Under construction.** A carrier board the modules plug into is in the works. Details will follow once it
-> has been built and tested. Until then, use the [DIY build](#a-diy-build); the carrier board will use the same
-> firmware and pin assignment.
+The WT32-ETH01 and a Ra-02 plug into the carrier board, which also carries the OLED connector (J7: GND, VCC,
+SCL, SDA), the buttons and the 5-28 V DC input. It runs the same firmware and pin assignment as the DIY build.
+Photos: [README, Carrier board photos](../README.md#carrier-board-photos).
 
 ### Hardware note: carrier board R2.0
 
@@ -154,6 +155,36 @@ About 400 mA worst case, within the WT32-ETH01's regulator. Use a 5 V / 1 A supp
 >
 > Also on R2.0: the controller does not always start at power-on. Press **EN** once if the OLED stays blank. A fix
 > is planned for the next revision.
+
+### Case
+
+A printed base and snap-on lid for the carrier board, in two variants: one with room for an external amplifier
+and its buck, and a slim one without. STLs, the OpenSCAD source and assembly notes are in
+[hardware/case](../hardware/case/README.md).
+
+### Amplifier power switch
+
+The firmware can power an external RF amplifier up and down from **IO2**, the WT32-ETH01's only free output (on
+the XIAO, D1). It's optional: until you enable it, IO2 stays the status LED's pin.
+
+The simplest switch uses the amp's 12 V → 5 V buck module, if it has an **EN** pin:
+
+- A small N-channel FET (2N7002 or similar): **drain to the buck's EN, source to GND, gate to IO2** through about
+  100 Ω, with **100k from the gate to GND**.
+- IO2 high pulls EN low and the buck, so the amp, switches off. IO2 low lets the buck's own pull-up switch it on.
+- Check the module first: power it from 12 V and measure EN. About 12 V or 5-6 V means it is pulled up, so this
+  circuit is right. Near 0 V means an active-low EN (LM2596 type), which needs a different circuit.
+
+Don't connect IO2 to EN directly: EN is usually pulled up to the 12 V input, and IO2 must be low at reset for
+serial flashing. The FET and its gate pull-down take care of both.
+
+For an amp or buck without EN, switch its supply with a high-side P-FET (e.g. AO3401, 10k gate to source) whose
+gate a 2N7002 on IO2 pulls low. Never switch the amp's ground: its RF ground also runs through the coax.
+
+Then, on the web UI's **Tools** page, open **Amplifier power → Switch wiring** and tick *A power switch is wired to
+IO2*. Leave **Active low** ticked for the EN circuit above, and untick it for the P-FET one. The **Amplifier**
+switch then turns the amp on and off, and the setting is kept across restarts. Over HTTP it's `/api/amp`
+([API](API.md#amplifier-power-switch)).
 
 ---
 
@@ -184,6 +215,7 @@ Optional parts:
 | SX1278 (Ra-02) reset, instead of a CC1101 | D0 | 1 |
 | USER button | the board's **B** (BOOT) button | 0 |
 | Status LED | the board's orange LED | 21 |
+| Amplifier power switch ([see above](#amplifier-power-switch)) | D1 | 2 |
 
 The BOOT button works as USER once the firmware runs (short press = next OLED page, hold 5 s / 15 s = network /
 factory reset). Holding it while the board resets still enters the USB bootloader.
