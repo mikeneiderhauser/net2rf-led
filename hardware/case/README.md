@@ -71,4 +71,4 @@ openscad -o base.stl -D 'part="base"' net2rf_case.scad
 
 Fit settings worth tuning for a different printer: `SNAP` (lid grip), `CLR` (lid to wall clearance), `FEN_G` (OLED
 pocket width), `PLUG_PRESS` (antenna plug grip) and `BR_HOOK` (bracket grip). Bump `REV`, engraved inside the base
-and lid, whenever the STLs change. These files are revision **R27**.
+and lid, whenever the STLs change. These files are revision **R28**: the slim lid's side snap ridges at the antenna end are shortened so they stop at the end of the lip (on R27 they ran past it; trim them flush on an R27 lid).

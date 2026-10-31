@@ -9,7 +9,7 @@
 
 part = "assembly";
 
-REV = "R27";                      // case revision, engraved inside both parts. Bump it whenever the STLs change.
+REV = "R28";                      // case revision, engraved inside both parts. Bump it whenever the STLs change.
 AMP = true;                        // false: the slim case, for builds without the amplifier (and so without the buck)
 OLED = "ssd1306";                  // "ssd1306": the 27.9 x 28.3 module; "ssd1315": the 24.7 x 27 one (lid only differs)
 
@@ -111,6 +111,11 @@ HEAD_R = 4.5;  HEAD_H = 3.6;       // clearance for an M3 head above the board: 
 LIP_T = 1.2;  LIP_D = 3;  lz = LID_Z - LIP_D;
 SNAP = 0.9;                        // ridge height. Engagement is SNAP - CLR. Raise for a tighter lid. (0.6 printed too loose)
 SNAP_Y = [2, 42];  SNAP_L = 12;
+// The lid's side ridges stop where the side lips do (CORNER_R from the inside corners): in the slim case the far
+// pair, at y 2, would otherwise run 3.5 mm past the lip and into the far wall. R28: shortened to y -0.5 to 8
+// there. The base's grooves keep their full length.
+function snap_y0(y) = max(y - SNAP_L / 2, y0 + CORNER_R);
+function snap_y1(y) = min(y + SNAP_L / 2, y1 - CORNER_R);
 SNAP_X = AMP ? [0, 40] : [14, 42]; // ridges on the far (antenna-end) lip too; slim: clear of the SMA pocket
 SNAP_FRONT_X = -12;                // one ridge on a short lip inside the front wall, left of the DC jack (full-height base wall there)
 
@@ -331,8 +336,8 @@ module plug_finger() {
 // ------------------------------------------------------------------ lid
 module ridge(xface, dir, y) {      // chamfered snap ridge on a lip's outer face
     hull() {
-        bx(xface, xface + dir * 0.01, y - SNAP_L / 2, y + SNAP_L / 2, lz + 0.2, lz + 1.8);
-        bx(xface + dir * (SNAP - 0.01), xface + dir * SNAP, y - SNAP_L / 2, y + SNAP_L / 2, lz + 0.8, lz + 1.2);
+        bx(xface, xface + dir * 0.01, snap_y0(y), snap_y1(y), lz + 0.2, lz + 1.8);
+        bx(xface + dir * (SNAP - 0.01), xface + dir * SNAP, snap_y0(y), snap_y1(y), lz + 0.8, lz + 1.2);
     }
 }
 module ridge_y(yface, dir, x) {   // the same ridge on a lip that faces along y
@@ -515,6 +520,7 @@ else if (part == "plug")                           // print orientation: inner f
 else if (part == "plug_asm") { base(); color("Tomato") ant_plug(); color("DarkSeaGreen") lid(); }
 else if (part == "plug_clash") intersection() { ant_plug(ribs = false); union() { lid(); base(); } }   // should be empty (the ribs overlap the hole on purpose)
 else if (part == "rib_bite") intersection() { ant_plug(); base(); }                // just the ribs' interference, PLUG_PRESS deep
+else if (part == "lid_clash") intersection() { lid(); base(); }                         // should be empty: ridges sit in their grooves with clearance
 else if (part == "finger_clash") intersection() { plug_finger(); base(); }                 // should be empty
 else if (part == "bracket_clash") intersection() { bracket(); translate([0, 0, 0.01]) union() { base(); lid(); } }   // should be empty
 else if (part == "amp_test")                       // the amp bay corner of the base, cut off above the posts: a quick fit test
