@@ -205,6 +205,8 @@ powered during boot.
 }
 ```
 
+`test_mode` is `off`, `solid`, `cycle`, `fade` or `flicker`.
+
 `input.packets`/`frames` count every valid DDP or E1.31 packet and frame (`ddp_packets` / `e131_packets` split
 them; `last_source` is the protocol of the last one, `source` its sender's IP); `output.suppressed` counts zone updates that
 were consumed while output was disabled. With listen before transmit on, `lbt_checks` counts updates that

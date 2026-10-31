@@ -252,6 +252,10 @@ Each part is exported, imported and reset by itself, under **System**:
   5 s does the same.
 - **Factory reset** clears both. Holding USER for 15 s does the same.
 
+Two small settings are kept apart from both parts: the test mode that **starts at power-up**, and the
+**amplifier power switch** (Tools page). They are not in the export files and *Reset settings* leaves them, but a
+factory reset clears them.
+
 Settings are not converted between firmware versions with a different settings layout: after such an update
 the affected part starts from its defaults. Export before updating if you want to restore it.
 

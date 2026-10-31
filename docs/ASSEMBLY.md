@@ -81,8 +81,8 @@ on the dashboard, instead of the radio silently keying up with nothing on it.
 
 - **IO12** carries MOSI and is a strapping pin: it must be low at boot, which its internal pull-down gives it.
   Put no pull-up on the MOSI line.
-- **IO2** drives the WT32-ETH01's onboard LED (the status LED). Don't wire anything else to it: pull-ups on
-  IO2 break serial flashing.
+- **IO2** drives the WT32-ETH01's onboard LED (the status LED). The only other thing to wire to it is an
+  [amplifier power switch](#amplifier-power-switch), with a pull-down: a pull-up on IO2 breaks serial flashing.
 - **IO0** is also the Ethernet 50 MHz clock once running. Only press BOOT while resetting, and keep wiring
   on it short.
 - The OLED pins are labelled `RXD`/`TXD`, not `TXD0`/`RXD0`, which is easy to mix up. If SDA and SCL are

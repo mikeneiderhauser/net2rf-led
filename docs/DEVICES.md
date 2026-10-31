@@ -108,6 +108,8 @@ Which protocol is my device?* and report the result.
 | Falcon Player (FPP) as the show player | 🧪 (should work over DDP / E1.31 like xLights) |
 | Web UI, setup hotspot, Wi-Fi join, firmware update with rollback | ✅ |
 | Test mode, zone walk, address probe | ✅ |
+| Fade and flicker test modes, started at power-up | ✅ run on the controller, and restarted by themselves after a power cut; 🧪 how they look on devices |
+| Amplifier power switch (`/api/amp`) | 🧪 no switch wired yet |
 | Several controllers (live list, `net2rf.local` election) | ✅ against simulated controllers (`tools/peer_sim.py`); 🧪 with two real ones |
 | Listen before transmit | 🧪 channel sensing works (quiet CC1101 reads -84 to -87 dBm); backing off needs two radios in range |
 | Home Assistant examples | 🧪 |
