@@ -110,10 +110,12 @@ Which protocol is my device?* and report the result.
 | xLights *Upload Output* (zone count) with the All + 15 model | ✅ from xLights 2026.17, WLED / Generic ESP32 profile |
 | xLights *Upload Input*, and the Net2RF controller definition | 🧪 |
 | Base layer and same-colour merging (protocol 0) | ✅ packets checked on the controller; bracelets on groups 2 and 3 |
-| FPP discovery ping (found by FPP / xLights) | ✅ xLights 2026.17 *Discover* adds it by hostname; 🧪 FPP's MultiSync page |
+| FPP discovery ping (found by FPP / xLights) | ✅ xLights 2026.17 *Discover* adds it by hostname; ✅ listed on FPP's MultiSync page |
 | Falcon Player (FPP) as the show player | 🧪 (should work over DDP / E1.31 like xLights) |
 | Web UI, setup hotspot, Wi-Fi join, firmware update with rollback | ✅ |
-| Test mode, zone walk, address probe | ✅ |
+| Test mode, zone walk, address probe, group tester, range walk | ✅ |
+| Range across a yard | ✅ Ra-02 on the carrier board, with and without the external amplifier. Mount it high and away from things. |
+| Reset settings, reset network, factory reset (System page and USER button) | ✅ |
 | Fade and flicker test modes, started at power-up | ✅ run on the controller, and restarted by themselves after a power cut; 🧪 how they look on devices |
 | Amplifier power switch (`/api/amp`) | 🧪 no switch wired yet |
 | Several controllers (live list, `net2rf.local` election) | ✅ against simulated controllers (`tools/peer_sim.py`); 🧪 with two real ones |

@@ -2,7 +2,8 @@
 
 ## Range and power
 
-- Mount the antenna high, clear of metal, with a view of the audience.
+- Mount the antenna high, clear of metal, with a view of the audience. In range tests across a yard (Ra-02, with
+  and without the external amplifier) height and keeping it away from other objects made the most difference.
 - Do a range walk ([SETUP.md](SETUP.md#4-check-the-range-where-the-audience-will-be)), then use the **lowest TX power** that still
   reaches the far edge.
 - The CC1101 goes up to +10 dBm; the Ra-02 (SX1278) up to +17 dBm for bigger areas.

@@ -23,12 +23,8 @@ history.
 
 ## Needs hardware checks
 
-- [ ] **Range test** across the yard (CC1101 at +10 dBm; Ra-02 as the long-range option), with *Tools → Range walk*.
 - [ ] **XIAO ESP32-S3 build** on a real board: boot, Wi-Fi, CC1101 on the documented pins, BOOT as the USER button,
   the per-board firmware file in the updater and the browser flasher.
-- [ ] **Reset network** from the System page (*Reset settings* and *Factory reset* have run on hardware).
-- [ ] **Group tester** and **Range walk** from a real browser with devices awake (checked against the mock only).
-- [ ] **FPP:** how its MultiSync page shows the controller.
 - [ ] **Amplifier power switch** (`/api/amp`, IO2): no switch has been wired yet. Check the buck's EN polarity, that
   the amp follows the switch, and that serial flashing still works with the gate pull-down on IO2.
 - [ ] **Fade and flicker** on bracelets of both protocols (fade has run on Wally's Lights pucks).
