@@ -39,9 +39,10 @@ a bracelet following an xLights sequence, and the web UI.
 |---|---|
 | ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Carrier board R2.0** with the **Ra-02 / SX1278** radio, in both printed cases ([photos](#carrier-board-photos)) · **Wally's Lights** wristbands, pucks, wand and Santa hat (protocol 1) · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · group-mask addressing, the All Zones base layer and one packet per colour · bracelet fade in / fade out · xLights custom model, *Upload Output* and *Discover* · update check and install from GitHub releases · controller list and `net2rf.local` election (against simulated controllers) |
 | 🧪 **Built, not yet tested on hardware** | **XIAO ESP32-S3** build (Wi-Fi only) · **Receiver mode** (decoder tested against the encoder with timing errors and noise) · **LedGiftSupplier**-branded bracelets (protocol 1, full 8-bit RGB + group codes, matched to off-air captures of the vendor's transmitter) · **vendor DMX** input mode · E1.31 multicast · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
+| 🛠 **Coming soon** | **FPP plugin:** each zone follows FPP models (your floods, say) live, one colour per zone, kept within the radio's budget · **AI sequencing assistant:** adds the devices to your existing xLights sequences |
 
 Full list of what's been tried: [docs/DEVICES.md](docs/DEVICES.md). What we know about the bracelets
-themselves (one model tested so far, a giveaway bracelet from a Banana Ball game):
+themselves (the protocol 0 giveaway bracelets from a Banana Ball game):
 - **Waking up:** they need a press of their button before they listen to the radio.
 - **Idle behaviour:** they turn red by themselves after ~20 minutes without a command, but keep listening.
 - **Effects:** besides colours and off, they have a built-in fade out to black and fade in to the last colour.
@@ -168,6 +169,10 @@ far wall; the amp's SMA goes through the far wall.
   controllers with listen before transmit.
 - **Bracelet behaviour:** more bracelets and batches; idle and sleep (e.g. a keep-alive so bracelets don't
   drift to red between songs).
+- **FPP plugin** (coming soon): zones follow models in FPP's running sequence, each reduced to one colour, with
+  changes paced to what the radio can send, so existing shows drive the devices with no extra sequencing.
+- **AI sequencing assistant** (coming soon): adds the Net2RF model to your existing xLights sequences, following
+  what the rest of the show does, within the radio's budget.
 - **xLights and FPP:** get the Net2RF controller definition into xLights, and a device type of its own in
   FPP's discovery, so a discovered controller is set up without manual steps.
 
