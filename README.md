@@ -22,6 +22,15 @@ a bracelet following an xLights sequence, and the web UI.
 
 ![Dashboard](docs/images/dashboard.png)
 
+**The carrier board, in its printed case:** WT32-ETH01, Ra-02 radio, OLED and buttons on one board
+([photos](#carrier-board-photos)).
+
+<p>
+<a href="docs/images/carrier/board-assembled.jpg"><img src="docs/images/carrier/board-assembled.jpg" width="260" alt="Carrier board with the WT32-ETH01 and Ra-02 fitted"></a>
+<a href="docs/images/carrier/amp-closed.jpg"><img src="docs/images/carrier/amp-closed.jpg" width="260" alt="Amp case, closed, OLED showing the controller ready"></a>
+<a href="docs/images/carrier/slim-ext-closed.jpg"><img src="docs/images/carrier/slim-ext-closed.jpg" width="260" alt="Slim case, closed, with an external antenna"></a>
+</p>
+
 ## Project status
 
 > **Early prototype: DIY only, tested on one setup.** It works end to end: an xLights sequence drives
@@ -90,6 +99,45 @@ The DIY build needs:
 
 Full parts list, with where to buy: [ASSEMBLY.md, Parts](docs/ASSEMBLY.md#parts).
 
+### Carrier board photos
+
+The first R2.0 carrier boards, built up and fitted in the [printed case](hardware/case/README.md). Click a
+photo for the full size.
+
+**The board:** bare, with the modules plugged in, and the back.
+
+<p>
+<a href="docs/images/carrier/board-parts.jpg"><img src="docs/images/carrier/board-parts.jpg" width="200" alt="Bare carrier board beside the Ra-02 and WT32-ETH01"></a>
+<a href="docs/images/carrier/board-top.jpg"><img src="docs/images/carrier/board-top.jpg" width="200" alt="Carrier board, top"></a>
+<a href="docs/images/carrier/board-back.jpg"><img src="docs/images/carrier/board-back.jpg" width="200" alt="Carrier board, back"></a>
+<a href="docs/images/carrier/board-assembled.jpg"><img src="docs/images/carrier/board-assembled.jpg" width="200" alt="Carrier board with both modules plugged in"></a>
+</p>
+
+**Amp case:** the external 433 MHz amplifier stands along the left wall, with its 12 V to 5 V buck at the
+far wall; the amp's SMA goes through the far wall.
+
+<p>
+<a href="docs/images/carrier/amp-inside.jpg"><img src="docs/images/carrier/amp-inside.jpg" width="260" alt="Amp case, inside: amplifier, buck and carrier board"></a>
+<a href="docs/images/carrier/amp-open.jpg"><img src="docs/images/carrier/amp-open.jpg" width="260" alt="Amp case open, OLED in the lid"></a>
+<a href="docs/images/carrier/amp-closed.jpg"><img src="docs/images/carrier/amp-closed.jpg" width="260" alt="Amp case closed and running"></a>
+</p>
+
+**Slim case, external antenna:** the Ra-02 pigtail's bulkhead SMA through the far wall.
+
+<p>
+<a href="docs/images/carrier/slim-ext-open.jpg"><img src="docs/images/carrier/slim-ext-open.jpg" width="260" alt="Slim case open, external antenna"></a>
+<a href="docs/images/carrier/slim-ext-inside.jpg"><img src="docs/images/carrier/slim-ext-inside.jpg" width="260" alt="Slim case inside, pigtail to the SMA bulkhead"></a>
+<a href="docs/images/carrier/slim-ext-closed.jpg"><img src="docs/images/carrier/slim-ext-closed.jpg" width="260" alt="Slim case closed, external antenna"></a>
+</p>
+
+**Slim case, internal antenna:** a spring antenna tied to the left wall, the antenna hole plugged.
+
+<p>
+<a href="docs/images/carrier/slim-int-closed.jpg"><img src="docs/images/carrier/slim-int-closed.jpg" width="260" alt="Slim case closed, internal antenna"></a>
+<a href="docs/images/carrier/slim-int-open.jpg"><img src="docs/images/carrier/slim-int-open.jpg" width="260" alt="Slim case open, internal antenna"></a>
+<a href="docs/images/carrier/slim-int-inside.jpg"><img src="docs/images/carrier/slim-int-inside.jpg" width="260" alt="Slim case inside, spring antenna tied to the wall"></a>
+</p>
+
 ## Getting started
 
 1. **Build and flash:** [docs/ASSEMBLY.md](docs/ASSEMBLY.md) covers parts, pinout, wiring and flashing. The
@@ -112,7 +160,7 @@ Full parts list, with where to buy: [ASSEMBLY.md, Parts](docs/ASSEMBLY.md#parts)
 | [API.md](docs/API.md) | HTTP API, settings, stats, controller discovery |
 | [HOME_ASSISTANT.md](docs/HOME_ASSISTANT.md) | Sensors, switches and automations |
 | [tools/xlights](tools/xlights/) | xLights custom models and controller definition |
-| [hardware/case](hardware/case/README.md) | 3D-printed case for the carrier board: STLs and OpenSCAD source |
+| [hardware/case](hardware/case/README.md) | 3D-printed case for the carrier board: STLs and OpenSCAD source ([photos](#carrier-board-photos)) |
 | [TODO.md](TODO.md) | Open items and things waiting for hardware tests |
 
 ## Roadmap

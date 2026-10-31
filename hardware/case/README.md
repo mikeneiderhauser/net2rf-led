@@ -11,6 +11,15 @@ have been printed and fitted.
 
 ![Amp case](images/amp-assembly.png) ![Slim case](images/slim-assembly.png)
 
+Printed and built (more in the [main README](../../README.md#carrier-board-photos)):
+
+<p>
+<a href="../../docs/images/carrier/amp-inside.jpg"><img src="../../docs/images/carrier/amp-inside.jpg" width="200" alt="Amp case, inside"></a>
+<a href="../../docs/images/carrier/amp-closed.jpg"><img src="../../docs/images/carrier/amp-closed.jpg" width="200" alt="Amp case, closed"></a>
+<a href="../../docs/images/carrier/slim-ext-inside.jpg"><img src="../../docs/images/carrier/slim-ext-inside.jpg" width="200" alt="Slim case, external antenna, inside"></a>
+<a href="../../docs/images/carrier/slim-int-inside.jpg"><img src="../../docs/images/carrier/slim-int-inside.jpg" width="200" alt="Slim case, internal antenna, inside"></a>
+</p>
+
 ## Files
 
 | File | What it is |
