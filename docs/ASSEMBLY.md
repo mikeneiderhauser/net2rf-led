@@ -4,7 +4,8 @@ Two ways to build a controller:
 
 - **[A. DIY build](#a-diy-build)**: a WT32-ETH01 and a radio module wired together. Available now; this is
   what the firmware has been tested on.
-- **[B. Carrier board](#b-carrier-board-coming-soon)**: coming soon.
+- **[B. Carrier board](#b-carrier-board)**: the WT32-ETH01 and a Ra-02 plug into one board with the OLED and
+  buttons, in a printed case. R2.0 is built and tested.
 - **[C. XIAO ESP32-S3](#c-xiao-esp32-s3)**: a small Wi-Fi-only alternative, wired like
   [CrispyPyro/Wireless_DMX_Receiver](https://github.com/CrispyPyro/Wireless_DMX_Receiver). Builds; not yet tested
   on hardware.
@@ -23,7 +24,7 @@ connecting and everyday use, and [SETUP.md](SETUP.md) covers adding the bracelet
 | **WT32-ETH01** ([Amazon](https://www.amazon.com/dp/B09Z298QJQ)) | ESP32 + LAN8720 Ethernet. Power it with 5 V; its own 3.3 V regulator also supplies the radio and OLED. (Not the "WT32-ETH01-EVO", which is a different chip and pinout.) |
 | **Radio, one of:** | Chosen in the web UI (*Devices & Radio → Radio module*), no recompiling. Fit only one. |
 | CC1101 module, **433 MHz** | The blue 2×4-header board with an SMA jack, e.g. [AOICRIE CC1101 + antenna](https://www.amazon.com/dp/B0D2TMTV5Z). −30 to +10 dBm. **Tested.** Multi-band listings ("315/433/868/915") are only tuned for one band: make sure yours is 433 MHz. |
-| Ai-Thinker Ra-02 (SX1278, 433 MHz) | [Ra-02 module](https://www.amazon.com/SX1278-Ai-Thinker-Wireless-Spectrum-Transmission/dp/B0CP778J3T): +2 to +17 dBm, the long-range option. **Supported, not yet tested on hardware.** It has a u.FL antenna connector and 2 mm pads, so use a breakout: [ACROBOTIC Ra-02 breakout](https://www.amazon.com/ACROBOTIC-Breakout-Arduino-ESP8266-Raspberry/dp/B07MNH5W65), or [Adafruit RFM96W 433 MHz](https://www.adafruit.com/product/3073) (equivalent chip, 0.1" header). |
+| Ai-Thinker Ra-02 (SX1278, 433 MHz) | [Ra-02 module](https://www.amazon.com/SX1278-Ai-Thinker-Wireless-Spectrum-Transmission/dp/B0CP778J3T): +2 to +17 dBm, the long-range option, and the radio on the carrier board (tested). It has a u.FL antenna connector and 2 mm pads, so use a breakout: [ACROBOTIC Ra-02 breakout](https://www.amazon.com/ACROBOTIC-Breakout-Arduino-ESP8266-Raspberry/dp/B07MNH5W65), or [Adafruit RFM96W 433 MHz](https://www.adafruit.com/product/3073) (equivalent chip, 0.1" header). |
 | 433 MHz antenna | Included with the linked CC1101. For the Ra-02: a u.FL→SMA pigtail + 433 MHz SMA whip. Mount it high. |
 | 128×64 I²C OLED (optional) | SSD1306 (0.96", e.g. [this one](https://www.amazon.com/dp/B09T6SJBV5)) or SH1106 (1.3"), selectable under *System → Display*. Shows IP, radio status, input rate, zone colours. Everything works without it. |
 | 3 × tactile buttons ([Amazon](https://www.amazon.com/dp/B01E38OS7K)) | EN (reset), BOOT (IO0), and an optional USER button on IO39. |
@@ -132,11 +133,11 @@ About 400 mA worst case, within the WT32-ETH01's regulator. Use a 5 V / 1 A supp
 
 ---
 
-## B. Carrier board (coming soon)
+## B. Carrier board
 
-> 🚧 **Under construction.** A carrier board the modules plug into is in the works. Details will follow once it
-> has been built and tested. Until then, use the [DIY build](#a-diy-build); the carrier board will use the same
-> firmware and pin assignment.
+The WT32-ETH01 and a Ra-02 plug into the carrier board, which also carries the OLED connector (J7: GND, VCC,
+SCL, SDA), the buttons and the 5-28 V DC input. It runs the same firmware and pin assignment as the DIY build.
+Photos: [README, Carrier board photos](../README.md#carrier-board-photos).
 
 ### Hardware note: carrier board R2.0
 

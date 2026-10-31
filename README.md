@@ -33,15 +33,14 @@ a bracelet following an xLights sequence, and the web UI.
 
 ## Project status
 
-> **Early prototype: DIY only, tested on one setup.** It works end to end: an xLights sequence drives
-> bracelets over DDP, in zones. One bracelet family, one radio and one controller have seen real hardware so
-> far. Expect rough edges, and please report what you find.
+> **Early prototype: DIY build or the R2.0 carrier board.** It works end to end: an xLights sequence drives
+> bracelets over DDP, in zones. One bracelet family has seen real hardware so far. Expect rough edges, and
+> please report what you find.
 
 | | |
 |---|---|
-| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · group-mask addressing, the All Zones base layer and one packet per colour · bracelet fade in / fade out · xLights custom model, *Upload Output* and *Discover* · update check and install from GitHub releases · controller list and `net2rf.local` election (against simulated controllers) |
-| 🧪 **Built, not yet tested on hardware** | **XIAO ESP32-S3** build (Wi-Fi only) · **Receiver mode** (decoder tested against the encoder with timing errors and noise) · **LedGiftSupplier** bracelets (protocol 1, full 8-bit RGB + group codes, matched to off-air captures of the vendor's transmitter) · **vendor DMX** input mode · E1.31 multicast · **Ra-02 / SX1278** radio · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
-| 🛠 **Coming soon** | The carrier board (its printed case is ready: [hardware/case](hardware/case/README.md)) |
+| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Carrier board R2.0** with the **Ra-02 / SX1278** radio, in both printed cases ([photos](#carrier-board-photos)) · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · group-mask addressing, the All Zones base layer and one packet per colour · bracelet fade in / fade out · xLights custom model, *Upload Output* and *Discover* · update check and install from GitHub releases · controller list and `net2rf.local` election (against simulated controllers) |
+| 🧪 **Built, not yet tested on hardware** | **XIAO ESP32-S3** build (Wi-Fi only) · **Receiver mode** (decoder tested against the encoder with timing errors and noise) · **LedGiftSupplier** bracelets (protocol 1, full 8-bit RGB + group codes, matched to off-air captures of the vendor's transmitter) · **vendor DMX** input mode · E1.31 multicast · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
 
 Full list of what's been tried: [docs/DEVICES.md](docs/DEVICES.md). What we know about the bracelets
 themselves (one model tested so far, a giveaway bracelet from a Banana Ball game):
@@ -88,7 +87,7 @@ Raw captures of anything it can't decode, with a waveform view, bit guess and rt
 |---|---|---|
 | **DIY build:** WT32-ETH01 + CC1101 or Ra-02, wired by hand | Works today | [Assembly guide, part A](docs/ASSEMBLY.md#a-diy-build) |
 | **XIAO ESP32-S3** + CC1101, Wi-Fi only (CrispyPyro's receiver wiring) | 🧪 Builds, untested | [Assembly guide, part C](docs/ASSEMBLY.md#c-xiao-esp32-s3) |
-| **Carrier board** | 🚧 Coming soon | [Assembly guide, part B](docs/ASSEMBLY.md#b-carrier-board-coming-soon) |
+| **Carrier board R2.0:** WT32-ETH01 + Ra-02 plug in, OLED and buttons on board, [printed case](hardware/case/README.md) | Works today | [Assembly guide, part B](docs/ASSEMBLY.md#b-carrier-board) |
 
 The DIY build needs:
 - a WT32-ETH01;
@@ -165,9 +164,8 @@ far wall; the amp's SMA goes through the far wall.
 
 ## Roadmap
 
-- **Carrier board:** in the works; details once it has been built and tested. Its case is in
-  [hardware/case](hardware/case/README.md).
-- **Broader testing:** LedGiftSupplier bracelets, vendor mode, the Ra-02, range across a yard, two real
+- **Carrier board:** the next revision fixes R2.0's MOSI routing (no J3 bridge) and its power-on start.
+- **Broader testing:** LedGiftSupplier bracelets, vendor mode, range across a yard, two real
   controllers with listen before transmit.
 - **Bracelet behaviour:** more bracelets and batches; idle and sleep (e.g. a keep-alive so bracelets don't
   drift to red between songs).

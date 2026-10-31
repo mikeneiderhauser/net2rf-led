@@ -87,11 +87,11 @@ Which protocol is my device?* and report the result.
 | WT32-ETH01 (ESP32 + LAN8720) | ✅ | Ethernet and Wi-Fi both used. Not the WT32-ETH01-EVO (different chip and pinout). |
 | Seeed XIAO ESP32-S3 | 🧪 | Wi-Fi only; own build (`xiao-esp32s3`), wiring in [ASSEMBLY.md, part C](ASSEMBLY.md#c-xiao-esp32-s3). |
 | CC1101 433 MHz module, blue 2×4 header + SMA (AOICRIE, see [parts](ASSEMBLY.md#parts)) | ✅ | Reports chip version `0x14`; data-line self-test passes; drives the Banana Ball bracelet. |
-| Ai-Thinker Ra-02 (SX1278) on a breakout | 🧪 | Driver written to the datasheet; never run. |
+| Ai-Thinker Ra-02 (SX1278) on a breakout | ✅ | On the carrier board R2.0 (needs the J3 bridge, see [ASSEMBLY.md, part B](ASSEMBLY.md#b-carrier-board)). |
 | SSD1306 0.96" I²C OLED | ✅ | Including detection of swapped SDA/SCL. |
 | SH1106 1.3" I²C OLED | 🧪 | Selectable under *System → Display*. |
 | 3.3 V USB-serial adapter (FTDI-style) | ✅ | First flash; updates are then over the network. |
-| Carrier board | 🚧 | Coming soon ([ASSEMBLY.md, part B](ASSEMBLY.md#b-carrier-board-coming-soon)). |
+| Carrier board R2.0 | ✅ | WT32-ETH01 + Ra-02, in both printed cases. Bridge J3 pins 9-10; press EN if it doesn't start at power-on ([ASSEMBLY.md, part B](ASSEMBLY.md#b-carrier-board)). |
 
 ## Software and features
 

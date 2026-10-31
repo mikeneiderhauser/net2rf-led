@@ -39,8 +39,7 @@ history.
 - [ ] **OLED wake** on a network address change, hotspot start / stop and a radio fault.
 - [ ] **Group tester** and **Range walk** from a real browser with devices awake (checked against the mock only).
 - [ ] **FPP:** how its MultiSync page shows the controller.
-- [ ] **Carrier board** (in progress, tracked outside the repo for now). Its case (both variants, R27) is printed,
-  fitted and checked in under `hardware/case`.
+- [x] **Carrier board R2.0**: built and tested with the Ra-02, in both case variants (R28 in `hardware/case`).
 - [ ] **SSD1315 OLED lids**: from the seller's drawing only. Print `test-pieces/oled-test-ssd1315.stl` with a module.
 - [ ] **Amplifier power switch** (`/api/amp`, IO2): no switch has been wired yet. Check the buck's EN polarity, that
   the amp follows the switch, and that serial flashing still works with the gate pull-down on IO2.
