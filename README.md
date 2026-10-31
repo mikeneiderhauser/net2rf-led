@@ -145,6 +145,9 @@ far wall; the amp's SMA goes through the far wall.
    buttons.
 3. **Add the bracelets to your show:** [docs/SETUP.md](docs/SETUP.md) covers the show network, finding your
    bracelet type and groups, a range check, adding the controller to xLights / FPP, and sequencing tips.
+   For xLights, start with the ready-made models in [`tools/xlights`](tools/xlights/)
+   (`Net2RF_All_plus_4.xmodel` or `Net2RF_All_plus_15.xmodel`): import one, put it on port 1, and sequence its
+   **All Zones** and **Zone N** submodels.
 
 ## Documentation
 

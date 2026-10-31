@@ -132,6 +132,14 @@ Please report what your bracelets answer to: it's how this gets confirmed.
 > xLights screenshots below show an older single-zone setup, not the ready-made model. Where the text and the
 > pictures disagree, follow the text and [`tools/xlights`](../tools/xlights/README.md).
 
+> **Quickest way: use the ready-made models in this repo.** Download
+> [`Net2RF_All_plus_4.xmodel`](../tools/xlights/Net2RF_All_plus_4.xmodel) (a new controller's five zones) or
+> [`Net2RF_All_plus_15.xmodel`](../tools/xlights/Net2RF_All_plus_15.xmodel) (all sixteen) from
+> [`tools/xlights`](../tools/xlights/), import it in *Layout → Import → Custom model*, and put it on port 1 of
+> the controller. Each zone is already a named submodel (**All Zones**, **Zone 1**, ...), so there are no
+> channels to work out: sequence the submodels, then *Upload Output* sets the controller's zone count to match.
+> Details in step 2 below. Tested from xLights, and played from FPP, with both device protocols.
+
 Treat it like any other Ethernet controller in your setup. **Tools → xLights setup** on the controller lists the
 exact settings for its current zones.
 
@@ -198,8 +206,9 @@ exact settings for its current zones.
 3. **Model groups:** add the bracelet model(s) to an existing group, such as your floods or "whole house".
    Sequences with effects on that group then drive the bracelets with no extra work. Add them to a
    **Bracelets** group as well, for bracelet-only moments.
-4. **Falcon Player:** if FPP plays your show, push the updated output configuration to it as you do for your
-   other controllers (e.g. *FPP Connect*). FPP then sends DDP to the bracelet controller.
+4. **Falcon Player** (tested): if FPP plays your show, push the updated output configuration to it as you do for
+   your other controllers (e.g. *FPP Connect*). FPP then sends DDP to the bracelet controller, and the controller
+   shows up on FPP's MultiSync page.
 5. Play a sequence. The dashboard shows the input frame rate climbing and each zone's colour following.
 
 ## 6. Sequencing tips
