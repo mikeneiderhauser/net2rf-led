@@ -5,5 +5,6 @@ __pycache__/
 *.pyc
 .DS_Store
 platformio_local.ini
-# Carrier board: kept local until it has been built and tested
-hardware/
+# Carrier board: kept local until it has been built and tested (its case is checked in)
+hardware/*
+!hardware/case/
