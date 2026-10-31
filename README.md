@@ -34,13 +34,13 @@ a bracelet following an xLights sequence, and the web UI.
 ## Project status
 
 > **Early prototype: DIY build or the R2.0 carrier board.** It works end to end: an xLights sequence drives
-> bracelets over DDP, in zones. One bracelet family has seen real hardware so far. Expect rough edges, and
+> bracelets over DDP, in zones, and devices on both RF protocols have been driven. Expect rough edges, and
 > please report what you find.
 
 | | |
 |---|---|
-| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Carrier board R2.0** with the **Ra-02 / SX1278** radio, in both printed cases ([photos](#carrier-board-photos)) · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · group-mask addressing, the All Zones base layer and one packet per colour · bracelet fade in / fade out · xLights custom model, *Upload Output* and *Discover* · update check and install from GitHub releases · controller list and `net2rf.local` election (against simulated controllers) |
-| 🧪 **Built, not yet tested on hardware** | **XIAO ESP32-S3** build (Wi-Fi only) · **Receiver mode** (decoder tested against the encoder with timing errors and noise) · **LedGiftSupplier** bracelets (protocol 1, full 8-bit RGB + group codes, matched to off-air captures of the vendor's transmitter) · **vendor DMX** input mode · E1.31 multicast · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
+| ✅ **Tested** | WT32-ETH01 + CC1101 (433 MHz) DIY build · **Carrier board R2.0** with the **Ra-02 / SX1278** radio, in both printed cases ([photos](#carrier-board-photos)) · **Wally's Lights** wristbands, pucks, wand and Santa hat (protocol 1) · **Shenzen New Dody** bracelets (protocol 0), two bracelets · xLights over **DDP, pixel mode** · **DMX** input mode (colours) · **E1.31** unicast · web UI, Wi-Fi setup through the setup hotspot, firmware updates over the network · SSD1306 OLED · zone walk and address probe · group-mask addressing, the All Zones base layer and one packet per colour · bracelet fade in / fade out · xLights custom model, *Upload Output* and *Discover* · update check and install from GitHub releases · controller list and `net2rf.local` election (against simulated controllers) |
+| 🧪 **Built, not yet tested on hardware** | **XIAO ESP32-S3** build (Wi-Fi only) · **Receiver mode** (decoder tested against the encoder with timing errors and noise) · **LedGiftSupplier**-branded bracelets (protocol 1, full 8-bit RGB + group codes, matched to off-air captures of the vendor's transmitter) · **vendor DMX** input mode · E1.31 multicast · two real controllers side by side, listen before transmit backing off · Home Assistant examples · range across a full yard |
 
 Full list of what's been tried: [docs/DEVICES.md](docs/DEVICES.md). What we know about the bracelets
 themselves (one model tested so far, a giveaway bracelet from a Banana Ball game):
@@ -54,7 +54,8 @@ themselves (one model tested so far, a giveaway bracelet from a Banana Ball game
 
 - **Two bracelet families:** Shenzen New Dody (10-colour palette) and LedGiftSupplier.com (RGB, group codes), on
   one controller: each zone drives protocol 0, protocol 1 or both, and only the protocols in use go on air.
-  Wally's Lights' RF products use the LedGiftSupplier protocol too; their bracelets follow the controller.
+  Wally's Lights' RF products use the LedGiftSupplier protocol too: their wristbands, pucks, wand and Santa hat
+  all follow the controller.
   Bracelets and light sticks both work the same way.
 - **Layered zones:** an All Zones layer under per-group zones, so a group keeps its own colour while everyone
   else follows the crowd-wide effect (protocol 0).

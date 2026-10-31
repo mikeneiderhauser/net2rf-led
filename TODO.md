@@ -23,10 +23,11 @@ history.
 - [ ] **Protocol 1 on real devices.** Wally's Lights bracelets follow the colour cycle test sent to all groups
   (2026-10-10, Ra-02), and the one tested responds to group 0 (all) and group 1. The vendor's "Zone 1" is
   group 1. Still to check: other zones (assumed zone N = group N); a group above 15; driving them from xLights; a zone on both protocols; more devices at once; idle
-  behaviour. Then the hat, pucks and sticks.
+  behaviour. Wristbands, pucks, a wand and the Santa hat all follow protocol 1 (2026-10-31); the same checks
+  apply to them.
 - [ ] **Protocol 1 sync timing:** CrispyPyro's captures of the vendor transmitter suggest a long mark, a ~1000 µs
-  gap and two copies per burst; we send the Flipper app's 200 / 1600 µs sync. Wally's Lights bracelets respond to
-  ours, so try the vendor's only if the hat, pucks or sticks ignore it; if both are needed, make it a setting.
+  gap and two copies per burst; we send the Flipper app's 200 / 1600 µs sync. Wally's Lights wristbands, pucks,
+  wand and Santa hat all respond to ours, so the vendor's is only needed if another device ignores it.
 
 ## Needs hardware checks
 

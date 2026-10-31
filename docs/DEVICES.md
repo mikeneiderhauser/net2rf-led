@@ -43,10 +43,14 @@ group 0 = all. Not yet tested with a LedGiftSupplier-branded device; Wally's Lig
 protocol, follow it (below). This is the protocol the vendor's "DMX to RF transmitter" kits
 use.
 
-### 🧪 Wally's Lights RF products (protocol 1)
+### ✅ Wally's Lights RF products (protocol 1)
 
 Wally's Lights' RF range (hats, pucks, bracelets and light sticks, sold with a "DMX to RF" transmitter) uses
 **protocol 1**, the same protocol as the LedGiftSupplier devices above.
+
+**Tested: wristbands, pucks, a wand and the Santa hat.** All four are protocol 1 and follow the controller, with
+the Flipper app's sync timing as sent; the vendor's own sync is not needed. The pucks also ran the fade test
+mode for Halloween 2026.
 
 - **Bracelets: first test passed (2026-10-10).** They follow the controller's protocol 1 packets: the colour
   cycle test, sent to all groups from a Ra-02 (SX1278) radio, with the encoding and sync timing as they are.
@@ -71,7 +75,8 @@ Wally's Lights' RF range (hats, pucks, bracelets and light sticks, sold with a "
   Prefer bright colours with these; avoid slow fades down to black.
 - **Still to check on the bracelets:** driving them from xLights, how they behave when idle, and how many LEDs
   are inside (the product page says 2; it may be 3).
-- **Hat, pucks and light sticks:** not tested yet.
+- **Pucks, wand and Santa hat:** tested, protocol 1 (2026-10-31). Groups other than all, idle behaviour and
+  xLights are still to check on these.
 
 Only the receiving products are here, not the vendor's transmitter.
 
