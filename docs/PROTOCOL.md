@@ -11,7 +11,7 @@ addressable: a device is one colour. Devices **latch**: they hold the last colou
 
 | | Protocol 0 (Shenzen New Dody) | Protocol 1 (LedGiftSupplier.com) |
 |---|---|---|
-| Tested with real devices | **Yes**, two bracelets (Banana Ball giveaway, board `SD-B15ST1K1`) driven from xLights | **Yes**: Wally's Lights wristbands, pucks, a wand and the Santa hat all follow it (Ra-02). The bracelets respond to group 0 (all) and their own group (1). Full 8-bit dimming works on each channel. xLights still to check. The encoding matches 61 off-air captures of the vendor's DMX transmitter |
+| Tested with real devices | **Yes**, two bracelets (Banana Ball giveaway, board `SD-B15ST1K1`) driven from xLights | **Yes**: Wally's Lights wristbands, pucks, a wand and the Santa hat all follow it (Ra-02). The bracelets respond to group 0 (all) and their own group (1). Full 8-bit dimming works on each channel. Driven from xLights and FPP. The encoding matches 61 off-air captures of the vendor's DMX transmitter |
 
 Device details and photos: [DEVICES.md](DEVICES.md).
 

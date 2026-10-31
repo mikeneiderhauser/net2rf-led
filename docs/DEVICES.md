@@ -73,10 +73,8 @@ mode for Halloween 2026.
   clean, whether each packet is sent once or 3 times. At low levels the bracelet visibly flickers, also while
   a dim colour is simply held with nothing on air: that is the bracelet's own dimming, not the controller.
   Prefer bright colours with these; avoid slow fades down to black.
-- **Still to check on the bracelets:** driving them from xLights, how they behave when idle, and how many LEDs
-  are inside (the product page says 2; it may be 3).
-- **Pucks, wand and Santa hat:** tested, protocol 1 (2026-10-31). Groups other than all, idle behaviour and
-  xLights are still to check on these.
+- **Pucks, wand and Santa hat:** tested, protocol 1 (2026-10-31).
+- **Driven from xLights and FPP**, by group and all together: protocol 1 works across the board on all of these.
 
 Only the receiving products are here, not the vendor's transmitter.
 
@@ -111,7 +109,7 @@ Which protocol is my device?* and report the result.
 | xLights *Upload Input*, and the Net2RF controller definition | 🧪 |
 | Base layer and same-colour merging (protocol 0) | ✅ packets checked on the controller; bracelets on groups 2 and 3 |
 | FPP discovery ping (found by FPP / xLights) | ✅ xLights 2026.17 *Discover* adds it by hostname; ✅ listed on FPP's MultiSync page |
-| Falcon Player (FPP) as the show player | 🧪 (should work over DDP / E1.31 like xLights) |
+| Falcon Player (FPP) as the show player | ✅ |
 | Web UI, setup hotspot, Wi-Fi join, firmware update with rollback | ✅ |
 | Test mode, zone walk, address probe, group tester, range walk | ✅ |
 | Range across a yard | ✅ Ra-02 on the carrier board, with and without the external amplifier. Mount it high and away from things. |
