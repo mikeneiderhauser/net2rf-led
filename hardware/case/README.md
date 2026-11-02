@@ -11,7 +11,7 @@ have been printed and fitted.
 
 ![Amp case](images/amp-assembly.png) ![Slim case](images/slim-assembly.png)
 
-Printed and built (more in the [main README](../../README.md#carrier-board-photos)):
+Printed and built (more in the [main README](../../docs/build/carrier-board.md#photos)):
 
 <p>
 <a href="../../docs/images/carrier/amp-inside.jpg"><img src="../../docs/images/carrier/amp-inside.jpg" width="200" alt="Amp case, inside"></a>
@@ -27,10 +27,10 @@ Printed and built (more in the [main README](../../README.md#carrier-board-photo
 | `net2rf_case.scad` | Parametric source (OpenSCAD 2021.01). Every dimension is at the top. |
 | `amp/base.stl`, `amp/lid.stl` | Amp case. |
 | `slim/base-slim.stl`, `slim/lid-slim.stl` | Slim case. |
-| `amp/lid-ssd1315.stl`, `slim/lid-slim-ssd1315.stl` | Lids for the smaller SSD1315 OLED (24.7 x 27 mm board) instead of the 27.9 x 28.3 mm SSD1306 one. Printed and fitted. |
+| `amp/lid-small-oled.stl`, `slim/lid-slim-small-oled.stl` | Lids for the small 0.96" OLED board (24.7 x 27 mm) instead of the standard 27.9 x 28.3 mm one. Measure yours: the display is the same, only the board differs. Printed and fitted. |
 | `slim/antenna-plug.stl` | Blanks the antenna hole of a slim case fitted with an internal antenna. |
 | `amp/bracket.stl`, `slim/bracket-slim.stl` | Snap-in bracket that mounts the closed case inside a weatherproof enclosure. |
-| `test-pieces/` | Quick fit tests: the SSD1315 OLED pocket, and the amp bay corner of the base. |
+| `test-pieces/` | Quick fit tests: the small OLED pocket, and the amp bay corner of the base. |
 
 ## Printing
 
@@ -46,7 +46,7 @@ No supports for any part.
 - The board drops into the base onto four standoffs (plus plain support posts under the left third and under the
   USER and EN buttons). M3 screws cut their own thread in the 2.6 mm pilot holes. The top-left screw sits under
   the edge of the WT32-ETH01, so fit it before plugging the module in.
-- **Antenna:**
+- **Antenna:** an external antenna is recommended for the best range.
   - Slim case, external antenna: the Ra-02 pigtail's bulkhead SMA goes through the far wall from the inside, its
     hex in the pocket on the inside boss, and its nut outside. The pigtail runs along the left strip to the Ra-02.
   - Slim case, internal antenna: tie the spring antenna to the tie bridge on the left wall with a cable tie, and
@@ -55,7 +55,7 @@ No supports for any part.
   - Amp case: the amp stands on its long edge along the left wall, heatsink towards the wall. Its OUT SMA goes
     through the far wall (nut outside) and its IN end faces the connector end. The buck (heat-shrunk) is strapped
     to the tie bridge at the far wall with a cable tie and takes 12 V from J6. The amp's power can be switched
-    by the firmware: see [Amplifier power switch](../../docs/ASSEMBLY.md#amplifier-power-switch).
+    by the firmware: see [Amplifier power switch](../../docs/build/amplifier.md#amplifier-power-switch).
 - The connector wall above board level is an apron on the lid, with openings for the RJ45, DC jack and screw
   terminal, and `+` / `-` marks beside the terminal's screwdriver holes.
 - The OLED slides into the rails under the lid from its header end, glass towards the window, until it stops. A
@@ -75,7 +75,7 @@ openscad -o base.stl -D 'part="base"' net2rf_case.scad
 | Setting | Values |
 |---|---|
 | `AMP` | `true`: amp case, `false`: slim case |
-| `OLED` | `"ssd1306"` (default) or `"ssd1315"`: changes the lid only |
+| `OLED` | `"standard"` (default) or `"small"`: changes the lid only |
 | `part` | `base`, `lid`, `bracket`, `plug`; `closed`, `bracket_asm`, `plug_asm` to look at; `oled_test`, `amp_test` for test pieces |
 
 Fit settings worth tuning for a different printer: `SNAP` (lid grip), `CLR` (lid to wall clearance), `FEN_G` (OLED

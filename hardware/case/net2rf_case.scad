@@ -11,7 +11,7 @@ part = "assembly";
 
 REV = "R28";                      // case revision, engraved inside both parts. Bump it whenever the STLs change.
 AMP = true;                        // false: the slim case, for builds without the amplifier (and so without the buck)
-OLED = "ssd1306";                  // "ssd1306": the 27.9 x 28.3 module; "ssd1315": the 24.7 x 27 one (lid only differs)
+OLED = "standard";                  // "standard": the 27.9 x 28.3 module; "small": the 24.7 x 27 one (lid only differs)
 
 // ---- board (EasyEDA Pro project, carrier as fabbed 2026-10: positions from the exports of 2026-10-19) ----
 W = 57.15;  H = 62;  PCB_T = 1.6;
@@ -120,12 +120,12 @@ SNAP_X = AMP ? [0, 40] : [14, 42]; // ridges on the far (antenna-end) lip too; s
 SNAP_FRONT_X = -12;                // one ridge on a short lip inside the front wall, left of the DC jack (full-height base wall there)
 
 // OLED module                                                         CHECK all of these
-// SSD1315: from the seller's drawing (board 24.7 x 27 +-0.2, 1.2 thick, glass about 1.5 above it, 2.3 max; visible
+// Small module: from the seller's drawing (board 24.7 x 27 +-0.2, 1.2 thick, glass about 1.5 above it, 2.3 max; visible
 // area 22.74 x 11.86, centred across the board, 6.08 mm from the header edge). Not yet fitted.
-S15 = OLED == "ssd1315";
-OLW = S15 ? 24.7 : 27.9;  OLH = S15 ? 27 : 28.3;   // board, nominal; the pocket width comes from FEN_G
-O_PCB = S15 ? 1.2 : 1.4;  O_GLASS = 1.6;           // board thickness, glass height above the board
-WIN_C = S15 ? 12.01 : 12.15;                       // display centre, from the header edge
+SMALL_OLED = OLED == "small";
+OLW = SMALL_OLED ? 24.7 : 27.9;  OLH = SMALL_OLED ? 27 : 28.3;   // board, nominal; the pocket width comes from FEN_G
+O_PCB = SMALL_OLED ? 1.2 : 1.4;  O_GLASS = 1.6;           // board thickness, glass height above the board
+WIN_C = SMALL_OLED ? 12.01 : 12.15;                       // display centre, from the header edge
 // Placed so the display window is centred on the lid (WIN below sits 5.35-18.95 mm from the header edge, so its
 // centre is 12.15 mm in); the header edge faces the antenna end. Slim: no further right than x 22, about 2.8 mm left
 // of the lid's centre, so the right rail stays 1.5 mm clear of the USER tongue's root.
@@ -134,8 +134,8 @@ oz = LID_Z - O_GLASS - O_PCB;      // back face of the OLED board
 ocx = (ox0 + ox1) / 2;
 // Test piece G (oled_test.scad) fitted best: pocket 27.3 mm wide (FEN_G = -0.30) with a 0.3 mm wedge.
 // Nothing latches the OLED: it is held by the rails; a dab of glue at the header end stops it sliding out.
-// SSD1315: 25.0 until a test piece says otherwise. Its glass is as wide as the board (24.74 +-0.2), so no squeeze.
-FEN_G = S15 ? 0.15 : -0.30;  FEN_T = 1.2;  FEN_A = 4;          // side gap (negative: tighter than nominal), wall thickness, end-stop length
+// Small module: 25.0 until a test piece says otherwise. Its glass is as wide as the board (24.74 +-0.2), so no squeeze.
+FEN_G = SMALL_OLED ? 0.15 : -0.30;  FEN_T = 1.2;  FEN_A = 4;          // side gap (negative: tighter than nominal), wall thickness, end-stop length
 FEN_END = 0.15;                                             // gap at the end stops
 WEDGE = 0.3;                                                // the sloped face starts this far towards the lid from the board's back face
 RAIL_IN = 1.2;  RAIL_T = 0.8;                               // rail ledge reach under the board; ledge thickness below the slope
