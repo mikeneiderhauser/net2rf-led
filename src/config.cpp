@@ -106,7 +106,7 @@ void config_defaults_app(AppConfig &c) {
     memset(&c, 0, sizeof(c));
     c.magic = APP_MAGIC;
     strlcpy(c.name, "Net2RF LED", sizeof(c.name));
-    c.protocol = 0;  // the protocol tested on real devices
+    c.protocol = 1;  // the devices on sale (Wally's Lights, LedGiftSupplier). Saved settings keep their own.
     c.mode = MODE_PIXEL;
     c.color_order = rfproto::ORDER_RGB;
     c.num_zones = 5;  // All Zones + Zone 1-4 (the smaller xLights model, tools/xlights)
@@ -128,7 +128,7 @@ void config_defaults_app(AppConfig &c) {
     c.e131_universe = 1;
     for (uint8_t i = 0; i < MAX_ZONES; i++)
         zone_defaults(c.zones[i], i, rfproto::PROTOCOL_BIT[c.protocol & 1]);
-    c.lbt_enabled = 0;  // optional until tested with several controllers in range of each other
+    c.lbt_enabled = 1;  // new controllers only: saved settings keep their own
     c.lbt_threshold = LBT_DEFAULT_THRESHOLD;
     c.radio_off = 0;
     strlcpy(c.update_repo, updater::DEFAULT_REPO, sizeof(c.update_repo));
@@ -241,14 +241,22 @@ struct AmpRecord {
     uint32_t magic;
     AmpConfig c;
 };
+struct AmpRecordV1 {  // before idle_min (same magic): accepted, idle_min stays 0
+    uint32_t magic;
+    uint8_t fitted, active_low, on;
+};
 
 void config_load_amp(AmpConfig &out) {
-    out = AmpConfig{0, 1, 1};
+    out = AmpConfig{0, 1, 1, 0};
     Preferences p;
     p.begin(NVS_NS, true);
     AmpRecord r{};
-    if (p.getBytesLength("amp") == sizeof(r) && p.getBytes("amp", &r, sizeof(r)) == sizeof(r) && r.magic == AMP_MAGIC)
+    AmpRecordV1 v1{};
+    size_t len = p.getBytesLength("amp");
+    if (len == sizeof(r) && p.getBytes("amp", &r, sizeof(r)) == sizeof(r) && r.magic == AMP_MAGIC)
         out = r.c;
+    else if (len == sizeof(v1) && p.getBytes("amp", &v1, sizeof(v1)) == sizeof(v1) && v1.magic == AMP_MAGIC)
+        out = AmpConfig{v1.fitted, v1.active_low, v1.on, 0};
     p.end();
 }
 
@@ -257,6 +265,31 @@ void config_save_amp(const AmpConfig &c) {
     p.begin(NVS_NS, false);
     AmpRecord r{AMP_MAGIC, c};
     p.putBytes("amp", &r, sizeof(r));
+    p.end();
+}
+
+static const uint32_t PRESETS_MAGIC = 0x4E325031;  // "N2P1"
+struct PresetsRecord {
+    uint32_t magic;
+    FadePresets p;
+};
+
+void config_load_fade_presets(FadePresets &out) {
+    memset(&out, 0, sizeof(out));
+    Preferences p;
+    p.begin(NVS_NS, true);
+    PresetsRecord r{};
+    if (p.getBytesLength("fade_pre") == sizeof(r) && p.getBytes("fade_pre", &r, sizeof(r)) == sizeof(r) &&
+        r.magic == PRESETS_MAGIC && r.p.n <= MAX_FADE_PRESETS)
+        out = r.p;
+    p.end();
+}
+
+void config_save_fade_presets(const FadePresets &c) {
+    Preferences p;
+    p.begin(NVS_NS, false);
+    PresetsRecord r{PRESETS_MAGIC, c};
+    p.putBytes("fade_pre", &r, sizeof(r));
     p.end();
 }
 
@@ -275,6 +308,12 @@ void config_network_reset() {
 void config_settings_reset() {
     config_defaults_app(g_app);
     config_save_app(g_app);
+    Preferences p;
+    p.begin(NVS_NS, false);
+    p.remove("boot_test");
+    p.remove("amp");
+    p.remove("fade_pre");
+    p.end();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -356,6 +395,157 @@ static String hex_string(const uint8_t *data, size_t len) {
     return s;
 }
 
+static const char *const TEST_MODE_NAMES[] = {"off", "solid", "cycle", "fade", "flicker"};  // TestMode
+
+void fade_to_json(const FadePalette &p, JsonObject out) {
+    JsonArray pal = out["palette"].to<JsonArray>();
+    for (uint8_t i = 0; i < p.n && i < MAX_FADE_COLORS; i++)
+        pal.add(hex_string(p.rgb[i], 3));
+    out["fade_s"] = p.fade_ms / 1000.0f;
+    out["hold_s"] = p.hold_ms / 1000.0f;
+}
+
+bool fade_from_json(JsonObjectConst in, FadePalette &p, String &err) {
+    FadePalette next = p;
+    JsonArrayConst pal = in["palette"].as<JsonArrayConst>();
+    if (!pal.isNull()) {
+        next.n = 0;
+        for (JsonVariantConst c : pal)
+            if (next.n < MAX_FADE_COLORS && parse_hex(c | "", next.rgb[next.n], 3))
+                next.n++;
+        if (next.n == 0) {
+            err = "palette needs at least one RRGGBB colour";
+            return false;
+        }
+    }
+    float fade_s = in["fade_s"] | p.fade_ms / 1000.0f, hold_s = in["hold_s"] | p.hold_ms / 1000.0f;
+    if (!(fade_s >= 0 && fade_s <= 600 && hold_s >= 0 && hold_s <= 600)) {
+        err = "fade_s and hold_s must be 0-600";
+        return false;
+    }
+    next.fade_ms = (uint32_t) (fade_s * 1000 + 0.5f), next.hold_ms = (uint32_t) (hold_s * 1000 + 0.5f);
+    p = next;
+    return true;
+}
+
+static int find_preset(const FadePresets &p, const char *name) {
+    for (uint8_t i = 0; i < p.n; i++)
+        if (strcmp(p.p[i].name, name) == 0)
+            return i;
+    return -1;
+}
+
+bool fade_presets_apply(FadePresets &p, JsonObjectConst in, String &err) {
+    if (in["delete"].is<const char *>()) {
+        int i = find_preset(p, in["delete"]);
+        if (i < 0) {
+            err = "no preset of that name";
+            return false;
+        }
+        for (uint8_t k = i; k + 1 < p.n; k++)
+            p.p[k] = p.p[k + 1];
+        p.n--;
+        return true;
+    }
+    const char *name = in["name"] | "";
+    if (name[0] == '\0' || strlen(name) >= sizeof(p.p[0].name)) {
+        err = "name must be 1-20 characters";
+        return false;
+    }
+    if (in["palette"].isNull()) {
+        err = "palette needs at least one RRGGBB colour";
+        return false;
+    }
+    FadePreset n{};
+    strlcpy(n.name, name, sizeof(n.name));
+    n.fade.fade_ms = 3000, n.fade.hold_ms = 4000;
+    if (!fade_from_json(in, n.fade, err))
+        return false;
+    int i = find_preset(p, name);
+    if (i < 0 && p.n >= MAX_FADE_PRESETS) {
+        err = String(MAX_FADE_PRESETS) + " presets saved: delete one first";
+        return false;
+    }
+    p.p[i < 0 ? p.n++ : i] = n;
+    return true;
+}
+
+void fade_presets_to_json(const FadePresets &p, JsonArray out) {
+    for (uint8_t i = 0; i < p.n; i++) {
+        JsonObject o = out.add<JsonObject>();
+        o["name"] = String(p.p[i].name);  // copied: a char array would be kept as a pointer into `p`
+        fade_to_json(p.p[i].fade, o);
+    }
+}
+
+void extras_to_json(JsonObject out) {
+    BootTest t;
+    if (config_load_boot_test(t)) {
+        JsonObject o = out["boot_test"].to<JsonObject>();
+        o["mode"] = TEST_MODE_NAMES[t.mode < 5 ? t.mode : 0];
+        o["rgb"] = hex_string(t.rgb, 3);
+        fade_to_json(t.fade, o["fade"].to<JsonObject>());
+    }
+    AmpConfig a;
+    config_load_amp(a);
+    JsonObject amp = out["amp"].to<JsonObject>();
+    amp["fitted"] = (bool) a.fitted;
+    amp["active_low"] = (bool) a.active_low;
+    amp["on"] = (bool) a.on;
+    amp["idle_min"] = a.idle_min;
+    FadePresets p;
+    config_load_fade_presets(p);
+    if (p.n)
+        fade_presets_to_json(p, out["fade_presets"].to<JsonArray>());
+}
+
+bool extras_from_json(JsonObjectConst in, SettingsExtras &x, String &err) {
+    memset(&x, 0, sizeof(x));
+    JsonObjectConst boot = in["boot_test"].as<JsonObjectConst>();
+    if (!boot.isNull()) {
+        const char *mode = boot["mode"] | "";
+        for (uint8_t m = 1; m < 5; m++)
+            if (strcmp(mode, TEST_MODE_NAMES[m]) == 0)
+                x.boot.mode = m;
+        if (!x.boot.mode || !parse_hex(boot["rgb"] | "", x.boot.rgb, 3) ||
+            !fade_from_json(boot["fade"].as<JsonObjectConst>(), x.boot.fade, err) || !x.boot.fade.n) {
+            err = "boot_test: " + (err.length() ? err : String("bad mode or colour"));
+            return false;
+        }
+        x.has_boot = true;
+    }
+    JsonObjectConst amp = in["amp"].as<JsonObjectConst>();
+    if (!amp.isNull()) {
+        int idle = amp["idle_min"] | 0;
+        if (idle < 0 || idle > AMP_IDLE_MAX_MIN) {
+            err = "amp: idle_min out of range";
+            return false;
+        }
+        x.amp = AmpConfig{(uint8_t) (amp["fitted"] | false), (uint8_t) (amp["active_low"] | true),
+                          (uint8_t) (amp["on"] | true), (uint16_t) idle};
+        x.has_amp = true;
+    }
+    JsonArrayConst presets = in["fade_presets"].as<JsonArrayConst>();
+    if (!presets.isNull()) {
+        for (JsonVariantConst v : presets)
+            if (!fade_presets_apply(x.presets, v.as<JsonObjectConst>(), err)) {
+                err = "fade_presets: " + err;
+                return false;
+            }
+        x.has_presets = true;
+    }
+    return true;
+}
+
+void extras_save(const SettingsExtras &x) {
+    if (x.has_boot)
+        config_save_boot_test(&x.boot);
+    if (x.has_amp)
+        config_save_amp(x.amp);
+    if (x.has_presets)
+        config_save_fade_presets(x.presets);
+}
+
 bool parse_hex(const char *str, uint8_t *out, size_t len) {
     if (str == nullptr)
         return false;
@@ -424,7 +614,7 @@ void app_to_json(const AppConfig &c, JsonObject o) {
         all |= c.zones[i].protocols;
     protocols_to_json(common ? common : all, br["protocols"].to<JsonArray>());
     br["per_zone"] = common == 0;
-    br["protocol"] = c.protocol;  // the default protocol (older clients read this one)
+    br["protocol"] = c.protocol;  // the default protocol (read-only: "protocols" sets it)
     br["mode"] = c.mode == MODE_VENDOR ? "vendor" : c.mode == MODE_DMX ? "dmx" : "pixel";
     br["color_order"] = rfproto::COLOR_ORDER_NAMES[c.color_order % rfproto::NUM_ORDERS];
     br["base_layer"] = (bool) c.base_layer;
@@ -469,7 +659,6 @@ void app_to_json(const AppConfig &c, JsonObject o) {
 }
 
 bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
-    uint8_t old_protocol = c.protocol;
 
     if (in["name"].is<const char *>())
         copy_name(c.name, sizeof(c.name), in["name"]);
@@ -508,20 +697,12 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
             return false;
     }
 
-    // devices.protocols sets every zone's protocols. devices.protocol (older clients) switches every zone to that
-    // one protocol when it changes. Zones keep both addresses either way, so nothing has to be re-entered.
+    // devices.protocols sets every zone's protocols. Zones keep both addresses, so nothing has to be re-entered.
     JsonObjectConst br = in["devices"];
     uint8_t every_zone = 0;
     if (!br.isNull()) {
-        if (!read_int(br, "protocol", 0, 1, c.protocol, err))
-            return false;
-        // Zones that say what they drive (an export, the Zones page) are left to it; with "per_zone" set,
-        // "protocols" is only what the zones use between them (as /api/config reports it), not an instruction.
-        bool zones_say = false;
-        for (JsonObjectConst z : in["zones"].as<JsonArrayConst>())
-            zones_say |= !z["protocols"].isNull();
-        if (c.protocol != old_protocol && br["protocols"].isNull() && !zones_say)
-            every_zone = rfproto::PROTOCOL_BIT[c.protocol];
+        // With "per_zone" set, "protocols" is only what the zones use between them (as /api/config reports it),
+        // not an instruction.
         if (!br["protocols"].isNull() && !(br["per_zone"] | false)) {
             if (!protocols_from_json(br["protocols"], every_zone, "devices", err))
                 return false;
@@ -644,16 +825,6 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
                     return false;
                 }
                 memcpy(z.p1_addr, tmp, 2);
-            }
-            if (!j["addr"].isNull()) {
-                // Older clients and exports: one address, in the default protocol, which the zone then drives alone.
-                if (!j["addr"].is<const char *>() || !parse_hex(j["addr"], tmp, address_len(c.protocol))) {
-                    err = where + ": a protocol " + c.protocol + " address is " + address_len(c.protocol) + " bytes";
-                    return false;
-                }
-                memcpy(c.protocol ? z.p1_addr : z.addr, tmp, address_len(c.protocol));
-                if (j["protocols"].isNull())
-                    z.protocols = rfproto::PROTOCOL_BIT[c.protocol];
             }
             if (!j["protocols"].isNull() && !protocols_from_json(j["protocols"], z.protocols, where, err))
                 return false;

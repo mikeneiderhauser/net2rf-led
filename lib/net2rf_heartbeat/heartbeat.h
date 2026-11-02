@@ -12,6 +12,9 @@
 // Coverage group (lib/net2rf_group): "mac" is the full MAC (unique, unlike "id"); "sync": true marks a controller
 // that takes part in a group, "master": true the one that leads it. Older firmware sends neither (and ignores them).
 //
+// "board" is the firmware's board id ("wt32-eth01"), "net" how it is connected ("eth", "wifi", "ap" = setup hotspot).
+// Older firmware sends neither.
+//
 // "p" + "v" identify the format (anything else is ignored). The sender's IP is taken from the packet's
 // source address, not from the payload. "hello" asks every receiver to answer with a beat right away.
 
@@ -42,6 +45,8 @@ struct Heartbeat {
     char mac[13];    // full MAC, 12 hex digits ("" from older firmware)
     bool sync;       // in a coverage group
     bool master;     // ... and leads it
+    char board[16];  // firmware board id ("" from older firmware)
+    char net[6];     // "eth" / "wifi" / "ap" ("" from older firmware)
 };
 
 namespace detail {
@@ -91,6 +96,10 @@ inline size_t encode_heartbeat(const Heartbeat &h, char *buf, size_t size) {
         doc["hello"] = true;
     if (h.mac[0])
         doc["mac"] = h.mac;
+    if (h.board[0])
+        doc["board"] = h.board;
+    if (h.net[0])
+        doc["net"] = h.net;
     if (h.sync) {
         doc["sync"] = true;
         if (h.master)
@@ -134,6 +143,8 @@ inline bool decode_heartbeat(const uint8_t *data, size_t len, Heartbeat &out) {
     const char *mac = doc["mac"] | "";
     if (strlen(mac) == 12 && detail::is_hex(mac))
         detail::copy_str(out.mac, sizeof(out.mac), mac);
+    detail::copy_str(out.board, sizeof(out.board), doc["board"] | "");
+    detail::copy_str(out.net, sizeof(out.net), doc["net"] | "");
     out.sync = doc["sync"] | false;
     out.master = out.sync && (doc["master"] | false);
     return true;

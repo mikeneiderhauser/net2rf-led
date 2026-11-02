@@ -12,7 +12,7 @@ colour order RGB, which is the controller's default colour order.
 
 How the models map: node 1 is the controller's first zone (All Zones) and node N+1 is Zone N. Each is a
 submodel with that name, plus **Zones 1-N** for every single zone together. Sequencing and what the base layer
-does: [docs/SETUP.md](../../docs/SETUP.md#all-zones-as-a-base-layer-protocol-0).
+does: [show setup guide](../../docs/guides/show-setup.md#all-zones-as-a-base-layer-protocol-0).
 
 ## Installing the controller definition
 

@@ -185,6 +185,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <div class="actions" style="margin-top:0"><div class="seg" id="testSeg"><button data-m="off">Off</button><button data-m="solid">Solid</button><button data-m="cycle">Cycle R/G/B/W</button><button data-m="fade">Fade</button><button data-m="flicker">Flicker</button></div>
       <input type="color" id="testColor" value="#ffffff" title="Solid and Flicker colour"></div>
       <label class="inline" style="margin-top:8px" title="The mode running now, with its colours, starts again by itself after every power-up or restart"><input type="checkbox" id="testBoot"> Start this mode at power-up</label>
+      <p class="dim small" style="margin:4px 0 0">A mode started at power-up gives way to live show input, and comes back 10 s after the input stops. <b id="testPaused"></b></p>
       <p class="dim small" style="margin:4px 0 0">Flicker: a candle in the Solid colour (try orange, #ff7a10), changing about 3 times a second &mdash; the most the radio carries, so a slow, guttering flame.</p>
       <div id="fadeBox" style="margin-top:10px">
         <p class="dim small" style="margin:0 0 6px">Fade: holds each colour, then fades to the next, round and round. Up to 8 colours; the radio gets a step about every 0.3 s while fading.</p>
@@ -194,6 +195,8 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
           <label class="small">Hold <input type="number" id="holdS" min="0" max="600" step="0.5" style="width:70px"> s</label>
           <button id="fadeGo">Start fade</button></div>
         <div class="actions" style="flex-wrap:wrap"><span class="small dim">Presets:</span><span id="fadePresets" style="display:inline-flex;gap:6px;flex-wrap:wrap"></span></div>
+        <div class="actions" style="flex-wrap:wrap"><span class="small dim">Saved:</span><span id="fadeSaved" style="display:inline-flex;gap:6px;flex-wrap:wrap"></span></div>
+        <div class="actions" style="flex-wrap:wrap"><input id="fadeName" maxlength="20" placeholder="Preset name" style="width:160px"><button id="fadeSave" title="Saved on this controller, up to 8">Save preset</button></div>
       </div>
     </div>
   </section>
@@ -284,10 +287,11 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       </div>
       <h2 style="margin-top:18px">Wi-Fi</h2>
       <div class="form">
-        <label>Network (SSID)<input id="n_ssid" maxlength="32" list="n_ssidList"><datalist id="n_ssidList"></datalist></label>
+        <label>Network (SSID)<input id="n_ssid" maxlength="32"></label>
         <label>Password<input id="n_pass" type="password" maxlength="64" placeholder=""></label>
         <label>&nbsp;<button id="n_scan">Scan for networks</button></label>
       </div>
+      <div id="n_scanOut" class="hide" style="margin-top:8px"></div>
       <h2 style="margin-top:18px">IP address</h2>
       <div class="form">
         <label class="inline"><input type="checkbox" id="n_dhcp"> Get address automatically (DHCP)</label>
@@ -335,6 +339,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <details class="adv" style="margin-top:8px"><summary>Switch wiring</summary>
         <label class="inline" style="display:block;margin-top:8px"><input type="checkbox" id="amp_fitted"> A power switch is wired to IO<span class="amp_pin">2</span></label>
         <label class="inline" style="display:block;margin-top:4px"><input type="checkbox" id="amp_low"> Active low: the pin is low while the amp is on (an N-FET pulling the buck's EN low when the pin is high)</label>
+        <label class="inline" style="display:block;margin-top:4px">Power down after <input type="number" id="amp_idle" min="0" max="1440" style="width:70px"> minutes without a transmission, and back up for the next one (0 = stay on)</label>
         <p class="dim small" id="amp_led" style="margin-bottom:0"></p>
       </details>
     </div>
@@ -420,8 +425,6 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
     <div class="card"><h2>Display (OLED)</h2>
       <p class="small" style="margin-top:0" id="o_state"></p>
       <div class="form">
-        <label>Display type<select id="o_type"><option value="ssd1306">SSD1306 (0.96", most common)</option><option value="sh1106">SH1106 (1.3")</option></select>
-          <span class="hint">pick SH1106 if the picture is shifted or garbled</span></label>
         <label>Sleep after (minutes)<input id="o_sleep" type="number" min="0" max="240">
           <span class="hint" id="o_sleepHint"></span></label>
       </div>
@@ -642,11 +645,12 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
   // live zones
   const w=C?({dmx:4,vendor:5}[C.app.devices.mode]||3):3;
   const rows=e.zones.map((g,k)=>{const cfg=C&&C.app.zones[k];if(!cfg)return'';
-    return `<tr class="${cfg.enabled?'':'dim'}"><td class="dim">${k+1}</td><td class="nw">${esc(cfg.name)}</td><td class="dim nw">${cfg.start}-${cfg.start+w-1}</td><td class="nw"><span class="sw" style="background:#${g.rgb}"></span> <span class="mono">#${g.rgb}</span></td><td class="small dim nw">${w===4?'fx '+g.fx:w===5?(g.gated?'<span class="badge warn">held: ch1 ≠ 85</span>':'group '+g.group):''}</td><td class="mono nw">${(g.packets&&g.packets.length?g.packets:g.packet?[{p:'',pkt:g.packet}]:[]).map(e=>(g.packets&&g.packets.length>1?`<span class="dim">P${e.p}</span> `:'')+e.pkt.match(/../g).join(' ')).join('<br>')||'–'}</td><td>${fmtN(g.tx)}</td><td class="dim">${fmtAge(g.tx_age_ms)}</td></tr>`}).join('');
+    return `<tr class="${cfg.enabled?'':'dim'}"><td class="dim">${k+1}</td><td class="nw">${esc(cfg.name)}</td><td class="dim nw">${cfg.start}-${cfg.start+w-1}</td><td class="nw"><span class="sw" style="background:#${g.rgb}"></span> <span class="mono">#${g.rgb}</span></td><td class="small dim nw">${w===4?'fx '+g.fx:w===5?(g.gated?'<span class="badge warn">held: ch1 ≠ 85</span>':'group '+g.group):''}</td><td class="mono nw">${(g.packets||[]).map(e=>(g.packets&&g.packets.length>1?`<span class="dim">P${e.p}</span> `:'')+e.pkt.match(/../g).join(' ')).join('<br>')||'–'}</td><td>${fmtN(g.tx)}</td><td class="dim">${fmtAge(g.tx_age_ms)}</td></tr>`}).join('');
   $('d_zones').innerHTML=rows;
   document.querySelectorAll('#testSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===e.test.mode));
   if(!fadeEdited&&e.test.fade)fadeFill(e.test.fade.palette,e.test.fade.fade_s,e.test.fade.hold_s);
   $('testBoot').checked=!!e.test.boot;
+  $('testPaused').textContent=e.test.paused?'Paused now: show input is live.':'';
   ampRender(d.amp);
   renderNetStatus();sysInfo();if(location.hash==='#tools')xlights();
 }
@@ -764,9 +768,21 @@ function renderNetStatus(){if(!S)return;const n=S.network,rows=[['Active',n.inte
   rows.push(['Wi-Fi',n.wifi.ssid?(n.wifi.connected?`${esc(n.wifi.ssid)} (${n.wifi.rssi} dBm)`:(n.wifi.error?`<span style="color:var(--bad)">can't join ${esc(n.wifi.ssid)}: ${esc(n.wifi.error)}</span>${n.wifi.paused?' (retries paused while the setup AP is in use)':''}`:n.wifi.active?'connecting to '+esc(n.wifi.ssid):'standby (Ethernet in use)')):'not configured']);
   rows.push(['Access point',n.ap.active?`${esc(n.ap.ssid)} · ${n.ap.ip} · ${n.ap.clients} connected`:'off']);
   if(n.ethernet.mac)rows.push(['Ethernet MAC',n.ethernet.mac]);rows.push(['Wi-Fi MAC',n.wifi.mac]);kv($('n_status'),rows)}
-$('n_scan').onclick=async ev=>{ev.preventDefault();await api('wifi/scan',{});toast('Scanning…');
-  for(let k=0;k<20;k++){await new Promise(r=>setTimeout(r,700));const s=await api('wifi/scan');if(!s.running){
-    $('n_ssidList').innerHTML=s.networks.map(w=>`<option value="${esc(w.ssid)}">${w.rssi} dBm${w.secure?'':' (open)'}</option>`).join('');toast(s.networks.length+' networks found');return}}};
+// Wi-Fi scan: strongest first, one row per network name (several access points can share one)
+var scanNets=[];
+function scanDraw(found){const nets={};(found||[]).forEach(w=>{if(w.ssid&&(!nets[w.ssid]||w.rssi>nets[w.ssid].rssi))nets[w.ssid]=w});
+  scanNets=Object.values(nets).sort((a,b)=>b.rssi-a.rssi);
+  $('n_scanOut').innerHTML=scanNets.length?`<p class="small dim" style="margin:0 0 4px">${scanNets.length} network${scanNets.length>1?'s':''} found. Pick one, then enter its password.</p><div class="scroll"><table class="tbl"><tbody>`+
+    scanNets.map((w,k)=>`<tr><td>${esc(w.ssid)}</td><td class="dim nw">${w.rssi} dBm</td><td class="dim nw">${w.secure?'secured':'open'}</td><td style="text-align:right"><button data-k="${k}">Use</button></td></tr>`).join('')+'</tbody></table></div>':
+    '<p class="small dim" style="margin:0">No networks found. The controller only sees 2.4 GHz networks. You can also type the name above.</p>'}
+$('n_scanOut').onclick=e=>{const b=e.target.closest('button');if(!b)return;const w=scanNets[b.dataset.k];$('n_ssid').value=w.ssid;$('n_pass').value='';
+  if(w.secure)$('n_pass').focus();toast(w.ssid+' selected')};
+$('n_scan').onclick=async ev=>{ev.preventDefault();const b=ev.currentTarget,out=$('n_scanOut');b.disabled=true;b.textContent='Scanning…';
+  out.classList.remove('hide');out.innerHTML='<p class="small dim" style="margin:0">Scanning for networks…</p>';
+  try{await api('wifi/scan',{});let found=null;
+    for(let k=0;k<20&&!found;k++){await new Promise(r=>setTimeout(r,700));const s=await api('wifi/scan');if(!s.running)found=s.networks}
+    scanDraw(found)}catch(e){out.innerHTML='<p class="small dim" style="margin:0">The scan failed. Try again.</p>'}
+  finally{b.disabled=false;b.textContent='Scan for networks'}};
 $('n_save').onclick=async()=>{const body={hostname:$('n_host').value,eth_enabled:$('n_eth').checked,wifi_ssid:$('n_ssid').value,dhcp:$('n_dhcp').checked,
     ip:$('n_ip').value,subnet:$('n_mask').value,gateway:$('n_gw').value,dns:$('n_dns').value,ap_mode:$('n_ap').value};
   if($('n_pass').value)body.wifi_pass=$('n_pass').value;if($('n_appass').value)body.ap_pass=$('n_appass').value;
@@ -1052,7 +1068,8 @@ $('t_adv').ontoggle=()=>{try{localStorage.setItem('n2r_tools_adv',$('t_adv').ope
 var ampBusy=false;
 function ampRender(a){if(!a||ampBusy)return;document.querySelectorAll('.amp_pin').forEach(x=>x.textContent=a.pin);
   $('amp_fitted').checked=a.fitted;$('amp_low').checked=a.active_low;$('amp_on').checked=a.on;$('amp_on').disabled=!a.fitted;
-  $('amp_state').textContent=a.fitted?(a.on?'on':'off'):'no switch fitted';
+  if(document.activeElement!==$('amp_idle'))$('amp_idle').value=a.idle_min||0;
+  $('amp_state').textContent=a.fitted?(a.asleep?'idle, powered down':a.on?'on':'off'):'no switch fitted';
   $('amp_note').textContent=a.fitted?'':'Tick the wiring box below once a switch is fitted.';
   $('amp_led').textContent=a.shares_status_led?'This pin also drives the status LED, which stays dark while a switch is fitted.':''}
 async function ampSet(b){ampBusy=true;try{const r=await api('amp',b);ampBusy=false;ampRender(r.amp);toast(r.amp.fitted?'Amplifier '+(r.amp.on?'on':'off'):'No amp switch fitted')}catch(e){}finally{ampBusy=false;poll()}}
@@ -1061,6 +1078,7 @@ $('amp_fitted').onchange=async e=>{const want=e.target.checked;ampBusy=true;  //
   const ok=!want||await ask('Drive IO'+$('amp_fitted').parentNode.querySelector('.amp_pin').textContent+' as the amplifier switch? Only do this if a switch is wired to it.');
   ampBusy=false;if(!ok){e.target.checked=false;return}ampSet({fitted:want})};
 $('amp_low').onchange=e=>ampSet({active_low:e.target.checked});
+$('amp_idle').onchange=e=>ampSet({idle_min:Math.max(0,Math.min(1440,parseInt(e.target.value)||0))});
 // fade palette: filled from the controller until edited here
 // presets: [name, colours, fade s, hold s]. Picking one fills the editor; Start fade sends it.
 const FADE_PRESETS=[['Halloween',['FF5000','7000FF','40FF00','FF0000','FFA020'],3,4],
@@ -1076,6 +1094,18 @@ $('fadePresets').innerHTML=FADE_PRESETS.map((p,k)=>`<button data-k="${k}" title=
 $('fadePresets').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=FADE_PRESETS[b.dataset.k];fadeFill(p[1],p[2],p[3]);fadeEdited=true;
   if(S&&S.engine.test.mode==='fade')api('test',testBody('fade')).then(()=>{fadeEdited=false;poll()})};
 $('fadeGo').onclick=()=>api('test',testBody('fade')).then(()=>{fadeEdited=false;poll()});
+// presets saved on the controller (/api/presets)
+var fadeUser=[];
+function fadeUserDraw(){$('fadeSaved').innerHTML=fadeUser.length?fadeUser.map((p,k)=>`<span style="display:inline-flex;gap:2px"><button data-k="${k}">${p.palette.map(c=>`<span class="sw" style="width:12px;height:12px;background:#${c}"></span>`).join('')} ${esc(p.name)}</button><button data-del="${k}" title="Delete ${esc(p.name)}">&times;</button></span>`).join(''):'<span class="small dim">none yet</span>'}
+async function fadeUserLoad(){try{const r=await (await fetch('/api/presets')).json();fadeUser=r.presets||[];fadeUserDraw()}catch(e){}}
+$('fadeSaved').onclick=async e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.del!==undefined){const p=fadeUser[b.dataset.del];if(!await ask('Delete the preset "'+p.name+'"?','Delete'))return;
+    const r=await api('presets',{delete:p.name});fadeUser=r.presets;fadeUserDraw();return}
+  const p=fadeUser[b.dataset.k];fadeFill(p.palette,p.fade_s,p.hold_s);$('fadeName').value=p.name;fadeEdited=true;
+  if(S&&S.engine.test.mode==='fade')api('test',testBody('fade')).then(()=>{fadeEdited=false;poll()})};
+$('fadeSave').onclick=async()=>{const name=$('fadeName').value.trim();if(!name){toast('Name the preset first');return}
+  const {mode,...fade}=fadeBody();const r=await api('presets',{name,...fade});fadeUser=r.presets;fadeUserDraw();toast('Preset saved')};
+fadeUserLoad();
 
 // system
 function authUi(){const on=!!S.device.auth;
@@ -1088,15 +1118,14 @@ $('a_clear').onclick=async()=>{if(!await ask('Remove the admin password? Anyone 
   await api('auth',{password:''});toast('Admin password removed');poll()};
 function displayUi(){const di=S.device.display_info;if(!di)return;
   if(di.sda_pin!==undefined&&S.device.board!=='wt32-eth01')$('o_wiring').textContent=`SDA → IO${di.sda_pin}, SCL → IO${di.scl_pin}`;
-  $('o_state').innerHTML=di.present?`<span class="badge good">${di.type.toUpperCase()} at ${di.address}</span>`+(di.pins_swapped?' <span class="badge warn">SDA/SCL wired swapped (working anyway)</span>':''):'<span class="badge warn">No display found</span> <span class="dim">(looking at 0x3C / 0x3D every 5 s)</span>';
+  $('o_state').innerHTML=di.present?`<span class="badge good">OLED at ${di.address}</span>`+(di.pins_swapped?' <span class="badge warn">SDA/SCL wired swapped (working anyway)</span>':''):'<span class="badge warn">No display found</span> <span class="dim">(looking at 0x3C / 0x3D every 5 s)</span>';
   if(di.present&&di.asleep)$('o_state').innerHTML+=' <span class="badge">asleep</span>';
   $('o_sleepHint').textContent=(di.button?'without a USER button press; the next press wakes it. ':'no USER button fitted: wake it here. ')+'It also wakes after a reboot, when the network address changes and when the radio fails. 0 = never';
   $('o_wake').disabled=!di.present;
-  if(document.activeElement!==$('o_type'))$('o_type').value=di.type;if(document.activeElement!==$('o_sleep'))$('o_sleep').value=di.sleep_min}
+  if(document.activeElement!==$('o_sleep'))$('o_sleep').value=di.sleep_min}
 $('o_wake').onclick=async()=>{await api('display',{wake:true});toast('Display woken');setTimeout(poll,600)};
-$('o_dispSave').onclick=async()=>{const di=S.device.display_info||{},body={sleep_min:Math.max(0,Math.min(240,+$('o_sleep').value||0)),wake:true};
-  const retype=$('o_type').value!==di.type;if(retype)body.type=$('o_type').value;
-  await api('display',body);toast(retype?'Display settings saved; re-detecting…':'Display settings saved');setTimeout(poll,1500)};
+$('o_dispSave').onclick=async()=>{const body={sleep_min:Math.max(0,Math.min(240,+$('o_sleep').value||0)),wake:true};
+  await api('display',body);toast('Display settings saved');setTimeout(poll,1500)};
 $('o_scan').onclick=async()=>{const r=await api('i2c/scan');const out=$('o_scanOut');out.classList.remove('hide');
   out.textContent=(r.devices.length?'Devices found: '+r.devices.join(', '):'No I2C devices answered.')+
     `\nSDA (IO${r.sda_pin}) idle: ${r.sda_high?'high (ok)':'LOW: short, missing pull-up or wiring'}`+

@@ -11,6 +11,7 @@
 #include "group.h"
 #include "heartbeat.h"
 #include "net.h"
+#include "pins.h"
 
 namespace peers {
 
@@ -96,6 +97,8 @@ static void own_heartbeat(net2rf::Heartbeat &h) {
     n2rgroup::mac_to_hex(mac, h.mac);
     strlcpy(h.id, device_suffix().c_str(), sizeof(h.id));
     strlcpy(h.fw, FW_VERSION, sizeof(h.fw));
+    strlcpy(h.board, NET2RF_BOARD_ID, sizeof(h.board));
+    strlcpy(h.net, net::uplink_name(), sizeof(h.net));
     strlcpy(h.radio, radio_state_name(s.radio_state), sizeof(h.radio));
     const char *input = !s.input_seen ? "none" : s.timed_out ? "timed_out" : s.input_age_ms < 3000 ? "live" : "idle";
     strlcpy(h.input, input, sizeof(h.input));

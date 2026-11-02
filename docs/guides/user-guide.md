@@ -1,7 +1,7 @@
 # User guide
 
-How the controller behaves and how to use it day to day. Building and first-time flashing:
-[ASSEMBLY.md](ASSEMBLY.md). Adding the bracelets to your show: [SETUP.md](SETUP.md).
+How the controller behaves and how to use it day to day. Building and first-time flashing: see
+[build guide](../build/README.md). Adding the devices to your show: [show setup guide](show-setup.md).
 
 ## Powering up
 
@@ -25,7 +25,7 @@ connection after 15 s, it opens its own **setup hotspot**.
 
 - It opens when there's no Ethernet link and no Wi-Fi connection for 15 s. It closes again once the controller
   is connected and nobody is using the hotspot.
-- To join your Wi-Fi: go to **Network**, then **Scan for networks**, pick yours, enter the password and choose
+- To join your Wi-Fi: go to **Network**, then **Scan for networks**, click **Use** next to yours, enter the password and choose
   **Save & reboot**. After the reboot, reconnect your phone or laptop to your normal Wi-Fi and open
   `http://net2rf.local/`. If it couldn't join, the hotspot comes back within about 20 s and the Network page
   shows why: network not found (the ESP32 only does **2.4 GHz**), wrong password, or weak signal.
@@ -46,15 +46,15 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 | Page | What's there |
 |---|---|
 | **Dashboard** | Input rate and packet counters, RF airtime and counters, radio status, device info with free memory and flash; a notice when newer firmware is available; the last colour sent to each zone; other controllers on the network with their live state; **Test mode** (off, solid colour, cycle R/G/B/W, a palette **fade** or a candle **flicker**, optionally started at every power-up); the **RF output** and **Radio power** switches, and **All off** |
-| **Zones** | Add, name, enable and address zones; choose whether All Zones is a base layer under the others; send a colour, off, a fade in or a fade out to one zone; **Zone walk** lights one zone at a time so you can see which bracelets belong where |
-| **Devices & Radio** | Controller name, bracelet protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
+| **Zones** | Add, name, enable and address zones; choose whether All Zones is a base layer under the others; send a colour, off, a fade in or a fade out to one zone; **Zone walk** lights one zone at a time so you can see which devices belong where |
+| **Devices & Radio** | Controller name, device protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
 | **Network** | Current connection and the settings above |
 | **Tools** | Testing and diagnostics, described [below](#tools) |
-| **System** | Firmware info (version, free memory, free flash) and **Update firmware** (from GitHub releases or a file); an **Advanced** section with the flash partition breakdown; OLED display type and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
+| **System** | Firmware info (version, free memory, free flash) and **Update firmware** (from GitHub releases or a file); an **Advanced** section with the flash partition breakdown; OLED sleep time and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
 
 The pill row at the top of every page shows the radio, input and network state at a glance.
 
-![Dashboard](images/dashboard.png)
+![Dashboard](../images/dashboard.png)
 
 ### Tools
 
@@ -62,10 +62,10 @@ The everyday tools are always shown:
 
 | Tool | What it's for |
 |---|---|
-| **Which protocol is my device?** | Alternates the two bracelet protocols: the device lights red for protocol 0, green for protocol 1 |
+| **Which protocol is my device?** | Alternates the two device protocols: the device lights red for protocol 0, green for protocol 1 |
 | **Range walk** | Cycles red, green, blue, white every 2 s on all zones while you walk the area with a device, with the TX power setting next to it |
 | **Identify** | Flickers the status LED and flashes *THIS ONE* on the OLED for 15 s, to tell controllers apart |
-| **Amplifier power** | Switches an external RF amplifier on and off, once a power switch is wired to IO2 (tick *Switch wiring* first). See the [assembly guide](ASSEMBLY.md#amplifier-power-switch). |
+| **Amplifier power** | Switches an external RF amplifier on and off, once a power switch is wired to IO2 (tick *Switch wiring* first). It can also power the amp down after a set time without a transmission, and back up for the next one. See the [assembly guide](../build/amplifier.md#amplifier-power-switch). |
 | **Input monitor** | The channel values arriving from xLights / FPP right now, per zone: shows a wrong start channel or colour order at a glance |
 | **xLights setup** | The exact controller and model settings for the current zones |
 
@@ -77,7 +77,7 @@ The everyday tools are always shown:
 | **Send raw packet** | Send any 7-byte packet, with presets |
 | **Address probe** | Steps through the groups one by one, to find which group a device is on |
 | **Transmit log** | The last 24 RF packets: when, to which groups, what command. Shows the base layer at work (for example *all except groups 2, 3*: red). |
-| **Channel meter** | Live signal strength on the bracelet frequency, measured between transmissions: spot other transmitters and pick the listen-before-transmit threshold |
+| **Channel meter** | Live signal strength on the device frequency, measured between transmissions: spot other transmitters and pick the listen-before-transmit threshold |
 
 ### Controlling output
 
@@ -91,24 +91,27 @@ The everyday tools are always shown:
     times a second, as much as the radio carries, so it's a slow, guttering flame rather than a fast one.
   - **Start this mode at power-up**: the mode running now, with its colours, starts on its own after every
     power-up or restart: lights in pumpkins or a window come back after a power cut. Press **Off** with it ticked,
-    or untick it, to stop that.
+    or untick it, to stop that. A show takes over: while DDP or E1.31 is arriving the controller follows it, and
+    the mode comes back 10 s after the input stops. A mode you start by hand stays on over a show.
+  - **Saved presets**: name the palette in the editor and press **Save preset**. Up to 8 are kept on the controller
+    and in its settings export.
 - **RF output off** stops all transmission while still receiving and counting the show data. Turning it back on
   re-sends the current colours. The radio already sits idle between updates, so this changes nothing on air
   beyond stopping the updates.
 - **Radio power off** also puts the radio chip to sleep, to save a little power when the controller isn't in
   use. Nothing is sent until you switch it back on, which restarts the radio and re-sends the current colours.
   The setting survives a reboot.
-- **All off** blanks every bracelet once. They stay dark until the show input changes a colour.
-- **Input timeout:** if no show data arrives for 5 minutes (configurable, or 0 for never), the bracelets are
+- **All off** blanks every device once. They stay dark until the show input changes a colour.
+- **Input timeout:** if no show data arrives for 5 minutes (configurable, or 0 for never), the devices are
   switched off.
 
 ### Receiver mode
 
 The **Receiver mode** switch on the Dashboard turns the controller into a listener: it stops transmitting and
-instead decodes every bracelet command it hears on 433 MHz, from this project's controllers, the vendor's DMX
+instead decodes every device command it hears on 433 MHz, from this project's controllers, the vendor's DMX
 transmitter or a Flipper. Both protocols are decoded at once (the radio listens between their two frequencies).
 Use it to check what a transmitter is really sending, to walk the yard and see where commands still arrive (the
-signal strength is shown per transmission), or as a stand-in bracelet while you have none.
+signal strength is shown per transmission), or as a stand-in device while you have none.
 
 - The Dashboard's **Heard on air** card lists every group with the colour it was last told, how many commands it
   got, their signal strength and when; below it, the latest transmissions (repeats of one transmission are
@@ -123,14 +126,16 @@ signal strength is shown per transmission), or as a stand-in bracelet while you 
 - **Tuning** (on the card): *normal* (162 kHz on the CC1101, 167 kHz on the SX1278) is the most sensitive.
   *Near-field* caps the receiver's gain: use it when the transmitter is within a few metres, for example a second
   controller on the same bench, since a strong signal overloads the receiver and frames stop decoding while the
-  signal level reads high. *Wide band* (325 / 250 kHz) is for transmitters that are well off frequency.
+  signal level reads high. *Wide band* (325 / 250 kHz) is for transmitters that are well off frequency. With two
+  Ra-02 controllers about 16 inches apart at full power, *normal* decoded nothing, while *near* and *wide* decoded
+  every command. Side by side, only *wide* did.
 - **Raw captures:** every burst of remote-control-like pulses that is louder than the noise floor is kept, whether
   it decoded or not, for as long as receiver mode stays on (switching it off, or a firmware update, clears them
   and frees their memory). The last 4 are kept, and undecoded ones are kept longest. *View* draws the waveform, groups
   the mark and space widths, and, if the signal is pulse-width coded, reads its bits as hex: a quick way to see
   what an unknown transmitter or remote sends. *.ook* downloads it in [rtl_433](https://github.com/merbanan/rtl_433)'s
   pulse format; `rtl_433 -r capture.ook -A` runs rtl_433's pulse analyser on it.
-- Bracelets that were already lit before the receiver started only appear once something changes them.
+- Devices that were already lit before the receiver started only appear once something changes them.
 
 ## Front panel
 
@@ -142,7 +147,7 @@ signal strength is shown per transmission), or as a stand-in bracelet while you 
 | **USER**, hold 5 s | **Network reset:** DHCP, Ethernet on, setup hotspot on fallback, admin password cleared, then reboot. Everything outside the network part is kept. |
 | **USER**, hold 15 s | **Factory reset:** everything erased, then reboot |
 | **EN** | Reset (reboot) |
-| **BOOT** + EN | Hold BOOT, tap EN, release BOOT: serial bootloader, for flashing ([ASSEMBLY.md](ASSEMBLY.md#flashing)) |
+| **BOOT** + EN | Hold BOOT, tap EN, release BOOT: serial bootloader, for flashing ([build guide](../build/flashing.md)) |
 
 While USER is held, the OLED shows what will happen on release, and the status LED shows it too, for
 controllers without a display: **steady on** while it's just a press, a **slow even blink** (once a second)
@@ -162,7 +167,7 @@ The WT32-ETH01's onboard LED (IO2):
 | Rapid flicker | *Identify* is running (Tools page) |
 | Steady on, then slow blink, then rapid blink | USER is being held: see [Buttons](#buttons) |
 
-When an [amplifier power switch](ASSEMBLY.md#amplifier-power-switch) is fitted, IO2 switches the amplifier
+When an [amplifier power switch](../build/amplifier.md#amplifier-power-switch) is fitted, IO2 switches the amplifier
 instead and the LED is not driven.
 
 ### OLED
@@ -216,7 +221,7 @@ controller which release is the latest. When that is newer than the running firm
 Nothing is installed automatically. The controller forgets this at a restart, until a browser opens the page
 again.
 
-![System page: firmware version, free memory and flash, and the update card](images/system.png)
+![System page: firmware version, free memory and flash, and the update card](../images/system.png)
 
 **Free memory** is shown on the Dashboard and the System page. The bar turns amber with a ⚠ *Low memory* note
 when less than about 60 KB is free, and red below about 30 KB or if it has ever dropped under 8 KB since the
@@ -242,19 +247,17 @@ The controller keeps its settings in two parts:
 Each part is exported, imported and reset by itself, under **System**:
 
 - **Export settings / Export network** download one part as its own JSON file (`net2rf-xxxx-settings.json`,
-  `net2rf-xxxx-network.json`). Neither includes the Wi-Fi or admin password.
+  `net2rf-xxxx-network.json`). Neither includes the Wi-Fi or admin password. The settings file also holds the test
+  mode that starts at power-up, the amplifier power switch and your saved fade presets.
 - **Import** replaces only the part the chosen file holds, then reboots. To set up a second controller the same
   way, import the first one's *settings* file and leave its network alone.
-- **Reset settings** puts zones, devices, radio and the rest back to defaults and keeps the network
-  connection.
+- **Reset settings** puts zones, devices, radio and the rest back to defaults, including the power-up test mode,
+  the amplifier power switch and saved fade presets, and keeps the network connection. Zones go back to protocol
+  1: a protocol 0 setup needs its protocol set again.
 - **Reset network** goes back to DHCP, forgets the Wi-Fi network and clears the admin password, and keeps
   everything else. The controller may come up on another address or on its setup hotspot. Holding USER for
   5 s does the same.
 - **Factory reset** clears both. Holding USER for 15 s does the same.
-
-Two small settings are kept apart from both parts: the test mode that **starts at power-up**, and the
-**amplifier power switch** (Tools page). They are not in the export files and *Reset settings* leaves them, but a
-factory reset clears them.
 
 Settings are not converted between firmware versions with a different settings layout: after such an update
 the affected part starts from its defaults. Export before updating if you want to restore it.
@@ -266,19 +269,16 @@ controller *Discover*, by hostname, with its IP, firmware version and channel co
 and broadcast, so it only works within one subnet (xLights also asks controllers it already knows by IP).
 xLights doesn't know this type of device yet, so it adds it as an **E1.31** controller with no vendor: change
 the protocol to **DDP**, untick *Keep Channel Numbers* and pick the vendor and model
-([SETUP.md](SETUP.md#5-add-it-to-xlights)).
+([show setup guide](show-setup.md#5-add-it-to-xlights)).
 
 ## Several controllers
 
 Each controller lists the others on its dashboard, with their state and airtime, and exactly one of them answers
 at `net2rf.local`. Controllers in radio range of each other share the 433 MHz channel: see
-[RF.md](RF.md#multiple-controllers) before running more than one.
+[radio notes](../reference/radio.md#multiple-controllers) before running more than one.
 
-To cover a big yard with one show, make them a **coverage group** (*Devices & Radio* → *Coverage group*): tick
-*Sync enabled* on each, make the one xLights sends to the master, and the rest remotes. The dashboard then shows
-a *Coverage group* card (the master lists each remote and how well its clock is synced; a remote shows the master
-it follows), a pill at the top, and the OLED's status page shows the group on its last line. See
-[RF.md](RF.md#coverage-group).
+To cover a big yard with one show, make them a **coverage group**: see
+[Using several controllers](multiple-controllers.md).
 
 ## Recovering a controller
 
@@ -288,7 +288,7 @@ it follows), a pill at the top, and the OLED's status page shows the group on it
 | Forgot the admin password | Hold USER 5 s (network reset) |
 | Zones or radio settings are a mess, but it's on the network | *System → Reset settings* (keeps the network part) |
 | Everything is wrong | Hold USER 15 s (factory reset), or *System → Factory reset* |
-| A firmware update misbehaves | It rolls back by itself; otherwise flash the `.factory.bin` over serial ([ASSEMBLY.md](ASSEMBLY.md#flashing)) |
+| A firmware update misbehaves | It rolls back by itself; otherwise flash the `.factory.bin` over serial ([build guide](../build/flashing.md)) |
 | Radio *not detected* | Check the radio's wiring and 3.3 V, and that the right module is selected under *Devices & Radio* |
 | Radio *data line fault* | The CC1101's GDO0 isn't reaching IO33: check that wire |
-| Bracelets don't react | Press their button (they may be asleep), check they're on the right protocol and group, move closer, raise TX power |
+| Devices don't react | Check they're switched on (press the button if they have one), on the right protocol and group, then move closer or raise TX power |

@@ -78,20 +78,33 @@ jobs:
         with:
           path: site
 
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          # This version's section of CHANGELOG.md, then how to install it
+          awk -v head="## [${FW_VERSION}]" 'index($0, head) == 1 {on = 1; next} /^## / {on = 0} /^\[[0-9]/ {on = 0} on' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::warning::CHANGELOG.md has no section for ${FW_VERSION}"
+          fi
+          {
+            echo
+            echo "## Install"
+            echo
+            echo "**New install:** use the [browser flasher](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/) (Chrome or Edge),"
+            echo "or \`python3 -m esptool --chip esp32 write-flash 0x0 net2rf-led-${FW_VERSION}.factory.bin\`"
+            echo "(XIAO ESP32-S3: \`--chip esp32s3 write-flash 0x0 net2rf-led-xiao-esp32s3-${FW_VERSION}.factory.bin\`)."
+            echo
+            echo "**Update:** the controller's *System → Update firmware → From GitHub releases* picks the right file for its board."
+            echo "To upload by hand: \`net2rf-led-${FW_VERSION}.bin\` for a WT32-ETH01, \`net2rf-led-xiao-esp32s3-${FW_VERSION}.bin\` for a XIAO ESP32-S3."
+          } >> release-notes.md
+
       - name: GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
-          body: |
-            **New install:** use the browser flasher (Chrome/Edge) at https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-            or `python3 -m esptool --chip esp32 write-flash 0x0 net2rf-led-${{ env.FW_VERSION }}.factory.bin`
-            (XIAO ESP32-S3: `--chip esp32s3 write-flash 0x0 net2rf-led-xiao-esp32s3-${{ env.FW_VERSION }}.factory.bin`).
-
-            **Update:** the controller's *System → Update firmware → From GitHub releases* picks the right file for its
-            board. To upload by hand: `net2rf-led-${{ env.FW_VERSION }}.bin` for a WT32-ETH01,
-            `net2rf-led-xiao-esp32s3-${{ env.FW_VERSION }}.bin` for a XIAO ESP32-S3.
+          body_path: release-notes.md
 
   pages:
     # Pages needs a public repo (or a paid plan) and Settings → Pages → Source: GitHub Actions.

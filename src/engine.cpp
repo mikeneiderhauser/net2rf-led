@@ -13,6 +13,7 @@
 using namespace rfproto;
 
 Engine g_engine;
+void (*g_before_tx_hook)() = nullptr;
 void (*g_rx_heard_hook)(uint8_t protocol, const uint8_t *packet, int16_t rssi_dbm) = nullptr;
 
 static SemaphoreHandle_t s_lock = nullptr;
@@ -219,14 +220,28 @@ void Engine::on_e131(const uint8_t *buf, size_t len, uint32_t src_ip) {
 // Scheduling
 // ---------------------------------------------------------------------------------------------
 
+bool Engine::input_overrides_test_(uint32_t now) const {
+    return this->test_yields_ && this->test_mode_ != TestMode::OFF && this->in_.seen &&
+           now - this->in_.last_rx_ms < TEST_RESUME_MS;
+}
+
 void Engine::update_wants_(uint32_t now) {
+    bool paused = this->input_overrides_test_(now);
+    if (paused != this->test_paused_) {
+        this->test_paused_ = paused;
+        this->test_sent_ = false;
+        for (auto &zs : this->zones_)
+            zs.resend();
+        log_i("Test mode %s", paused ? "paused: live input" : "resumed");
+    }
+    TestMode test = paused ? TestMode::OFF : this->test_mode_;
     uint8_t cycle[3] = {0, 0, 0};  // the cycle or fade colour
-    if (this->test_mode_ == TestMode::CYCLE) {
+    if (test == TestMode::CYCLE) {
         static const uint8_t COLORS[4][3] = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}, {255, 255, 255}};
         memcpy(cycle, COLORS[(now / TEST_CYCLE_MS) % 4], 3);
-    } else if (this->test_mode_ == TestMode::FADE) {
+    } else if (test == TestMode::FADE) {
         fade_color(this->fade_, now, cycle);
-    } else if (this->test_mode_ == TestMode::FLICKER) {
+    } else if (test == TestMode::FLICKER) {
         flicker_color(this->test_rgb_, now / FLICKER_STEP_MS, cycle);
     }
     uint8_t width = zone_width(g_app);
@@ -241,10 +256,9 @@ void Engine::update_wants_(uint32_t now) {
         if (base + width > MAX_CHANNELS)
             continue;
         zs.gated = false;
-        if (this->test_mode_ == TestMode::SOLID) {
+        if (test == TestMode::SOLID) {
             zs.r = this->test_rgb_[0], zs.g = this->test_rgb_[1], zs.b = this->test_rgb_[2], zs.fx = 0;
-        } else if (this->test_mode_ == TestMode::CYCLE || this->test_mode_ == TestMode::FADE ||
-                   this->test_mode_ == TestMode::FLICKER) {
+        } else if (test == TestMode::CYCLE || test == TestMode::FADE || test == TestMode::FLICKER) {
             zs.r = cycle[0], zs.g = cycle[1], zs.b = cycle[2], zs.fx = 0;
         } else if (g_app.mode == MODE_VENDOR) {
             // Vendor transmitter layout: [boot code][group][R][G][B]. Only transmit while the boot code is 85,
@@ -309,8 +323,8 @@ void Engine::update_wants_(uint32_t now) {
 
     // Test mode, protocol 1 zones: one broadcast packet per colour change instead of one per zone. Protocol 0 zones
     // are still sent zone by zone.
-    if (this->test_mode_ != TestMode::OFF && this->can_broadcast_()) {
-        const uint8_t *rgb = this->test_mode_ == TestMode::SOLID ? this->test_rgb_ : cycle;
+    if (test != TestMode::OFF && this->can_broadcast_()) {
+        const uint8_t *rgb = test == TestMode::SOLID ? this->test_rgb_ : cycle;
         if (!this->test_sent_ || memcmp(rgb, this->test_last_rgb_, 3) != 0) {
             this->queue_broadcast_(ACTION_COLOR, rgb[0], rgb[1], rgb[2]);
             memcpy(this->test_last_rgb_, rgb, 3);
@@ -764,6 +778,8 @@ void Engine::run_() {
                     zs.resend();  // push new addressing/protocols out immediately
                 this->tuned_ = false;
             }
+            if (this->test_paused_ && !this->input_overrides_test_(now))
+                this->input_dirty_ = true;  // the input stopped: back to the test mode
             if (this->config_dirty_ || this->input_dirty_ || cycle_step)
                 this->update_wants_(now);
             this->config_dirty_ = this->input_dirty_ = false;
@@ -826,6 +842,8 @@ void Engine::run_() {
             }
         }
 
+        if ((remote_slot || have_job) && g_before_tx_hook)
+            g_before_tx_hook();
         if (remote_slot) {
             this->run_remote_slot_();
             vTaskDelay(1);
@@ -928,6 +946,7 @@ void Engine::set_test(TestMode mode, uint8_t r, uint8_t g, uint8_t b) {
             zs.resend();  // put the real (input-driven) colours back
     }
     this->test_mode_ = mode;
+    this->test_yields_ = this->test_paused_ = false;  // asked for now: it runs, show or no show
     this->test_rgb_[0] = r, this->test_rgb_[1] = g, this->test_rgb_[2] = b;
     this->test_sent_ = false;
     this->input_dirty_ = true;
@@ -1142,6 +1161,7 @@ void Engine::status_json(JsonObject o) {
     hex_into(rgb, this->test_rgb_, 3);
     test["rgb"] = rgb;
     test["boot"] = this->boot_test_;
+    test["paused"] = this->test_paused_;
     JsonObject fade = test["fade"].to<JsonObject>();
     JsonArray pal = fade["palette"].to<JsonArray>();
     for (uint8_t i = 0; i < this->fade_.n; i++) {
@@ -1159,7 +1179,7 @@ void Engine::status_json(JsonObject o) {
         hex_into(rgb, c, 3);
         j["rgb"] = rgb;
         j["fx"] = gs.fx;
-        // The last packet sent on each protocol the zone drives; "packet" is the first of them (older clients).
+        // The last packet sent on each protocol the zone drives.
         char pkt[PACKET_LEN * 2 + 1] = "";
         JsonArray packets = j["packets"].to<JsonArray>();
         for (uint8_t p = 0; p < NUM_PROTOCOLS; p++) {
@@ -1170,11 +1190,7 @@ void Engine::status_json(JsonObject o) {
             JsonObject e = packets.add<JsonObject>();
             e["p"] = p;
             e["pkt"] = pkt;
-            if (j["packet"].isNull())
-                j["packet"] = pkt;
         }
-        if (j["packet"].isNull())
-            j["packet"] = "";
         j["tx"] = gs.tx_count;
         j["tx_age_ms"] = gs.have_sent() ? (int32_t) (now - gs.last_tx_ms()) : -1;
         if (g_app.mode == MODE_VENDOR) {
@@ -1193,7 +1209,7 @@ EngineSnapshot Engine::snapshot() {
     s.packets = this->in_.packets;
     s.input_seen = this->in_.seen;
     s.timed_out = this->in_.timed_out;
-    s.test_active = this->test_mode_ != TestMode::OFF;
+    s.test_active = this->test_mode_ != TestMode::OFF && !this->test_paused_;
     s.output_enabled = g_app.output_enabled && !g_app.receiver;  // a receiver never transmits
     s.last_source = this->in_.last_source;
     s.input_age_ms = this->in_.seen ? millis() - this->in_.last_rx_ms : 0;

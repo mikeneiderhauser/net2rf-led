@@ -1,37 +1,34 @@
 # TODO
 
-Open items only. What has been done and tested is recorded in [docs/DEVICES.md](docs/DEVICES.md) and the git
+Open items only. What has been done and tested is recorded in [compatibility list](docs/reference/compatibility.md) and the git
 history.
 
 ## Needs a second controller or more devices
 
-- [ ] **Receiver mode on air**, CC1101 and Ra-02: decode range against a second controller; which tuning profile
-  works on the bench (*near* expected) and across the yard (*normal*); edge interrupt load on a noisy channel
-  (`edges` / `dropped` / `noise_pauses` in `/api/status`); whether the noise-floor filter drops real weak bursts.
-- [ ] **SX1278 receive:** confirm the AGC setting (`RegRxConfig` 0x08, gain picked when RX starts) holds up when a
-  transmitter comes and goes; otherwise fix the LNA gain or add an RSSI trigger.
-- [ ] **Raw captures:** check a real protocol 0 / protocol 1 burst against the bit guess, and an `.ook` export in
-  rtl_433.
-- [ ] **Coverage group on real hardware** (master + 1-2 remotes): clock error over Ethernet and Wi-Fi
+- [ ] **Receiver mode beyond the bench:** the Ra-02 decodes both protocols on the bench (see the compatibility list).
+  Still to check: *normal* across the yard; whether the noise-floor filter drops real weak bursts.
+- [ ] **SX1278 receive:** *normal* decodes nothing from a strong nearby transmitter, so its AGC doesn't back off in time.
+  Check it recovers at range when a transmitter comes and goes; otherwise fix the LNA gain or add an RSSI trigger.
+- [ ] **Raw captures:** captures save, decode and export; open an `.ook` export in rtl_433.
+- [ ] **Coverage group, beyond two controllers on Wi-Fi** (that case works: see `docs/reference/compatibility.md`): watch a device out of one controller's
+  range to confirm it follows the other. Then master + 2 remotes: clock error
   (`group.clock.error_us`), slot timing on air (receiver mode or an SDR: each controller's copies back to back,
   no overlap), `late` / `missed` counts during a busy sequence, and a coverage walk. Then tune the guard
   (3 ms + 2 × error), the lead (15 ms + 2 × round trip) and the settle repeat (1 s); check the master stays
   responsive with 3+ remotes at 3 copies (a plan blocks the engine until it ends).
-- [ ] **Listen before transmit** with two radios in range: check `lbt_waits` / `lbt_forced` while both run busy
-  sequences, and that the SX1278 RX path (packet mode, DIO2 = TimeOut) doesn't disturb its TX data line. Then
-  decide whether to turn it on by default. (Default threshold is -75 dBm: a quiet CC1101 read -84 to -87.)
 
 ## Needs hardware checks
 
-- [ ] **XIAO ESP32-S3 build** on a real board: boot, Wi-Fi, CC1101 on the documented pins, BOOT as the USER button,
+- [ ] **XIAO ESP32-S3 build** on a real board: boot, Wi-Fi, the radio on the documented pins, BOOT as the USER button,
   the per-board firmware file in the updater and the browser flasher.
 - [ ] **Amplifier power switch** (`/api/amp`, IO2): no switch has been wired yet. Check the buck's EN polarity, that
-  the amp follows the switch, and that serial flashing still works with the gate pull-down on IO2.
+  the amp follows the switch, and that serial flashing still works with the gate pull-down on IO2. Then the idle
+  power-down: that 0.3 s of warm-up is enough for the first packet to go out at full power.
 - [ ] **Fade and flicker** on bracelets of both protocols (fade has run on Wally's Lights pucks).
 
 ## xLights and FPP
 
-- [ ] Still to run from xLights: *Upload Input*, the All + 4 model, and the Net2RF controller definition itself
+- [ ] Still to run from xLights: the Net2RF controller definition itself
   (the Mac App Store build of xLights can't have the file added).
 - [ ] Offer the controller definition to xLights: an enhancement issue first, then a PR adding
   `resources/controllers/net2rf.xcontroller`.
@@ -42,19 +39,11 @@ history.
      model looked up from the model string `Net2RF-LED`), together with the definition PR.
 
   Until then a discovered controller is created as E1.31 with no vendor and has to be corrected by hand.
-- [ ] DMX mode in xLights: decide how DMX fixtures attach (the definition has no serial port, and upload only sets
-  the zone count in pixel mode).
 
 ## Docs
 
-- [ ] Rework docs/SETUP.md section 5 ("Add it to xLights"), which carries an under-construction note: new
-  screenshots of the controller properties and the visualiser with the Net2RF All + 15 model on port 1, and a pass
-  over the steps so they lead with the ready-made model, *Upload Output* and *Discover*.
-- [ ] Sequencing advice in docs/SETUP.md: it suggests letting the devices follow a group such as the floods. A
-  flood sequence with fades and strobes measured 19% airtime on average and over 40% in bursts (one 94 ms packet
-  per colour step). Recommend sequencing the device model by itself with held, solid colours, with those numbers.
-- [ ] The docs still say "bracelet" where they mean any device (about 180 mentions); the web UI and source say
-  "device".
+- [ ] New xLights screenshots for the show setup guide: the controller properties and the visualiser with the Net2RF
+  model on port 1.
 
 ## Ideas, not started
 
@@ -71,18 +60,3 @@ history.
 - [ ] Use the devices' own fade out / fade in from pixel mode (one packet instead of a staircase of colour steps).
 - [ ] Learn a protocol from a raw capture.
 - [ ] MQTT, or a Home Assistant integration beyond the REST examples.
-- [ ] Larger firmware slots on boards with 8 MB flash (the layout uses 4 MB; the firmware is at about 78% of its slot).
-
-## Parked: idle and sleep of protocol 0 bracelets
-
-Observed on the Banana Ball bracelets: they ignore the radio until their button is pressed, and about 20 minutes
-after the last command they turn red by themselves while still listening. Not a priority (2026-10-04).
-
-- [ ] How do they go to sleep (long press, a longer idle time), and can anything over the radio wake them or put
-  them to sleep?
-- [ ] Is the red an idle colour or a low-battery warning? Retest with fresh batteries.
-- [ ] Does re-sending the zone state every minute (`refresh_ms` = 60000) stop the red? Leave one idle for over
-  25 minutes.
-- [ ] If it does: a keep-alive setting (perhaps only while input is live), and whether the input timeout should
-  keep sending "off". Manual sends (Send, Zone walk, raw) don't update a zone's stored state, so with refresh on
-  they are replaced within one interval; decide whether that's acceptable.

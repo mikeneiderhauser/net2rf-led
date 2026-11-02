@@ -119,6 +119,40 @@ void test_oversized_datagram_rejected() {
     TEST_ASSERT_FALSE(decode(pkt, h));
 }
 
+void test_board_and_net() {
+    Heartbeat in = sample();
+    strcpy(in.board, "xiao-esp32s3");
+    strcpy(in.net, "wifi");
+    char buf[HEARTBEAT_MAX];
+    size_t n = encode_heartbeat(in, buf, sizeof(buf));
+    TEST_ASSERT_TRUE(n > 0);
+    Heartbeat out{};
+    TEST_ASSERT_TRUE(decode_heartbeat((const uint8_t *) buf, n, out));
+    TEST_ASSERT_EQUAL_STRING("xiao-esp32s3", out.board);
+    TEST_ASSERT_EQUAL_STRING("wifi", out.net);
+    // older firmware sends neither
+    TEST_ASSERT_TRUE(decode(R"({"p":"net2rf","v":1,"id":"24DB"})", out));
+    TEST_ASSERT_EQUAL_STRING("", out.board);
+    TEST_ASSERT_EQUAL_STRING("", out.net);
+}
+
+void test_encode_longest_fits() {
+    Heartbeat in{};
+    memset(in.id, 'A', sizeof(in.id) - 1);
+    memset(in.name, 'N', sizeof(in.name) - 1);
+    memset(in.host, 'h', sizeof(in.host) - 1);
+    memset(in.fw, 'f', sizeof(in.fw) - 1);
+    strcpy(in.radio, "not_detected");
+    strcpy(in.input, "timed_out");
+    memset(in.mac, 'A', sizeof(in.mac) - 1);
+    memset(in.board, 'b', sizeof(in.board) - 1);
+    strcpy(in.net, "wifi");
+    in.out = in.test = in.hello = in.sync = in.master = true;
+    in.zones = 16, in.air = 100, in.up = 4000000000u;
+    char buf[HEARTBEAT_MAX];
+    TEST_ASSERT_TRUE(encode_heartbeat(in, buf, sizeof(buf)) > 0);
+}
+
 void test_encode_reports_small_buffer() {
     char buf[16];
     Heartbeat in = sample();
@@ -135,5 +169,7 @@ int main() {
     RUN_TEST(test_long_fields_truncated_and_control_chars_replaced);
     RUN_TEST(test_oversized_datagram_rejected);
     RUN_TEST(test_encode_reports_small_buffer);
+    RUN_TEST(test_board_and_net);
+    RUN_TEST(test_encode_longest_fits);
     return UNITY_END();
 }

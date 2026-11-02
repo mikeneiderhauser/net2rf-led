@@ -1,5 +1,7 @@
 # HTTP API
 
+The controller's JSON API, for scripts and integrations such as [Home Assistant](../guides/home-assistant.md).
+
 All endpoints are JSON. POST bodies are JSON objects. Errors return `{"ok": false, "error": "..."}` with a 4xx/5xx status.
 Successful writes return `{"ok": true, "reboot": <bool>}`; when `reboot` is true the controller restarts about a second later.
 
@@ -59,19 +61,21 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 | POST 🔒 | `/api/auth` | `{"password": "..."}`: set or change the admin password (8-64 characters); `""` removes it |
 | POST 🔒 | `/api/output` | `{"enabled": true\|false}`: global RF switch (persisted). Disabled = DDP is consumed and counted, nothing is transmitted. |
 | POST 🔒 | `/api/radio` | `{"power": true\|false}`: radio chip power (persisted). `false` puts the chip to sleep: `radio.state` reads `off`, show data is still counted, and sends return 409 (`radio is shut down`). `true` re-initialises it and re-sends the current colours. |
-| POST 🔒 | `/api/test` | `{"mode": "off"\|"solid"\|"cycle"\|"fade"\|"flicker", "rgb": "FF0000"}`: override DDP input. **fade** holds each colour of a palette, then fades to the next, round and round: `"palette": ["FF5000", "7000FF", ...]` (1-8 colours), `"fade_s"`, `"hold_s"` (0-600); anything left out keeps the Halloween default (orange, purple, green, red, candle yellow; 3 s / 4 s). It sends a step about every 0.3 s while fading and nothing while holding. **flicker** is a candle in the `rgb` colour: a random level (55-100 %, redder when dimmer) about 3 times a second. `"boot": true` also starts this mode, with its colours, at every power-up; `false` (or `"off"` with `"boot": false`) stops that. The status shows `engine.test` = `{mode, rgb, boot, fade: {palette, fade_s, hold_s}}`. |
-| GET | `/api/amp` | Amplifier power switch (see *Amplifier power switch* below): `{fitted, active_low, on, pin, shares_status_led}`. Also in `/api/status` as `device.amp`. Always open. |
-| POST 🔒 | `/api/amp` | Any of `{"fitted": true, "active_low": true, "on": false}`, saved and kept across restarts. Returns `{"ok": true, "amp": {...}}`. 400 for a value that isn't true/false. |
-| POST 🔒 | `/api/send` | `{"zone": 0, "action": "color"\|"off"\|"fxa"\|"fxb"\|"fxc", "rgb": "FF0000"}` (protocol 0: `fxa` = fade in to the last colour, `fxb` = fade out, `fxc` = a third effect packet with no known result); `"zone": "all"` (or -1) = every bracelet: one broadcast packet on protocol 1, one per enabled zone on protocol 0. `"all"` + `"off"` behaves like `/api/all-off`. 400 for a zone that isn't saved; 409 when output is disabled. |
-| POST 🔒 | `/api/all-off` | Leave test mode and switch every bracelet off. Bracelets then stay off until the input changes a colour. 409 when output is disabled. |
+| POST 🔒 | `/api/test` | `{"mode": "off"\|"solid"\|"cycle"\|"fade"\|"flicker", "rgb": "FF0000"}`: override DDP input. **fade** holds each colour of a palette, then fades to the next, round and round: `"palette": ["FF5000", "7000FF", ...]` (1-8 colours), `"fade_s"`, `"hold_s"` (0-600); anything left out keeps the Halloween default (orange, purple, green, red, candle yellow; 3 s / 4 s). It sends a step about every 0.3 s while fading and nothing while holding. **flicker** is a candle in the `rgb` colour: a random level (55-100 %, redder when dimmer) about 3 times a second. `"boot": true` also starts this mode, with its colours, at every power-up; `false` (or `"off"` with `"boot": false`) stops that. The status shows `engine.test` = `{mode, rgb, boot, paused, fade: {palette, fade_s, hold_s}}`. |
+| GET | `/api/amp` | Amplifier power switch (see *Amplifier power switch* below): `{fitted, active_low, on, idle_min, asleep, pin, shares_status_led}`. Also in `/api/status` as `device.amp`. Always open. |
+| POST 🔒 | `/api/amp` | Any of `{"fitted": true, "active_low": true, "on": false, "idle_min": 30}`, saved and kept across restarts. `idle_min` (0-1440, 0 = never): an amp that is on powers down after that many minutes without a transmission and back up, 0.3 s ahead, for the next one; `asleep` is true meanwhile, and `on` stays true. Returns `{"ok": true, "amp": {...}}`. 400 for a bad value. |
+| GET | `/api/presets` | Fade palettes saved on this controller: `{"presets": [{"name", "palette", "fade_s", "hold_s"}]}`. Always open. |
+| POST 🔒 | `/api/presets` | `{"name": "Xmas", "palette": ["FF0000", "00FF00"], "fade_s": 3, "hold_s": 4}` adds a preset, or replaces the one of that name; `{"delete": "Xmas"}` removes one. Up to 8, names up to 20 characters. Returns the list. |
+| POST 🔒 | `/api/send` | `{"zone": 0, "action": "color"\|"off"\|"fxa"\|"fxb"\|"fxc", "rgb": "FF0000"}` (protocol 0: `fxa` = fade in to the last colour, `fxb` = fade out, `fxc` = a third effect packet with no known result); `"zone": "all"` (or -1) = every device: one broadcast packet on protocol 1, one per enabled zone on protocol 0. `"all"` + `"off"` behaves like `/api/all-off`. 400 for a zone that isn't saved; 409 when output is disabled. |
+| POST 🔒 | `/api/all-off` | Leave test mode and switch every device off. Devices then stay off until the input changes a colour. 409 when output is disabled. |
 | GET | `/api/tools` | Live data for the Tools page: `tx` = the last 24 transmissions, newest first (`age_ms`, `p` protocol, `pkt` hex, `n` repeats, `manual`, `ok`), `tx_total`, and `input` (`start`, `width`, `channels`: the raw values the zones read). Always open. |
-| GET 🔒 | `/api/rssi` | Listen on the bracelet frequency for about 20 ms, between transmissions: `peak_dbm`, `avg_dbm`, `freq_hz`. 409 if the radio can't listen (off, not ready). |
+| GET 🔒 | `/api/rssi` | Listen on the device frequency for about 20 ms, between transmissions: `peak_dbm`, `avg_dbm`, `freq_hz`. 409 if the radio can't listen (off, not ready). |
 | POST 🔒 | `/api/identify` | `{"seconds": 15}` (0-120; 0 stops): flicker the status LED and flash the OLED |
-| POST 🔒 | `/api/display` | Any of `{"type": "ssd1306"\|"sh1106", "sleep_min": 10, "wake": true}`: OLED driver, minutes without a USER press before it sleeps (0-240, 0 = never), and switch a sleeping display back on. `device.display_info` in `/api/status` has `asleep`, `sleep_min` and `button`. |
+| POST 🔒 | `/api/display` | Any of `{"sleep_min": 10, "wake": true}`: minutes without a USER press before it sleeps (0-240, 0 = never), and switch a sleeping display back on. `device.display_info` in `/api/status` has `asleep`, `sleep_min` and `button`. |
 | POST 🔒 | `/api/raw` | `{"protocol": 1, "hex": "55000FFFFF55FF", "repeats": 3, "fix": true}`. 409 when output is disabled. |
 | POST 🔒 | `/api/stats/reset` | Zero the packet counters |
 | POST / GET 🔒 | `/api/wifi/scan` | Start a scan / read results |
-| GET 🔒 | `/api/export` | Download settings. `?part=settings` gives the `app` part, `?part=network` the `network` part, each as its own file; without `part` the file holds both. Passwords are never included. |
+| GET 🔒 | `/api/export` | Download settings. `?part=settings` gives the `app` part plus `boot_test`, `amp` and `fade_presets`, `?part=network` the `network` part, each as its own file; without `part` the file holds both. Passwords are never included. |
 | POST 🔒 | `/api/import` | Body = an export file. Replaces the parts it holds (`app`, `network` or both) and leaves the other alone. Reboots. |
 | POST 🔒 | `/api/reset` | `{"what": "settings"\|"network"\|"all"}`: put that part back to defaults (`all` = both). Reboots. |
 | POST 🔒 | `/api/reboot` | Reboot |
@@ -82,7 +86,7 @@ Forgotten password: hold the front-panel button 5 s (network reset), which clear
 ## Amplifier power switch
 
 An optional output that powers an external RF amplifier up and down, e.g. through its 12 V → 5 V buck's EN pin
-([assembly guide](ASSEMBLY.md#amplifier-power-switch)). It uses `pin` (IO2 on the WT32-ETH01, D1 on the XIAO).
+([assembly guide](../build/amplifier.md#amplifier-power-switch)). It uses `pin` (IO2 on the WT32-ETH01, D1 on the XIAO).
 
 - `fitted`: a switch is wired to the pin. Until then the firmware leaves the pin alone (default `false`). On the
   WT32-ETH01, IO2 is also the status LED's pin (`shares_status_led`), and the LED is not driven while a switch is
@@ -90,7 +94,9 @@ An optional output that powers an external RF amplifier up and down, e.g. throug
 - `active_low`: the pin is low while the amp is on (default `true`): an N-FET that pulls the buck's EN low when the
   pin goes high. `false` for a switch that is on while the pin is high (e.g. a high-side P-FET driven through an
   N-FET).
-- `on`: the amp is powered. Kept across restarts. Reads `false` while no switch is fitted.
+- `on`: the amp is wanted. Kept across restarts. Reads `false` while no switch is fitted.
+- `idle_min`: powers the amp down after this many minutes without a transmission, and back up 0.3 s ahead of the
+  next one (0 = never). `asleep` is true meanwhile.
 
 Before the firmware starts, IO2 is low (it must be, for serial flashing), so with an active-low switch the amp is
 powered during boot.
@@ -102,15 +108,15 @@ powered during boot.
   "name": "Front Yard",
   "output_enabled": true,
   "role": "controller",
-  "devices": {"protocols": [0, 1], "per_zone": true, "protocol": 0, "mode": "pixel", "color_order": "RGB"},
+  "devices": {"protocols": [0, 1], "per_zone": true, "protocol": 1, "mode": "pixel", "color_order": "RGB"},
   "input":     {"ddp_enabled": true, "ddp_port": 4048, "e131_enabled": false, "e131_universe": 1,
                 "e131_multicast": true, "start_channel": 1, "timeout_s": 300},
   "radio":     {"type": "cc1101", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000,
                 "repeats": 3, "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
-                "lbt_enabled": false, "lbt_threshold_dbm": -75, "power": true},
+                "lbt_enabled": true, "lbt_threshold_dbm": -75, "power": true},
   "sync":      {"enabled": false, "master": false, "copies": 1},
   "zones": [
-    {"enabled": true, "name": "Bracelets", "protocols": [0], "addr_p0": "0002000F", "addr_p1": "01FF", "start": 1},
+    {"enabled": true, "name": "Wristbands", "protocols": [0], "addr_p0": "0002000F", "addr_p1": "01FF", "start": 1},
     {"enabled": true, "name": "Pucks", "protocols": [1], "addr_p0": "0004000F", "addr_p1": "05FF", "start": 4},
     {"enabled": true, "name": "Everyone", "protocols": [0, 1], "addr_p0": "00FFFF0F", "addr_p1": "00FF", "start": 7}
   ]
@@ -124,33 +130,31 @@ powered during boot.
   which has no effects). Broadcasts (All off, input-timeout blanking, test colours) go only to protocols some
   enabled zone uses.
 - `devices.protocols` (write): sets every zone at once. Read: what every zone uses, or, with `per_zone: true`,
-  what the zones use between them. `devices.protocol` is the default protocol (new zones when they differ, the
-  channel meter); an older client that changes it switches every zone to that protocol. Zones always keep an
+  what the zones use between them. `devices.protocol` (read-only) is the default protocol (new zones when they differ,
+  the channel meter). Zones always keep an
   address in both protocols, so nothing has to be re-entered when a zone changes protocol.
 - `devices.base_layer` (protocol 0): the zone addressed to every group (mask `FFFF`) is a base layer. A zone
   whose colour is not black is cut out of that zone's address ("everyone except"), so base changes don't
   reach it; a black zone follows the base and gets no packet of its own while the base's broadcast covers
   it. Zones that change to the same command at the same moment are sent as one packet with their masks
   combined. Default `true` for new settings, `false` for settings saved by older firmware. In `/api/status` the
-  base zone's `packet` shows the address actually used (e.g. `00FBFF0F` with group 2 cut out).
+  base zone's `packets` show the address actually used (e.g. `00FBFF0F` with group 2 cut out).
 - `devices.mode`: `pixel` (3 channels per zone: R G B in `color_order`), `dmx` (4: R, G, B, FX) or `vendor`
   (5: boot code, group, R, G, B, the LedGiftSupplier DMX transmitter's layout). Vendor mode drives protocol 1 only,
   so every enabled zone must use protocol 1 (a zone also on protocol 0 sends only protocol 1). A zone only transmits
   while its first channel is 85, and the group comes from its second channel.
 - `zones[].addr_p0`: 4 bytes (packet bytes 0-3; `00FFFF0F` = all groups, `0002000F` = group 1, `0004000F` =
   group 2, ...). `zones[].addr_p1`: group code byte + byte 6 (`00FF` = group 0, all groups; `01FF` = group 1).
-  Factory default: protocol 0 with five zones, *All Zones* and *Zone 1* to *4* (groups 1-4). Zone *k* defaults
+  Factory default: protocol 1 with five zones, *All Zones* and *Zone 1* to *4* (groups 1-4). Zone *k* defaults
   to group *k* in both protocols, and zone 0 to all groups. `zones[].start` is read-only: zone *k* starts at
-  `start_channel + k × (3, 4 or 5)`. Older clients and exports may send one `addr` per zone: it is read in the
-  default protocol, and the zone then drives that protocol alone. Settings saved by firmware before per-zone
+  `start_channel + k × (3, 4 or 5)`. Settings saved by firmware before per-zone
   protocols load with every zone on the controller's old protocol and its address kept.
-- `/api/status` → `engine.zones[].packets`: the last packet sent on each of the zone's protocols (`p`, `pkt`);
-  `packet` is the first of them.
+- `/api/status` → `engine.zones[].packets`: the last packet sent on each of the zone's protocols (`p`, `pkt`).
 - Transmit order: zones are sent when their colour changes, taking turns. When zones that reach the same
-  bracelets change together, the broader address goes first (all groups before a single group), so the more
+  devices change together, the broader address goes first (all groups before a single group), so the more
   specific colour lands last.
 - `radio.type`: `cc1101` or `sx1278`. A new or reset controller starts on `sx1278` (WT32-ETH01) or `cc1101` (XIAO ESP32-S3). `tx_power` is clamped to the module's range. `refresh_ms` defaults to 0
-  (send on change only): the bracelets latch, and extra airtime only adds interference.
+  (send on change only): the devices latch, and extra airtime only adds interference.
 - `radio.power`: `false` = radio chip shut down (same as `POST /api/radio`).
 - `role`: `controller` (default) or `receiver`. A receiver never transmits: it listens between the two protocol
   frequencies and decodes both protocols. `/api/status` → `engine.receiver` has `enabled`, `active` (listening),
@@ -170,12 +174,12 @@ powered during boot.
 - `display.sleep_min`: minutes without a USER button press before the OLED switches off (default 10, 0 = never).
 - `update.repo`: GitHub repository (`owner/name`) whose releases the web UI offers as firmware updates.
   Default `mikeneiderhauser/net2rf-led`; `""` restores the default.
-- `radio.lbt_enabled` (listen before transmit, off by default): before each update the radio listens for 2.5 ms
+- `radio.lbt_enabled` (listen before transmit, on for new settings, and settings saved by older firmware keep theirs): before each update the radio listens for 2.5 ms
   and only transmits if the strongest signal stayed below `lbt_threshold_dbm` (-120..-30, default -75).
   Otherwise it backs off a random 3-15 ms and listens again, for at most 250 ms, then sends anyway. Set the
   threshold about 10 dB above the quiet reading shown on *Devices & Radio* (`radio.lbt.last_rssi_dbm` in
-  `/api/status`). See [RF.md](RF.md#multiple-controllers).
-- `sync`: coverage group ([RF.md](RF.md#coverage-group)). `enabled` takes part; `master` (with `enabled`) makes this
+  `/api/status`). See [radio notes](radio.md#multiple-controllers).
+- `sync`: coverage group ([radio notes](radio.md#coverage-group)). `enabled` takes part; `master` (with `enabled`) makes this
   controller the one that receives the show and schedules every controller's slot; `copies` (1-3) is the frames each
   controller sends per change, used by the master for the whole group. Ignored in receiver mode. `/api/status` →
   `group`: `role` (`off`, `master`, `remote`), `mac`, `masters` (other masters alive: `name`, `mac`, `ip`), `conflict`
@@ -185,11 +189,11 @@ powered during boot.
   `ack_age_ms`), `clock` (`synced`, `samples`, `offset_us`, `error_us`, `rtt_us`), `on_time`, `late`, `missed`,
   `last_tx_age_ms`. `engine.output` adds `group_plans`, `group_settles` (master) and `group_slots`, `group_skipped`
   (remote).
-- `input.timeout_s`: blank the bracelets after this long without input. 0 = hold the last colour. On protocol 1 the
-  blank is one broadcast "off" to every group (so it also reaches bracelets in groups no zone uses).
+- `input.timeout_s`: blank the devices after this long without input. 0 = hold the last colour. On protocol 1 the
+  blank is one broadcast "off" to every group (so it also reaches devices in groups no zone uses).
 - Test mode (`/api/test`) on protocol 1 also uses one broadcast per colour change rather than one packet per zone.
 - `input.e131_*`: E1.31 listens on UDP 5568 for one universe (slots 1-512 = channels 1-512); with multicast it also
-  joins 239.255.*hi*.*lo* for that universe. Off by default so a shared universe can't drive the bracelets by accident.
+  joins 239.255.*hi*.*lo* for that universe. Off by default so a shared universe can't drive the devices by accident.
 
 ## Stats (`/api/stats`)
 
@@ -205,7 +209,9 @@ powered during boot.
 }
 ```
 
-`test_mode` is `off`, `solid`, `cycle`, `fade` or `flicker`.
+`test_mode` is `off`, `solid`, `cycle`, `fade` or `flicker`. A mode started at power-up gives way to live input
+and comes back 10 s after the input stops: `engine.test.paused` is true meanwhile. A mode started through
+`/api/test` overrides the input until it is switched off.
 
 `input.packets`/`frames` count every valid DDP or E1.31 packet and frame (`ddp_packets` / `e131_packets` split
 them; `last_source` is the protocol of the last one, `source` its sender's IP); `output.suppressed` counts zone updates that
@@ -229,7 +235,8 @@ until a browser has reported one since the controller started.
 
 Controllers find each other two ways:
 
-- **Heartbeat (live state):** every 5 s each controller broadcasts a small JSON packet on **UDP 4049** on every
+- **Heartbeat (live state):** every 5 s each controller broadcasts a small JSON packet (with its firmware, `board`
+  and `net`: `eth`, `wifi` or `ap`) on **UDP 4049** on every
   active interface (Ethernet, Wi-Fi, setup AP):
   ```json
   {"p":"net2rf","v":1,"id":"24DB","name":"Front Yard","host":"net2rf-24db","fw":"1.2.0",
@@ -260,7 +267,7 @@ group and directly to the asker. It takes no part in MultiSync playback.
 FPP has not assigned this controller a type code, and it does not borrow another product's. Players
 therefore list it by hostname and model without knowing what it is, and xLights creates it as an E1.31
 controller with no vendor: set DDP, *Keep Channel Numbers* off and the vendor yourself. The model string is
-the ID of the xLights controller definition in [`tools/xlights`](../tools/xlights/).
+the ID of the xLights controller definition in [`tools/xlights`](../../tools/xlights).
 
 `GET /api/discover`:
 

@@ -2,8 +2,6 @@
 #include "updater.h"
 
 #include <Arduino.h>
-#include <Preferences.h>
-#include <SH1106Wire.h>
 #include <SSD1306Wire.h>
 #include <Wire.h>
 
@@ -21,7 +19,6 @@ namespace panel {
 static OLEDDisplay *s_oled = nullptr;
 static uint8_t s_oled_addr = 0;
 static uint8_t s_oled_failures = 0;
-static uint8_t s_display_type = DISPLAY_SSD1306;
 static bool s_bus_started = false;
 static bool s_pins_swapped = false;  // SDA/SCL wired the wrong way round: probing alternates orientation
 static uint32_t s_next_probe_ms = 0;
@@ -153,10 +150,7 @@ static void probe_display() {
         if (!i2c_responds(addr))
             continue;
         // sda/scl = -1: we own the bus, the library must not re-begin it at its own (too fast) clock.
-        if (s_display_type == DISPLAY_SH1106)
-            s_oled = new SH1106Wire(addr, -1, -1, GEOMETRY_128_64, I2C_ONE, I2C_HZ);
-        else
-            s_oled = new SSD1306Wire(addr, -1, -1, GEOMETRY_128_64, I2C_ONE, I2C_HZ);
+        s_oled = new SSD1306Wire(addr, -1, -1, GEOMETRY_128_64, I2C_ONE, I2C_HZ);
         if (!s_oled->init()) {
             log_w("OLED at 0x%02X did not initialise", addr);
             delete s_oled;
@@ -175,7 +169,7 @@ static void probe_display() {
     s_oled->drawString(0, 28, NET2RF_BOARD_NAME);
         s_oled->display();
         s_last_draw = millis();  // leave the splash up briefly
-        log_i("OLED (%s) at 0x%02X%s", s_display_type == DISPLAY_SH1106 ? "SH1106" : "SSD1306", addr,
+        log_i("OLED at 0x%02X%s", addr,
               s_pins_swapped ? " (SDA/SCL wired swapped: working anyway)" : "");
         return;
     }
@@ -198,19 +192,8 @@ static bool oled_ok() {
     return false;
 }
 
-void set_display_type(uint8_t type) {
-    s_display_type = type == DISPLAY_SH1106 ? DISPLAY_SH1106 : DISPLAY_SSD1306;
-    Preferences p;
-    p.begin(NVS_NS, false);
-    p.putUChar("disp", s_display_type);
-    p.end();
-    drop_display("type changed");
-    s_next_probe_ms = 0;  // re-probe with the new driver right away
-}
-
 void display_json(JsonObject o) {
     o["present"] = s_oled != nullptr;
-    o["type"] = s_display_type == DISPLAY_SH1106 ? "sh1106" : "ssd1306";
     if (s_oled) {
         char a[5];
         snprintf(a, sizeof(a), "0x%02X", s_oled_addr);
@@ -268,11 +251,6 @@ void begin() {
     }
     s_button_armed = high;
     log_i("User button %s", s_button_armed ? "armed" : "not detected (no pull-up), disabled");
-
-    Preferences p;
-    p.begin(NVS_NS, true);
-    s_display_type = p.getUChar("disp", DISPLAY_SSD1306);
-    p.end();
 
     probe_display();
     if (!s_oled)

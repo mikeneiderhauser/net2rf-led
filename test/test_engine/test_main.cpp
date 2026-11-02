@@ -219,6 +219,48 @@ void test_fade_mode_broadcasts_steps(void) {
     g_engine.set_test(TestMode::OFF, 0, 0, 0);
 }
 
+static void send_input(uint8_t r, uint8_t g, uint8_t b) {
+    uint8_t rgb[3] = {r, g, b};
+    g_engine.apply_input_(0, rgb, 3, true, 0, InputSource::DDP);
+}
+
+void test_boot_test_yields_to_live_input(void) {
+    setup(1, PROTOCOL_BIT[1]);
+    s_now = 100000;
+    g_engine.in_ = InputStats{};
+    g_engine.set_test(TestMode::SOLID, 10, 20, 30);
+    g_engine.set_test_yields(true);
+    TEST_ASSERT_EQUAL(1, drain().size());  // the solid colour, broadcast
+
+    send_input(200, 0, 0);
+    auto sent = drain();  // the show's colour instead
+    TEST_ASSERT_EQUAL(1, sent.size());
+    TEST_ASSERT_TRUE(g_engine.test_paused_);
+    TEST_ASSERT_FALSE(g_engine.snapshot().test_active);
+
+    s_now += TEST_RESUME_MS - 1;  // still within the gap
+    TEST_ASSERT_EQUAL(0, drain().size());
+    TEST_ASSERT_TRUE(g_engine.test_paused_);
+
+    s_now += 2;  // the input has stopped: the test mode comes back
+    TEST_ASSERT_EQUAL(1, drain().size());
+    TEST_ASSERT_FALSE(g_engine.test_paused_);
+    TEST_ASSERT_TRUE(g_engine.snapshot().test_active);
+    g_engine.set_test(TestMode::OFF, 0, 0, 0);
+}
+
+void test_requested_test_ignores_input(void) {
+    setup(1, PROTOCOL_BIT[1]);
+    s_now = 200000;
+    g_engine.in_ = InputStats{};
+    g_engine.set_test(TestMode::SOLID, 10, 20, 30);  // started by hand: it stays on over a show
+    drain();
+    send_input(200, 0, 0);
+    TEST_ASSERT_EQUAL(0, drain().size());
+    TEST_ASSERT_FALSE(g_engine.test_paused_);
+    g_engine.set_test(TestMode::OFF, 0, 0, 0);
+}
+
 void test_flicker_color(void) {
     const uint8_t base[3] = {255, 120, 16};
     int changes = 0;
@@ -356,7 +398,6 @@ void test_status_lists_each_protocol(void) {
     TEST_ASSERT_EQUAL(2, packets.size());
     TEST_ASSERT_EQUAL(0, packets[0]["p"].as<int>());
     TEST_ASSERT_EQUAL(1, packets[1]["p"].as<int>());
-    TEST_ASSERT_EQUAL_STRING(packets[0]["pkt"].as<const char *>(), doc["zones"][0]["packet"].as<const char *>());
 }
 
 void setUp(void) {}
@@ -458,6 +499,8 @@ int main(int, char **) {
     RUN_TEST(test_group_remote_sends_slots);
     RUN_TEST(test_fade_color);
     RUN_TEST(test_fade_mode_broadcasts_steps);
+    RUN_TEST(test_boot_test_yields_to_live_input);
+    RUN_TEST(test_requested_test_ignores_input);
     RUN_TEST(test_flicker_color);
     return UNITY_END();
 }

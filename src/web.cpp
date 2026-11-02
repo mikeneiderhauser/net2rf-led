@@ -284,6 +284,7 @@ static void handle_status() {
     dev["chip"] = ESP.getChipModel();
     dev["board"] = NET2RF_BOARD_ID;  // release assets are per board
     dev["board_name"] = NET2RF_BOARD_NAME;
+    dev["uplink"] = net::uplink_name();
     dev["chip_rev"] = ESP.getChipRevision();
     dev["reset_reason"] = reset_reason();
     dev["display"] = panel::display_present();
@@ -465,25 +466,12 @@ static void handle_test() {
     t.mode = (uint8_t) m;
     t.fade = DEFAULT_FADE;
     if (m == TestMode::FADE) {
-        FadePalette &p = t.fade;
-        JsonArrayConst pal = doc["palette"].as<JsonArrayConst>();
-        if (!pal.isNull()) {
-            p.n = 0;
-            for (JsonVariantConst c : pal)
-                if (p.n < MAX_FADE_COLORS && parse_hex(c | "", p.rgb[p.n], 3))
-                    p.n++;
-            if (p.n == 0) {
-                send_error(400, "palette needs at least one RRGGBB colour");
-                return;
-            }
-        }
-        float fade_s = doc["fade_s"] | p.fade_ms / 1000.0f, hold_s = doc["hold_s"] | p.hold_ms / 1000.0f;
-        if (!(fade_s >= 0 && fade_s <= 600 && hold_s >= 0 && hold_s <= 600)) {
-            send_error(400, "fade_s and hold_s must be 0-600");
+        String err;
+        if (!fade_from_json(doc.as<JsonObjectConst>(), t.fade, err)) {
+            send_error(400, err);
             return;
         }
-        p.fade_ms = (uint32_t) (fade_s * 1000), p.hold_ms = (uint32_t) (hold_s * 1000);
-        g_engine.set_fade(p);
+        g_engine.set_fade(t.fade);
     } else {
         g_engine.set_test(m, t.rgb[0], t.rgb[1], t.rgb[2]);
     }
@@ -570,8 +558,10 @@ static void handle_export() {
     doc["firmware"] = FW_VERSION;
     {
         StateLock lock;
-        if (part != "network")
+        if (part != "network") {
             app_to_json(g_app, doc["app"].to<JsonObject>());
+            extras_to_json(doc.as<JsonObject>());
+        }
         if (part != "settings")
             net_to_json(g_net, doc["network"].to<JsonObject>(), false);  // never export the Wi-Fi password
     }
@@ -593,6 +583,11 @@ static void handle_import() {
         return;
     }
     String err;
+    static SettingsExtras extras;  // big for the web task's stack
+    if (!extras_from_json(doc.as<JsonObjectConst>(), extras, err)) {
+        send_error(400, err);
+        return;
+    }
     AppConfig next;
     NetConfig next_net;
     {
@@ -616,6 +611,7 @@ static void handle_import() {
         config_save_app(next);
     if (has_net)
         config_save_net(next_net);
+    extras_save(extras);
     schedule_reboot();
     send_ok(true);
 }
@@ -1192,20 +1188,36 @@ void begin() {
                     amp::json(out["amp"].to<JsonObject>());
                     send_json(200, out);
                 }));
+    s_server.on("/api/presets", HTTP_GET, []() {  // saved fade palettes
+        static FadePresets p;
+        config_load_fade_presets(p);
+        JsonDocument doc;
+        fade_presets_to_json(p, doc["presets"].to<JsonArray>());
+        send_json(200, doc);
+    });
+    s_server.on("/api/presets", HTTP_POST, protect([]() {
+                    JsonDocument doc;
+                    if (!parse_body(doc))
+                        return;
+                    static FadePresets p;
+                    config_load_fade_presets(p);
+                    String err;
+                    if (!fade_presets_apply(p, doc.as<JsonObjectConst>(), err)) {
+                        send_error(400, err);
+                        return;
+                    }
+                    config_save_fade_presets(p);
+                    JsonDocument out;
+                    out["ok"] = true;
+                    fade_presets_to_json(p, out["presets"].to<JsonArray>());
+                    send_json(200, out);
+                }));
     s_server.on("/api/send", HTTP_POST, protect(handle_send));
     s_server.on("/api/all-off", HTTP_POST, protect(handle_all_off));
     s_server.on("/api/display", HTTP_POST, protect([]() {
                     JsonDocument doc;
                     if (!parse_body(doc))
                         return;
-                    if (!doc["type"].isNull()) {
-                        String type = doc["type"] | "";
-                        if (type != "ssd1306" && type != "sh1106") {
-                            send_error(400, "type must be ssd1306 or sh1106");
-                            return;
-                        }
-                        panel::set_display_type(type == "sh1106" ? panel::DISPLAY_SH1106 : panel::DISPLAY_SSD1306);
-                    }
                     if (!doc["sleep_min"].isNull()) {  // minutes without a USER press before the OLED sleeps; 0 = never
                         int minutes = doc["sleep_min"] | -1;
                         if (minutes < 0 || minutes > 240) {

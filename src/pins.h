@@ -7,7 +7,7 @@
 // runtime. Fit only ONE radio at a time. The board is picked by the PlatformIO environment:
 //   wt32-eth01    (default)                 WT32-ETH01: ESP32 + LAN8720 Ethernet
 //   xiao-esp32s3  (-DNET2RF_BOARD_XIAO_S3)   Seeed XIAO ESP32-S3: Wi-Fi only, the CC1101 wiring used by
-//                                           CrispyPyro/Wireless_DMX_Receiver (docs/ASSEMBLY.md)
+//                                           CrispyPyro/Wireless_DMX_Receiver (docs/build/xiao-esp32s3.md)
 
 #if defined(NET2RF_BOARD_XIAO_S3)
 
@@ -33,7 +33,7 @@ constexpr int RADIO_CS = 4;   // D3
 constexpr int RADIO_DATA = 5;   // D4
 constexpr int RADIO_RESET = 1;  // D0, SX1278 (Ra-02) reset; unused by the other radios
 
-// SSD1306 128x64 OLED (optional). D6/D7 are UART0's pins, free because the console is on native USB.
+// 128x64 I2C OLED (optional). D6/D7 are UART0's pins, free because the console is on native USB.
 constexpr int I2C_SDA = 43;  // D6
 constexpr int I2C_SCL = 44;  // D7
 constexpr uint8_t OLED_ADDR = 0x3C;
@@ -80,7 +80,7 @@ constexpr int RADIO_DATA = 33;
 // SX1278 (Ra-02) reset; unused by the other radios
 constexpr int RADIO_RESET = 32;
 
-// SSD1306 128x64 OLED (optional). Not IO2: pull-ups there break serial flashing.
+// 128x64 I2C OLED (optional). Not IO2: pull-ups there break serial flashing.
 constexpr int I2C_SDA = 17;
 constexpr int I2C_SCL = 5;
 constexpr uint8_t OLED_ADDR = 0x3C;
