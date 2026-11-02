@@ -2,7 +2,7 @@
 
 #include <ArduinoJson.h>
 
-// Local front panel: optional SSD1306 OLED, optional user button (GPIO39), optional status LED (GPIO2).
+// Local front panel: optional 0.96" 128x64 OLED (SSD1306 or SSD1315), optional user button (GPIO39), optional status LED (GPIO2).
 //
 // Button:  short press      -> next OLED page
 //          hold 5 s         -> network reset (DHCP, default AP) + reboot
@@ -14,9 +14,7 @@ void loop();
 bool display_present();
 
 // OLED controller type (saved). The two look identical on I2C, so this is a user setting.
-enum DisplayType : uint8_t { DISPLAY_SSD1306 = 0, DISPLAY_SH1106 = 1 };
-void set_display_type(uint8_t type);
-void display_json(JsonObject out);   // present, type, address, pins, sleep state
+void display_json(JsonObject out);   // present, address, pins, sleep state
 void identify(uint16_t seconds);     // blink the LED and flash the OLED for this long (0 = stop)
 bool identifying();
 void wake();                         // switch a sleeping OLED back on (as a USER press does)

@@ -87,6 +87,7 @@ void setup() {
     config_load();
     store::begin();  // boot log first: a crash later in setup() is then already on record
     amp::begin();    // before the panel: the amp switch may own the status LED's pin
+    g_before_tx_hook = amp::before_tx;
     panel::begin();
     peers::begin();
     group::begin();
@@ -101,11 +102,13 @@ void setup() {
         else
             g_engine.set_test((TestMode) t.mode, t.rgb[0], t.rgb[1], t.rgb[2]);
         g_engine.set_boot_test(true);
+        g_engine.set_test_yields(true);  // a show takes over from it
     }
 }
 
 void loop() {
     net::loop();
+    amp::loop();
     web::loop();
     panel::loop();
     peers::loop();

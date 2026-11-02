@@ -27,6 +27,8 @@ enum class TestMode : uint8_t { OFF, SOLID, CYCLE, FADE, FLICKER };
 // Fade test mode (FadePalette, config.h): holds each palette colour, then fades to the next, round and round. The
 // colour moves in steps (FADE_STEP_MS) so the radio sends a few changes a second, not one per frame.
 static const uint32_t FADE_STEP_MS = 300;
+// A test mode started at boot gives way to live show input, and comes back this long after the input stops.
+static const uint32_t TEST_RESUME_MS = 10000;
 // Halloween: orange, purple, green, blood red, candle yellow; 3 s fades, 4 s holds.
 extern const FadePalette DEFAULT_FADE;
 // The colour at time t (ms): pure, for the tests.
@@ -160,6 +162,10 @@ class Engine {
 
     void set_test(TestMode mode, uint8_t r, uint8_t g, uint8_t b);
     void set_fade(const FadePalette &palette);  // fade test mode with this palette
+    void set_test_yields(bool yields) {          // the running test mode gives way to live input (set_test clears it)
+        StateLock lock;
+        this->test_yields_ = yields;
+    }
     void set_boot_test(bool saved) {             // for the status: a test mode is saved to start at boot
         StateLock lock;
         this->boot_test_ = saved;
@@ -266,6 +272,9 @@ class Engine {
     uint8_t test_rgb_[3]{};
     FadePalette fade_ = DEFAULT_FADE;
     bool boot_test_{false};  // a test mode is saved to start at boot (shown in the status)
+    bool test_yields_{false};  // the running test mode gives way to live input
+    bool test_paused_{false};  // ... and is doing so now
+    bool input_overrides_test_(uint32_t now) const;
     uint8_t test_last_rgb_[3]{};
     bool test_sent_{false};        // broadcast test colour already queued (protocol 1)
     bool blank_broadcast_{false};  // input timeout: send one broadcast "off" after update_wants_
@@ -329,3 +338,5 @@ extern Engine g_engine;
 // Called from the engine task for each transmission receiver mode decodes (not for its repeats). Set once at
 // boot, before receiver mode can start; must return quickly.
 extern void (*g_rx_heard_hook)(uint8_t protocol, const uint8_t *packet, int16_t rssi_dbm);
+// Called from the engine task before each transmission. May wait a moment: the amp waking up (src/amp.h).
+extern void (*g_before_tx_hook)();

@@ -110,14 +110,47 @@ struct BootTest {
 bool config_load_boot_test(BootTest &out);  // false when none is saved
 void config_save_boot_test(const BootTest *t);  // nullptr: start nothing at boot
 
+// Fade palettes saved by the user. Their own "fade_pre" record, so they never change the AppConfig layout.
+static const uint8_t MAX_FADE_PRESETS = 8;
+struct FadePreset {
+    char name[21];
+    FadePalette fade;
+};
+struct FadePresets {
+    uint8_t n;
+    FadePreset p[MAX_FADE_PRESETS];
+};
+void config_load_fade_presets(FadePresets &out);  // none when nothing is saved
+void config_save_fade_presets(const FadePresets &p);
+// {"name": ..., "palette": [...], "fade_s": 3, "hold_s": 4} adds it or replaces the one of that name;
+// {"delete": name} removes one. False + err on a bad value.
+bool fade_presets_apply(FadePresets &p, JsonObjectConst in, String &err);
+void fade_presets_to_json(const FadePresets &p, JsonArray out);
+// A palette as {"palette": ["FF5000", ...], "fade_s": 3, "hold_s": 4}. from_json applies the fields present.
+void fade_to_json(const FadePalette &p, JsonObject out);
+bool fade_from_json(JsonObjectConst in, FadePalette &p, String &err);
+
 // Amplifier power switch (src/amp.h). Its own "amp" record, so it never changes the AppConfig layout.
 struct AmpConfig {
     uint8_t fitted;      // a switch is wired to pins::AMP_EN; 0: the pin is left alone (status LED)
     uint8_t active_low;  // pin low = amp on (e.g. an N-FET pulling the buck's EN low when the pin is high)
-    uint8_t on;          // the amp is powered (kept across restarts)
+    uint8_t on;          // the amp is wanted (kept across restarts)
+    uint16_t idle_min;   // power down after this long without a transmission; 0: never
 };
-void config_load_amp(AmpConfig &out);  // defaults when none is saved: not fitted, active low, on
+static const uint16_t AMP_IDLE_MAX_MIN = 1440;
+void config_load_amp(AmpConfig &out);  // defaults when none is saved: not fitted, active low, on, never idles
 void config_save_amp(const AmpConfig &c);
+
+// The small records above, in the settings export. Each key is only in the file when there is something to restore.
+struct SettingsExtras {
+    bool has_boot, has_amp, has_presets;
+    BootTest boot;
+    AmpConfig amp;
+    FadePresets presets;
+};
+void extras_to_json(JsonObject out);                                     // from what's saved
+bool extras_from_json(JsonObjectConst in, SettingsExtras &x, String &err);  // top level of the file; saves nothing
+void extras_save(const SettingsExtras &x);
 
 struct NetConfig {
     uint32_t magic;

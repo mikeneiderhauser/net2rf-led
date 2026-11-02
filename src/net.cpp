@@ -372,6 +372,7 @@ IPAddress ip() {
     return IPAddress();
 }
 
+const char *uplink_name() { return eth_up() ? "eth" : wifi_up() ? "wifi" : ap_active() ? "ap" : "none"; }
 bool ap_active() { return s_ap_started; }
 String ap_ssid() { return s_ap_ssid; }
 

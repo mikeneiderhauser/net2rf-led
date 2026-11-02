@@ -17,8 +17,15 @@ T0 = time.time()
 LOG = []
 
 # MOCK_UPDATE=1 pretends a newer release exists (dashboard notice, Install button).
-FW = "0.0.4"
-LATEST = {"tag": "v0.0.5" if os.environ.get("MOCK_UPDATE") else "", "at": time.time()}  # what a browser last reported
+FW = "0.2.0"
+
+
+def newer(tag, version):
+    """True when release tag (v1.2.3) is newer than version (1.2.3)."""
+    parts = lambda v: [int(x) for x in v.lstrip("v").split(".")]
+    return bool(tag) and parts(tag) > parts(version)
+
+LATEST = {"tag": "v9.9.9" if os.environ.get("MOCK_UPDATE") else "", "at": time.time()}  # what a browser last reported
 
 
 APP = {
@@ -26,7 +33,7 @@ APP = {
     "output_enabled": True,
     "role": "controller",
     "rx_profile": "normal",
-    "devices": {"protocol": 0, "mode": "pixel", "color_order": "RGB", "base_layer": True},
+    "devices": {"protocol": 1, "mode": "pixel", "color_order": "RGB", "base_layer": True},
     "radio": {"type": "sx1278", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
               "lbt_enabled": True, "lbt_threshold_dbm": -75, "power": True},
@@ -35,16 +42,18 @@ APP = {
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
               "e131_multicast": True, "start_channel": 1, "timeout_s": 300},
     "zones": [  # the firmware's defaults: every group, then groups 1-4; an address in both protocols
-        {"enabled": True, "name": "All Zones", "protocols": [0], "addr_p0": "00FFFF0F", "addr_p1": "00FF", "start": 1},
-        {"enabled": True, "name": "Zone 1", "protocols": [0], "addr_p0": "0002000F", "addr_p1": "01FF", "start": 4},
-        {"enabled": True, "name": "Zone 2", "protocols": [0], "addr_p0": "0004000F", "addr_p1": "02FF", "start": 7},
-        {"enabled": True, "name": "Zone 3", "protocols": [0], "addr_p0": "0008000F", "addr_p1": "03FF", "start": 10},
-        {"enabled": True, "name": "Zone 4", "protocols": [0], "addr_p0": "0010000F", "addr_p1": "04FF", "start": 13},
+        {"enabled": True, "name": "All Zones", "protocols": [1], "addr_p0": "00FFFF0F", "addr_p1": "00FF", "start": 1},
+        {"enabled": True, "name": "Zone 1", "protocols": [1], "addr_p0": "0002000F", "addr_p1": "01FF", "start": 4},
+        {"enabled": True, "name": "Zone 2", "protocols": [1], "addr_p0": "0004000F", "addr_p1": "02FF", "start": 7},
+        {"enabled": True, "name": "Zone 3", "protocols": [1], "addr_p0": "0008000F", "addr_p1": "03FF", "start": 10},
+        {"enabled": True, "name": "Zone 4", "protocols": [1], "addr_p0": "0010000F", "addr_p1": "04FF", "start": 13},
     ],
 }
 NET = {"hostname": "net2rf-3f2a", "eth_enabled": True, "wifi_ssid": "", "wifi_pass_set": False, "dhcp": True,
        "ip": "", "gateway": "", "subnet": "255.255.255.0", "dns": "", "ap_mode": "no_connection"}
-AMP = {"fitted": False, "active_low": True, "on": False, "pin": 2, "shares_status_led": True}
+AMP = {"fitted": False, "active_low": True, "on": False, "idle_min": 0, "asleep": False, "pin": 2,
+       "shares_status_led": True}
+PRESETS = []
 TEST = {"mode": "off", "rgb": "FFFFFF", "boot": False,
         "fade": {"palette": ["FF5000", "7000FF", "40FF00", "FF0000", "FFA020"], "fade_s": 3, "hold_s": 4}}
 AUTH = {"enabled": False}
@@ -186,7 +195,7 @@ def status():
     for i, cfg in enumerate(APP["zones"]):
         rgb = scene[i][0]
         packets = [{"p": p, "pkt": scene[i][1] if p == 0 else p1_packet(cfg["addr_p1"], rgb)} for p in cfg["protocols"]]
-        z = {"rgb": rgb, "fx": 0, "packets": packets, "packet": packets[0]["pkt"] if packets else "",
+        z = {"rgb": rgb, "fx": 0, "packets": packets,
              "tx": 120 + i, "tx_age_ms": random.randint(50, 900)}
         if APP["devices"]["mode"] == "vendor":
             z.update(gated=(i == 1), group=i)
@@ -196,9 +205,9 @@ def status():
                    "free_heap": 182344, "min_free_heap": 160112, "heap_bytes": 327680, "firmware_bytes": 1471297, "firmware_slot_bytes": 1966080, "chip": "ESP32-D0WD-V3", "chip_rev": 3,
                    "reset_reason": "power on", "display": True, "suffix": "3F2A", "name": APP["name"],
                    "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False,
-                   "update_check": dict({"available": bool(LATEST["tag"]) and LATEST["tag"] != "v" + FW},
+                   "update_check": dict({"available": newer(LATEST["tag"], FW)},
                                         **({"latest": LATEST["tag"], "reported_ago_s": int(time.time() - LATEST["at"])} if LATEST["tag"] else {})),
-                   "display_info": {"present": False, "type": "ssd1306", "sda_pin": 5, "scl_pin": 17, "asleep": False, "sleep_min": 10, "button": False},
+                   "display_info": {"present": False, "sda_pin": 5, "scl_pin": 17, "asleep": False, "sleep_min": 10, "button": False},
                    "amp": AMP},
         "network": {"interface": "ethernet", "ip": "192.168.250.60", "hostname": NET["hostname"], "dhcp": NET["dhcp"],
                     "ethernet": {"enabled": True, "link": True, "mac": "A8:03:2A:11:3F:2A", "speed": 100,
@@ -274,6 +283,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, dict(c, age_ms=4000, freq=433904500))
         if path == "/api/wifi/scan":
             return self.send(200, {"running": False, "networks": [{"ssid": "HomeNet", "rssi": -52, "secure": True},
+                                                                   {"ssid": "HomeNet", "rssi": -66, "secure": True},
                                                                    {"ssid": "Guest", "rssi": -71, "secure": False}]})
         if path == "/api/export":  # ?part=settings | network: one part per file
             part = self.path.partition("part=")[2].split("&")[0]
@@ -322,6 +332,8 @@ class Handler(BaseHTTPRequestHandler):
                 {"label": "coredump", "offset": 0x3F0000, "bytes": 0x10000, "kind": "crash_dump"}]})
         if path == "/api/amp":
             return self.send(200, AMP)
+        if path == "/api/presets":
+            return self.send(200, {"presets": PRESETS})
         if path == "/api/heap":
             return self.send(200, {"free": 148000, "largest_block": 110000, "min_free": 61000, "allocated": 164000, "blocks_used": 420,
                                    "blocks_free": 9, "tasks": [{"name": "loopTask", "stack_unused": 3200}, {"name": "engine", "stack_unused": 2900}]})
@@ -414,8 +426,14 @@ class Handler(BaseHTTPRequestHandler):
             NET.update({k: v for k, v in body.items() if k not in ("wifi_pass", "ap_pass")})
             reboot = True
         elif path == "/api/amp":
-            AMP.update({k: v for k, v in body.items() if k in ("fitted", "active_low", "on")})
+            AMP.update({k: v for k, v in body.items() if k in ("fitted", "active_low", "on", "idle_min")})
             return self.send(200, {"ok": True, "amp": AMP})
+        elif path == "/api/presets":
+            name = body.get("delete") or body.get("name")
+            PRESETS[:] = [p for p in PRESETS if p["name"] != name]
+            if "delete" not in body:
+                PRESETS.append({k: body.get(k) for k in ("name", "palette", "fade_s", "hold_s")})
+            return self.send(200, {"ok": True, "presets": PRESETS})
         elif path == "/api/test":
             TEST.update({k: v for k, v in body.items() if k in ("mode", "rgb")})
             if isinstance(body.get("boot"), bool):

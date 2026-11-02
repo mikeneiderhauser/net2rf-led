@@ -20,6 +20,7 @@ bool wifi_up();                   // Wi-Fi station has an IP
 const char *active_interface();  // "ethernet", "wifi", "ap", or "none"
 IPAddress ip();                   // primary IP (station/ethernet, else AP)
 bool ap_active();
+const char *uplink_name();        // how it is connected: "eth", "wifi", "ap" (setup hotspot) or "none"
 String ap_ssid();
 void status_json(JsonObject out);
 
