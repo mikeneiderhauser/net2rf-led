@@ -1,22 +1,22 @@
-# Radio: range, multiple controllers and the rules
+# Radio notes
 
 ## Range and power
 
 - Mount the antenna high, clear of metal, with a view of the audience. In range tests across a yard (Ra-02, with
   and without the external amplifier) height and keeping it away from other objects made the most difference.
-- Do a range walk ([SETUP.md](SETUP.md#4-check-the-range-where-the-audience-will-be)), then use the **lowest TX power** that still
+- Do a range walk ([show setup guide](../guides/show-setup.md#4-check-the-range-where-the-audience-will-be)), then use the **lowest TX power** that still
   reaches the far edge.
 - The CC1101 goes up to +10 dBm; the Ra-02 (SX1278) up to +17 dBm for bigger areas.
 - Each update takes about 140 ms on air (a ~47 ms frame, sent 3 times by default). The controller manages roughly
   5-10 colour changes per second across all its zones, so favour bold, slow effects.
 - On protocol 0 with the base layer on, zones that change to the same colour share one transmission (the address
   is a group mask), so airtime grows with the number of colours on screen, not the number of zones.
-- The bracelets **hold** their last colour, so the controller only transmits when a colour changes (*Refresh
+- The devices **hold** their last colour, so the controller only transmits when a colour changes (*Refresh
   unchanged* = 0). Re-sending unchanged colours only adds airtime and interference.
 
 ## Airtime: how many changes fit
 
-The channel, not the controller, sets the limit. One bracelet packet is about **46.6 ms on air** (56 bits at 750-800
+The channel, not the controller, sets the limit. One device packet is about **46.6 ms on air** (56 bits at 750-800
 µs each, plus the start pulses), and only one transmitter can use the channel at a time.
 
 **Filling the airwave** means transmitting back to back with no idle time: 1 s ÷ 46.6 ms ≈ **21 frames a second**
@@ -36,7 +36,7 @@ treat it as a wall, not a target.
   to the same colour share one on protocol 0 with the base layer on). A frame where three zones change to three
   different colours costs three times the airtime of a frame where they all change to one colour.
 - When the show asks for changes faster than this, the controller does not queue them: the newest state wins and
-  the in-between ones are dropped. The bracelets show what got through, slightly late.
+  the in-between ones are dropped. The devices show what got through, slightly late.
 - Fewer repeats buy speed at the cost of reliability: a device that misses its only copy keeps its old colour until
   the next change.
 
@@ -65,23 +65,29 @@ continuously an unlicensed device may transmit (see [Legal](#legal)). Budget rou
 
 ## Multiple controllers
 
-All controllers, and both bracelet protocols, share one 433 MHz channel: the bracelets' receivers are wide enough
-to hear both. Two controllers transmitting at the same moment garble each other, and a bracelet that misses an
+All controllers, and both device protocols, share one 433 MHz channel: the devices' receivers are wide enough
+to hear both. Two controllers transmitting at the same moment garble each other, and a device that misses an
 update keeps its old colour until the next change.
 
 - **One transmitter per area (recommended).** A single controller drives up to 16 zones and queues every update
   itself, so it never collides with itself. Add a second controller only for an area out of RF range of the first,
-  or for a second bracelet protocol you can't run alongside it.
-- **Listen before transmit (optional, *Devices & Radio*).** When controllers do overlap, each one listens for a
+  or for a second device protocol you can't run alongside it.
+- **Listen before transmit (*Devices & Radio*, on by default).** When controllers do overlap, each one listens for a
   clear channel before every update (2.5 ms), backs off a few ms if it hears another transmitter, and sends anyway
   after 250 ms. It needs no setup between controllers and also avoids key fobs and other 433 MHz traffic. It only
   helps when the controllers can hear each other, which is usually true since they're closer together than the
-  bracelets are.
+  devices are.
   - **Threshold:** default -75 dBm. Set it about 10 dB above the quiet reading shown on the page: a quiet
     channel read -84 to -87 dBm on the tested CC1101, so a threshold at the quiet level makes it wait on noise.
   - **Counters:** `/api/stats` shows how often it waited (`lbt_waits`) and how often it gave up and sent anyway
     (`lbt_forced`). Waiting on almost every update means the threshold is too low.
-  - **Status:** off by default until it has been tested with two radios in range of each other.
+  - **Tested results:** two Ra-02 controllers ran at once, driven at the same moment, with a third in
+    receiver mode counting what came through. With listening off it decoded 4-9% of frames, and heard 6-12% of the
+    changes. With it on, 55-80% of frames and 59-75% of the changes. At 6 changes a second each, about a quarter of
+    updates are sent anyway, because the channel is full: listening can't add airtime. The default -75 dBm caused no
+    false waits with one controller running.
+  - **Default:** on for a new or factory-reset controller. A controller with saved settings keeps what it had until you
+    tick the box. A coverage group skips it inside its slots.
 - **Coverage group (several controllers, one show).** See [below](#coverage-group): the controllers take turns
   in time slots scheduled by one master, instead of competing for the channel.
 - **Airtime per controller.** The dashboard's controller list shows each controller's airtime (`air`). Two
@@ -92,7 +98,8 @@ update keeps its old colour until the next change.
 ## Coverage group
 
 When one controller can't reach the whole yard, place a few around it and make them a **coverage group**: one
-show, several transmitters, taking turns on air.
+show, several transmitters, taking turns on air. For setup steps, see
+[Using several controllers](../guides/multiple-controllers.md). This section covers how it works.
 
 - **Set up (*Devices & Radio* → *Coverage group*).** Tick *Sync enabled* on every controller in the group. Make one
   of them the **master** and point xLights at it; leave the others as **remotes**. Remotes need no input, no zones
@@ -131,7 +138,7 @@ show, several transmitters, taking turns on air.
 ## Car key fobs
 
 A strong 433 MHz transmitter can stop some car key fobs from working nearby (reported by users of the vendor
-transmitter). Use the lowest TX power that reaches your audience and a short antenna, and keep the bracelets for
+transmitter). Use the lowest TX power that reaches your audience and a short antenna, and keep the devices for
 highlights rather than constant effects. The RF output switch, or vendor mode's channel 1, turns transmission off
 between songs.
 
@@ -146,3 +153,5 @@ which restricts field strength and how often and how long a device may transmit;
 short-range devices are limited to 10 mW ERP and a duty cycle of 10%. Check the rules where you operate, use the
 lowest TX power that covers your area, and keep transmissions to what the show needs. The radio modules this
 project uses are not certified as part of this device.
+
+An external amplifier adds to all of this: see [Licensing and legal](../build/amplifier.md#licensing-and-legal).

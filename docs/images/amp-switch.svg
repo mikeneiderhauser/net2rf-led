@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 548" width="1180" height="548" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+<rect width="1180" height="548" fill="#ffffff"/>
+<text x="24" y="34" font-size="20" fill="#1f2421" text-anchor="start" font-weight="700">Net2RF LED: amplifier power switch</text>
+<text x="24" y="56" font-size="13" fill="#6a716c" text-anchor="start">IO2 on the WT32-ETH01, D1 on the XIAO ESP32-S3. Fit one of these, then enable it under Tools → Amplifier power.</text>
+<rect x="24" y="76" width="550" height="430" rx="10" fill="none" stroke="#c7ccc6"/>
+<rect x="596" y="76" width="560" height="430" rx="10" fill="none" stroke="#c7ccc6"/>
+<text x="44" y="106" font-size="15" fill="#1f2421" text-anchor="start" font-weight="700">A. Buck module with an EN pin (recommended)</text>
+<text x="44" y="126" font-size="12" fill="#6a716c" text-anchor="start">Tools page: Active low ticked</text>
+<rect x="44" y="220" width="90" height="50" rx="8" fill="#f6f8f5" stroke="#9aa39d" stroke-width="1.5"/>
+<text x="89.0" y="250.0" font-size="14" fill="#1f2421" text-anchor="middle" font-weight="700">IO2</text>
+<polyline points="134,245 180,245" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="180" y="234" width="60" height="22" rx="3" fill="#fff" stroke="#37474f" stroke-width="2"/>
+<text x="210" y="227" font-size="13" fill="#1f2421" text-anchor="middle" font-weight="700">100 Ω</text>
+<polyline points="240,245 340,245" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="290" cy="245" r="4.5" fill="#37474f"/>
+<rect x="279" y="310" width="22" height="60" rx="3" fill="#fff" stroke="#37474f" stroke-width="2"/>
+<text x="272" y="345" font-size="13" fill="#1f2421" text-anchor="end" font-weight="700">100 kΩ</text>
+<polyline points="290,245 290,310" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="290,370 290,415" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="290,415 290,425" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="276,425 304,425" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="281,430 299,430" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="286,435 294,435" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="340,245 358,245" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="358,223 358,267" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,219 365,237" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,238 365,252" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,253 365,271" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,227 385,227 385,215" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,263 385,263 385,275" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,245 385,245 385,263" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M367,245 l10,-5 v10 z" fill="#37474f"/>
+<text x="398" y="250" font-size="13" fill="#1f2421" text-anchor="start" font-weight="700">2N7002</text>
+<text x="392" y="217" font-size="11" fill="#6a716c" text-anchor="start">D</text>
+<text x="392" y="287" font-size="11" fill="#6a716c" text-anchor="start">S</text>
+<text x="344" y="237" font-size="11" fill="#6a716c" text-anchor="start">G</text>
+<polyline points="385,215 385,165 440,165" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="440" y="138" width="112" height="54" rx="8" fill="#f6f8f5" stroke="#9aa39d" stroke-width="1.5"/>
+<text x="496.0" y="160" font-size="14" fill="#1f2421" text-anchor="middle" font-weight="700">Buck EN</text>
+<text x="496.0" y="178" font-size="12" fill="#6a716c" text-anchor="middle">12 V → 5 V</text>
+<polyline points="385,275 385,415" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="385,415 385,425" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="371,425 399,425" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="376,430 394,430" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="381,435 389,435" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="44" y="470" font-size="12" fill="#6a716c" text-anchor="start">IO2 high: EN pulled low, amp off. IO2 low: the buck's own pull-up turns the amp on.</text>
+<text x="44" y="488" font-size="12" fill="#6a716c" text-anchor="start">Check EN first: it should read 5-12 V with nothing connected.</text>
+<text x="616" y="106" font-size="15" fill="#1f2421" text-anchor="start" font-weight="700">B. No EN pin: high-side switch</text>
+<text x="616" y="126" font-size="12" fill="#6a716c" text-anchor="start">Tools page: Active low unticked</text>
+<rect x="616" y="138" width="96" height="54" rx="8" fill="#f6f8f5" stroke="#9aa39d" stroke-width="1.5"/>
+<text x="664.0" y="160" font-size="14" fill="#1f2421" text-anchor="middle" font-weight="700">5 V supply</text>
+<text x="664.0" y="178" font-size="12" fill="#6a716c" text-anchor="middle">from the buck</text>
+<polyline points="712,165 894,165" fill="none" stroke="#d32f2f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="800" cy="165" r="4.5" fill="#d32f2f"/>
+<rect x="789" y="190" width="22" height="60" rx="3" fill="#fff" stroke="#37474f" stroke-width="2"/>
+<text x="782" y="225" font-size="13" fill="#1f2421" text-anchor="end" font-weight="700">10 kΩ</text>
+<polyline points="800,165 800,190" fill="none" stroke="#d32f2f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="800,250 800,268 924,268" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="924" cy="268" r="4.5" fill="#37474f"/>
+<polyline points="924,227 924,205" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="902,205 946,205" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="898,198 916,198" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="917,198 931,198" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="932,198 950,198" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="906,198 906,165 894,165" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="942,198 942,165 954,165" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="924,198 924,179 906,179" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M923,186 l-5,-10 h10 z" transform="rotate(180 923 181)" fill="#37474f"/>
+<text x="956" y="209" font-size="13" fill="#1f2421" text-anchor="start" font-weight="700">AO3401</text>
+<text x="882" y="157" font-size="11" fill="#6a716c" text-anchor="start">S</text>
+<text x="958" y="157" font-size="11" fill="#6a716c" text-anchor="start">D</text>
+<text x="932" y="223" font-size="11" fill="#6a716c" text-anchor="start">G</text>
+<polyline points="924,227 924,268" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="954,165 1036,165" fill="none" stroke="#d32f2f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1036" y="138" width="104" height="54" rx="8" fill="#f6f8f5" stroke="#9aa39d" stroke-width="1.5"/>
+<text x="1088.0" y="170.0" font-size="14" fill="#1f2421" text-anchor="middle" font-weight="700">Amp supply</text>
+<polyline points="924,268 924,330" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="616" y="335" width="90" height="50" rx="8" fill="#f6f8f5" stroke="#9aa39d" stroke-width="1.5"/>
+<text x="661.0" y="365.0" font-size="14" fill="#1f2421" text-anchor="middle" font-weight="700">IO2</text>
+<polyline points="706,360 726,360" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="726" y="349" width="60" height="22" rx="3" fill="#fff" stroke="#37474f" stroke-width="2"/>
+<text x="756" y="342" font-size="13" fill="#1f2421" text-anchor="middle" font-weight="700">100 Ω</text>
+<polyline points="786,360 879,360" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="830" cy="360" r="4.5" fill="#37474f"/>
+<polyline points="830,360 830,378" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="819" y="378" width="22" height="46" rx="3" fill="#fff" stroke="#37474f" stroke-width="2"/>
+<text x="812" y="406" font-size="13" fill="#1f2421" text-anchor="end" font-weight="700">100 kΩ</text>
+<polyline points="830,424 830,440" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="830,440 830,450" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="816,450 844,450" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="821,455 839,455" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="826,460 834,460" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="879,360 897,360" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="897,338 897,382" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="904,334 904,352" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="904,353 904,367" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="904,368 904,386" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="904,342 924,342 924,330" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="904,378 924,378 924,390" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="904,360 924,360 924,378" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M906,360 l10,-5 v10 z" fill="#37474f"/>
+<text x="937" y="365" font-size="13" fill="#1f2421" text-anchor="start" font-weight="700">2N7002</text>
+<text x="931" y="332" font-size="11" fill="#6a716c" text-anchor="start">D</text>
+<text x="931" y="402" font-size="11" fill="#6a716c" text-anchor="start">S</text>
+<text x="883" y="352" font-size="11" fill="#6a716c" text-anchor="start">G</text>
+<polyline points="924,390 924,440" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="924,440 924,450" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="910,450 938,450" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="915,455 933,455" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="920,460 928,460" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="616" y="488" font-size="12" fill="#6a716c" text-anchor="start">IO2 high: amp on. Switch the 5 V side, not 12 V: the AO3401's gate is only rated to ±12 V.</text>
+<text x="24" y="530" font-size="12" fill="#8a918b" text-anchor="start">Don't wire IO2 straight to EN, and never switch the amp's ground: its RF ground also runs through the coax.</text>
+</svg>
