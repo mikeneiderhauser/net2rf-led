@@ -17,7 +17,7 @@ T0 = time.time()
 LOG = []
 
 # MOCK_UPDATE=1 pretends a newer release exists (dashboard notice, Install button).
-FW = "0.2.0"
+FW = "0.2.1"
 
 
 def newer(tag, version):

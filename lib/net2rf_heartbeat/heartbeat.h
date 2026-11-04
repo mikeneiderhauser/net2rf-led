@@ -12,6 +12,10 @@
 // Coverage group (lib/net2rf_group): "mac" is the full MAC (unique, unlike "id"); "sync": true marks a controller
 // that takes part in a group, "master": true the one that leads it. Older firmware sends neither (and ignores them).
 //
+// Radio budget (so a sender such as the FPP plugin can pace its changes): "rep" = repeats per change; a master
+// adds "rem" = remotes synced now (each takes a slot per change) and "cp" = copies each controller sends. Older
+// firmware sends none of them (decoded as 0).
+//
 // "board" is the firmware's board id ("wt32-eth01"), "net" how it is connected ("eth", "wifi", "ap" = setup hotspot).
 // Older firmware sends neither.
 //
@@ -47,6 +51,9 @@ struct Heartbeat {
     bool master;     // ... and leads it
     char board[16];  // firmware board id ("" from older firmware)
     char net[6];     // "eth" / "wifi" / "ap" ("" from older firmware)
+    uint8_t repeats;  // frames per change (0 from older firmware)
+    uint8_t remotes;  // master: synced remotes (0 otherwise, or from older firmware)
+    uint8_t copies;   // master: frames each controller sends per change (0 otherwise)
 };
 
 namespace detail {
@@ -100,10 +107,16 @@ inline size_t encode_heartbeat(const Heartbeat &h, char *buf, size_t size) {
         doc["board"] = h.board;
     if (h.net[0])
         doc["net"] = h.net;
+    if (h.repeats)
+        doc["rep"] = h.repeats;
     if (h.sync) {
         doc["sync"] = true;
-        if (h.master)
+        if (h.master) {
             doc["master"] = true;
+            doc["rem"] = h.remotes;
+            if (h.copies)
+                doc["cp"] = h.copies;
+        }
     }
     size_t need = measureJson(doc);
     if (need + 1 > size)
@@ -147,6 +160,11 @@ inline bool decode_heartbeat(const uint8_t *data, size_t len, Heartbeat &out) {
     detail::copy_str(out.net, sizeof(out.net), doc["net"] | "");
     out.sync = doc["sync"] | false;
     out.master = out.sync && (doc["master"] | false);
+    out.repeats = doc["rep"] | 0;
+    if (out.master) {
+        out.remotes = doc["rem"] | 0;
+        out.copies = doc["cp"] | 0;
+    }
     return true;
 }
 

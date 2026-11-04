@@ -315,6 +315,14 @@ void reset_stats() {
     s_plans = 0;
 }
 
+uint8_t live_remotes() {
+    Lock lock;
+    if (s_role != Role::MASTER)
+        return 0;
+    uint8_t live[MAX_REMOTES];
+    return s_roster.live(millis(), live);
+}
+
 String summary() {
     uint32_t now = millis();
     Lock lock;

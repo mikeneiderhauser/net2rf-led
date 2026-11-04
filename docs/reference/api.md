@@ -199,7 +199,7 @@ powered during boot.
 
 ```json
 {
-  "uptime_s": 86400, "free_heap": 182344, "name": "Front Yard", "output_enabled": true,
+  "uptime_s": 86400, "free_heap": 182344, "name": "Front Yard", "output_enabled": true, "repeats": 3,
   "radio": "ready", "test_mode": "off",
   "input":  {"packets": 1204233, "frames": 1204233, "malformed": 0, "ignored": 2, "bytes": 19267728, "fps": 40.0,
              "seen": true, "timed_out": false, "age_ms": 25, "source": "192.168.1.20", "timeout_s": 300},
@@ -249,6 +249,9 @@ Controllers find each other two ways:
   sender's IP is taken from the packet, not the payload. Firmware with coverage groups adds `"mac"` (12 hex digits,
   the Ethernet MAC: a stable identity), `"sync"` (takes part in a coverage group) and, with `sync`, `"master"`.
   The master lists every controller whose beat has `sync` and not `master`; a remote follows the one with both.
+  From 0.2.1 every beat adds `"rep"` (repeats per change), and a master's adds `"rem"` (remotes synced now, which
+  each get a slot per change) and `"cp"` (copies each controller sends), so a sender can work out how many changes
+  a second fit ([radio notes](radio.md#airtime-how-many-changes-fit)). A change to either count sends a beat at once.
 - **Coverage group (UDP 4050, unicast only):** remote → master `SYNC` every second, master → remote `SYNC_ACK`
   (NTP-style timestamps), and master → remote `TX` per change (slot start on the master's clock, copies,
   protocol, frequency, packet). Binary, little-endian, starting `N2RG`, version 1; see

@@ -420,6 +420,7 @@ static void handle_stats() {
         StateLock lock;
         doc["name"] = g_app.name;
         doc["output_enabled"] = (bool) g_app.output_enabled;
+        doc["repeats"] = g_app.repeats;  // so a sender can pace itself without the (password-protected) settings
     }
     doc["radio"] = full["radio"]["state"];
     doc["input"] = full["input"];
