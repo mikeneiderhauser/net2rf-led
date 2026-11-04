@@ -3,7 +3,7 @@
 What changed in each release. The section for a version becomes its
 [GitHub release](https://github.com/mikeneiderhauser/net2rf-led/releases) notes.
 
-## [0.2.1] - Unreleased
+## [0.2.1] - 2026-11-04
 
 Senders can now pace themselves to the radio without reading the settings.
 
