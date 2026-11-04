@@ -37,6 +37,8 @@ void done(bool sent);
 void status_json(JsonObject out);  // /api/status "group"
 // One short line for the OLED ("Master: 2 remotes", "Remote: Garage", ...); empty when the group is off.
 String summary();
+// Master: remotes synced now, the ones a plan gives a slot (the status broadcast's "rem"). 0 otherwise.
+uint8_t live_remotes();
 void reset_stats();
 
 }  // namespace group

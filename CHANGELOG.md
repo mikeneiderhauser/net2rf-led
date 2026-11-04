@@ -3,6 +3,17 @@
 What changed in each release. The section for a version becomes its
 [GitHub release](https://github.com/mikeneiderhauser/net2rf-led/releases) notes.
 
+## [0.2.1] - Unreleased
+
+Senders can now pace themselves to the radio without reading the settings.
+
+### Added
+
+- The status broadcast carries the repeat count (`rep`) and, on a coverage group master, the remotes synced now
+  (`rem`) and the copies each controller sends (`cp`). A beat goes out at once when the repeats or the synced
+  remotes change. The FPP plugin (fpp-net2rf) uses them to set its rate.
+- `/api/stats` gives the repeat count (`repeats`), so it can be read on a controller with an admin password.
+
 ## [0.2.0] - 2026-11-02
 
 The carrier board and the coverage group have now run real shows, and the defaults suit the devices you can buy.

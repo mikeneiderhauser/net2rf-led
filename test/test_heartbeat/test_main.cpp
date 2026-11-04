@@ -53,6 +53,38 @@ void test_group_fields() {
     TEST_ASSERT_EQUAL_STRING("", out.mac);
 }
 
+void test_budget_fields() {
+    char buf[HEARTBEAT_MAX];
+    Heartbeat in = sample(), out{};
+    in.repeats = 3;
+    in.sync = in.master = true;
+    in.remotes = 2;
+    in.copies = 1;
+    size_t n = encode_heartbeat(in, buf, sizeof(buf));
+    TEST_ASSERT_TRUE(decode_heartbeat((const uint8_t *) buf, n, out));
+    TEST_ASSERT_EQUAL_UINT8(3, out.repeats);
+    TEST_ASSERT_EQUAL_UINT8(2, out.remotes);
+    TEST_ASSERT_EQUAL_UINT8(1, out.copies);
+    // a master with no synced remote still says so
+    in.remotes = 0;
+    n = encode_heartbeat(in, buf, sizeof(buf));
+    TEST_ASSERT_NOT_NULL(strstr(std::string(buf, n).c_str(), "\"rem\":0"));
+    // only a master sends remotes and copies
+    in.master = false;
+    in.remotes = 2;
+    n = encode_heartbeat(in, buf, sizeof(buf));
+    std::string s(buf, n);
+    TEST_ASSERT_NULL(strstr(s.c_str(), "\"rem\""));
+    TEST_ASSERT_NULL(strstr(s.c_str(), "\"cp\""));
+    TEST_ASSERT_TRUE(decode(R"({"p":"net2rf","v":1,"id":"24DB","rep":2,"rem":4,"cp":2})", out));
+    TEST_ASSERT_EQUAL_UINT8(2, out.repeats);
+    TEST_ASSERT_EQUAL_UINT8(0, out.remotes);
+    // older firmware: none of them
+    TEST_ASSERT_TRUE(decode(R"({"p":"net2rf","v":1,"id":"24DB"})", out));
+    TEST_ASSERT_EQUAL_UINT8(0, out.repeats);
+    TEST_ASSERT_EQUAL_UINT8(0, out.copies);
+}
+
 void test_round_trip() {
     char buf[HEARTBEAT_MAX];
     Heartbeat in = sample(), out{};
@@ -149,6 +181,7 @@ void test_encode_longest_fits() {
     strcpy(in.net, "wifi");
     in.out = in.test = in.hello = in.sync = in.master = true;
     in.zones = 16, in.air = 100, in.up = 4000000000u;
+    in.repeats = 255, in.remotes = 255, in.copies = 255;
     char buf[HEARTBEAT_MAX];
     TEST_ASSERT_TRUE(encode_heartbeat(in, buf, sizeof(buf)) > 0);
 }
@@ -163,6 +196,7 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_round_trip);
     RUN_TEST(test_group_fields);
+    RUN_TEST(test_budget_fields);
     RUN_TEST(test_hello_omitted_when_false);
     RUN_TEST(test_rejects_foreign_packets);
     RUN_TEST(test_newer_version_and_minimal_packet_accepted);

@@ -91,7 +91,10 @@ static void own_heartbeat(net2rf::Heartbeat &h) {
         strlcpy(h.host, g_net.hostname, sizeof(h.host));
         h.sync = sync_is_master(g_app) || sync_is_remote(g_app);
         h.master = sync_is_master(g_app);
+        h.repeats = g_app.repeats;
+        h.copies = g_app.sync_copies;
     }
+    h.remotes = group::live_remotes();
     uint8_t mac[6];
     device_mac(mac);
     n2rgroup::mac_to_hex(mac, h.mac);
@@ -110,7 +113,8 @@ static void own_heartbeat(net2rf::Heartbeat &h) {
 }
 
 static String state_key(const net2rf::Heartbeat &h) {
-    return String(h.radio) + "|" + h.input + "|" + h.out + "|" + h.test + "|" + h.zones + "|" + h.sync + "|" + h.master;
+    return String(h.radio) + "|" + h.input + "|" + h.out + "|" + h.test + "|" + h.zones + "|" + h.sync + "|" + h.master + "|" +
+           h.repeats + "|" + h.remotes;
 }
 
 static void send_beat() {
