@@ -3,6 +3,16 @@
 What changed in each release. The section for a version becomes its
 [GitHub release](https://github.com/mikeneiderhauser/net2rf-led/releases) notes.
 
+## [0.2.2] - 2026-11-04
+
+A fix for the web UI on controllers with an OLED.
+
+### Fixed
+
+- **System → Firmware was blank, and the page said "offline",** on a controller with an OLED fitted (since 0.2.0).
+  The Display row read a status field 0.2.0 removed, and the error stopped the whole page from updating. It now
+  reads "OLED at 0x3C" (or 0x3D).
+
 ## [0.2.1] - 2026-11-04
 
 Senders can now pace themselves to the radio without reading the settings.
