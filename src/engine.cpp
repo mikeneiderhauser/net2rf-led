@@ -14,6 +14,10 @@ using namespace rfproto;
 
 Engine g_engine;
 void (*g_before_tx_hook)() = nullptr;
+bool (*g_tx_gate_hook)() = nullptr;
+
+// tx_allowed(), and nothing outside the engine holding transmissions (call with StateLock held).
+static bool can_transmit() { return tx_allowed(g_app) && (!g_tx_gate_hook || g_tx_gate_hook()); }
 void (*g_rx_heard_hook)(uint8_t protocol, const uint8_t *packet, int16_t rssi_dbm) = nullptr;
 
 static SemaphoreHandle_t s_lock = nullptr;
@@ -31,8 +35,6 @@ const char *radio_state_name(RadioState s) {
             return "ready";
         case RadioState::NOT_DETECTED:
             return "not_detected";
-        case RadioState::OFF:
-            return "off";
         default:
             return "initializing";
     }
@@ -337,7 +339,7 @@ void Engine::update_wants_(uint32_t now) {
 void Engine::queue_broadcast_(Action action, uint8_t r, uint8_t g, uint8_t b, bool important) {
     // Called with StateLock held. Protocol 1, group 0 = all groups; byte 6 as normally sent (FF).
     static const uint8_t ALL_GROUPS[4] = {0x00, 0xFF, 0x00, 0x00};
-    if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE)
+    if (!can_transmit() || this->manual_.size() >= MAX_MANUAL_QUEUE)
         return;
     Job job{};
     job.protocol = 1;
@@ -696,23 +698,17 @@ void Engine::run_() {
     uint32_t last_cycle_step = 0;
     for (;;) {
         uint32_t now = millis();
-        bool want_off;
-        {
+        if (this->restart_radio_) {
+            this->restart_radio_ = false;
+            log_i("Restarting %s", this->radio_->name());
+            this->stop_rx_();
+            this->radio_->shutdown();
+            this->try_init_radio_();
             StateLock lock;
-            want_off = g_app.radio_off;
-        }
-        if (want_off) {
-            if (this->radio_state_ != RadioState::OFF) {
-                this->stop_rx_();
-                this->radio_->shutdown();
-                StateLock lock;
-                this->radio_state_ = RadioState::OFF;
-                this->tuned_ = false;
-                log_i("%s shut down", this->radio_->name());
-            }
-        } else if (this->radio_state_ == RadioState::OFF ||
-                   (this->radio_state_ == RadioState::NOT_DETECTED && (int32_t) (now - this->next_init_ms_) >= 0)) {
-            this->try_init_radio_();  // also wakes the chip after a shutdown
+            for (auto &zs : this->zones_)
+                zs.resend();
+        } else if (this->radio_state_ == RadioState::NOT_DETECTED && (int32_t) (now - this->next_init_ms_) >= 0) {
+            this->try_init_radio_();
         }
 
         // Receiver mode: listen instead of transmitting.
@@ -787,7 +783,7 @@ void Engine::run_() {
                 // One broadcast "off" blanks every protocol 1 group, including ones no zone is configured for.
                 // Protocol 0 zones are blanked zone by zone (their colours have just gone to black).
                 this->blank_broadcast_ = false;
-                if (tx_allowed(g_app)) {
+                if (can_transmit()) {
                     this->queue_broadcast_(ACTION_OFF, 0, 0, 0, true);
                     this->mark_zones_sent_(now, PROTOCOL_BIT[1]);
                 }
@@ -798,7 +794,7 @@ void Engine::run_() {
                 this->mark_zones_sent_(now, ALL_PROTOCOLS);
             }
 
-            bool enabled = tx_allowed(g_app);
+            bool enabled = can_transmit();
             if (enabled != this->output_was_enabled_) {
                 log_i("RF output %s", enabled ? "enabled" : "disabled");
                 if (enabled) {
@@ -862,7 +858,7 @@ void Engine::run_() {
 
 bool Engine::send_raw(uint8_t protocol, const uint8_t *packet, uint8_t repeats, bool fix) {
     StateLock lock;
-    if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE)
+    if (!can_transmit() || this->manual_.size() >= MAX_MANUAL_QUEUE)
         return false;
     Job job{};
     job.protocol = protocol ? 1 : 0;
@@ -877,7 +873,7 @@ bool Engine::send_raw(uint8_t protocol, const uint8_t *packet, uint8_t repeats, 
 
 bool Engine::send_zone(int zone, Action action, uint8_t r, uint8_t g, uint8_t b) {
     StateLock lock;
-    if (!tx_allowed(g_app) || this->manual_.size() >= MAX_MANUAL_QUEUE || zone >= (int) g_app.num_zones)
+    if (!can_transmit() || this->manual_.size() >= MAX_MANUAL_QUEUE || zone >= (int) g_app.num_zones)
         return false;
     // Built-in effects exist on protocol 0 only: they aren't sent to a zone's protocol 1 devices.
     bool effect = action == ACTION_FX_A || action == ACTION_FX_B || action == ACTION_FX_C;
@@ -910,7 +906,7 @@ bool Engine::send_zone(int zone, Action action, uint8_t r, uint8_t g, uint8_t b)
 
 bool Engine::all_off() {
     StateLock lock;
-    if (!tx_allowed(g_app))
+    if (!can_transmit())
         return false;
     this->test_mode_ = TestMode::OFF;
     this->test_sent_ = false;
@@ -1102,7 +1098,6 @@ void Engine::status_json(JsonObject o) {
     radio["type"] = radio_type_name(g_app.radio_type);
     radio["name"] = this->radio_->name();
     radio["state"] = radio_state_name(this->radio_state_);
-    radio["power"] = !g_app.radio_off;
     radio["detail"] = this->radio_->detail();
     radio["data_line"] = this->radio_->data_line();
     radio["min_power"] = this->radio_->min_power();

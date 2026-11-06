@@ -333,7 +333,6 @@ static void draw_receiver(bool list, uint8_t first, const EngineSnapshot &s) {
     g_engine.rx_snapshot(rx);
     if (!list) {
         String state = !rx.supported                           ? "radio can't receive"
-                       : s.radio_state == RadioState::OFF      ? "radio shut down"
                        : s.radio_state != RadioState::READY    ? "radio not ready"
                        : rx.active                             ? "listening"
                                                                : "starting";
@@ -409,7 +408,6 @@ static void draw_page(uint32_t now) {
         String radio = String(s.radio_name) + ": ";
         radio += s.radio_state == RadioState::READY          ? (g_engine.receiving() ? "receiving" : "ready")
                  : s.radio_state == RadioState::NOT_DETECTED ? "NOT DETECTED"
-                 : s.radio_state == RadioState::OFF          ? "OFF"
                                                               : "starting";
         s_oled->drawString(0, 38, radio);
         const char *newer = updater::available_version();
@@ -482,7 +480,7 @@ static void update_led(uint32_t now) {
         on = held < HOLD_NET_RESET_MS ? true : held < HOLD_FACTORY_MS ? (now / 500) % 2 : (now / 80) % 2;
     } else if (s_identify_until)
         on = (now / 60) % 2;  // identify: a rapid flicker, unlike any status pattern
-    else if (s.radio_state != RadioState::READY && s.radio_state != RadioState::OFF)
+    else if (s.radio_state != RadioState::READY)
         on = (now / 150) % 2;  // fast blink: radio problem
     else if (net::ap_active() && !net::connected())
         on = (now % 1000) < 100 || ((now % 1000) > 200 && (now % 1000) < 300);  // double blink: AP mode

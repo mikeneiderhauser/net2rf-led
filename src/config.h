@@ -65,7 +65,7 @@ struct AppConfig {
     ZoneConfig zones[MAX_ZONES];
     uint8_t lbt_enabled;    // listen before transmit: wait for a clear channel (other controllers, key fobs)
     int8_t lbt_threshold;   // dBm; a channel louder than this counts as busy
-    uint8_t radio_off;      // radio chip powered down: nothing is transmitted until it is switched back on
+    uint8_t unused_radio_off;  // was the radio power switch (removed): ignored, kept so saved settings still load
     char update_repo[64];   // GitHub "owner/name" whose releases the web UI offers as firmware updates
     uint8_t base_layer;     // protocol 0: the all-groups zone is a base layer under the other zones
     uint8_t display_sleep;  // OLED sleep after this many minutes without a button press: 0 = default, 255 = never
@@ -90,7 +90,7 @@ inline uint8_t display_sleep_minutes(const AppConfig &c) {
     return c.display_sleep == 0 ? DISPLAY_SLEEP_DEFAULT_MIN : c.display_sleep == DISPLAY_SLEEP_NEVER ? 0 : c.display_sleep;
 }
 // True when transmissions may be queued (call with StateLock held).
-inline bool tx_allowed(const AppConfig &c) { return c.output_enabled && !c.radio_off && !c.receiver; }
+inline bool tx_allowed(const AppConfig &c) { return c.output_enabled && !c.receiver; }
 static const int8_t LBT_DEFAULT_THRESHOLD = -75;
 
 // Fade test mode palette (engine.h).
@@ -136,9 +136,10 @@ struct AmpConfig {
     uint8_t active_low;  // pin low = amp on (e.g. an N-FET pulling the buck's EN low when the pin is high)
     uint8_t on;          // the amp is wanted (kept across restarts)
     uint16_t idle_min;   // power down after this long without a transmission; 0: never
+    uint8_t follow_output;  // the amp is powered only while RF output is on
 };
 static const uint16_t AMP_IDLE_MAX_MIN = 1440;
-void config_load_amp(AmpConfig &out);  // defaults when none is saved: not fitted, active low, on, never idles
+void config_load_amp(AmpConfig &out);  // defaults: not fitted, active low, on, never idles, follows RF output
 void config_save_amp(const AmpConfig &c);
 
 // The small records above, in the settings export. Each key is only in the file when there is something to restore.

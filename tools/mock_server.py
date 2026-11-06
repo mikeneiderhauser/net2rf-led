@@ -36,7 +36,7 @@ APP = {
     "devices": {"protocol": 1, "mode": "pixel", "color_order": "RGB", "base_layer": True},
     "radio": {"type": "sx1278", "tx_power": 10, "freq_p0": 433889000, "freq_p1": 433920000, "repeats": 3,
               "off_threshold": 16, "refresh_ms": 0, "tx_jitter_ms": 0,
-              "lbt_enabled": True, "lbt_threshold_dbm": -75, "power": True},
+              "lbt_enabled": True, "lbt_threshold_dbm": -75},
     "update": {"repo": "mikeneiderhauser/net2rf-led"},
     "sync": {"enabled": True, "master": True, "copies": 2},
     "input": {"ddp_enabled": True, "ddp_port": 4048, "e131_enabled": False, "e131_universe": 1,
@@ -51,8 +51,21 @@ APP = {
 }
 NET = {"hostname": "net2rf-3f2a", "eth_enabled": True, "wifi_ssid": "", "wifi_pass_set": False, "dhcp": True,
        "ip": "", "gateway": "", "subnet": "255.255.255.0", "dns": "", "ap_mode": "no_connection"}
-AMP = {"fitted": False, "active_low": True, "on": False, "idle_min": 0, "asleep": False, "pin": 2,
-       "shares_status_led": True}
+AMP = {"fitted": False, "active_low": True, "on": False, "idle_min": 0, "follow_output": True, "asleep": False,
+       "pin": 2, "shares_status_led": True}
+
+
+def amp_state():
+    a = dict(AMP)
+    a["powered"] = a["fitted"] and a["on"] and not a["asleep"] and (not a["follow_output"] or APP["output_enabled"])
+    a["holds_tx"] = a["fitted"] and not a["on"]
+    return a
+
+
+def output_state():
+    return {"enabled": APP["output_enabled"],
+            "transmitting": APP["output_enabled"] and APP["role"] != "receiver" and not amp_state()["holds_tx"]}
+
 PRESETS = []
 TEST = {"mode": "off", "rgb": "FFFFFF", "boot": False,
         "fade": {"palette": ["FF5000", "7000FF", "40FF00", "FF0000", "FFA020"], "fade_s": 3, "hold_s": 4}}
@@ -153,7 +166,7 @@ def receiver(up):
            {"age_ms": 3200, "p": 0, "pkt": "0004000F010214", "n": 3, "rssi_dbm": -61},
            {"age_ms": 9000, "p": 1, "pkt": "5500FF00FFAAFF", "n": 2, "rssi_dbm": -71, "checksum": "vendor"},
            {"age_ms": 12000, "p": 1, "pkt": "55000FFFFF55FF", "n": 3, "rssi_dbm": -80, "checksum": "legacy"}]
-    return {"enabled": APP["role"] == "receiver", "active": APP["role"] == "receiver" and APP["radio"]["power"],
+    return {"enabled": APP["role"] == "receiver", "active": APP["role"] == "receiver",
             "supported": True, "error": False, "freq": 433904500,
             "frames": 120 + t, "bad": 3, "updates": 31 + t // 3, "edges": 900000 + t * 4000, "dropped": 0,
             "rssi_dbm": -96, "rssi_peak_dbm": -71, "last_age_ms": (t % 3) * 1000 + 120, "zones": zones, "log": log,
@@ -208,7 +221,7 @@ def status():
                    "update_check": dict({"available": newer(LATEST["tag"], FW)},
                                         **({"latest": LATEST["tag"], "reported_ago_s": int(time.time() - LATEST["at"])} if LATEST["tag"] else {})),
                    "display_info": {"present": False, "sda_pin": 5, "scl_pin": 17, "asleep": False, "sleep_min": 10, "button": False},
-                   "amp": AMP},
+                   "amp": amp_state()},
         "network": {"interface": "ethernet", "ip": "192.168.250.60", "hostname": NET["hostname"], "dhcp": NET["dhcp"],
                     "ethernet": {"enabled": True, "link": True, "mac": "A8:03:2A:11:3F:2A", "speed": 100,
                                  "full_duplex": True, "ip": "192.168.250.60", "gateway": "192.168.250.1",
@@ -220,7 +233,7 @@ def status():
             "role": APP["role"],
             "receiver": receiver(up),
             "radio": {"type": APP["radio"]["type"], "name": {"cc1101": "CC1101", "sx1278": "SX1278"}[APP["radio"]["type"]],
-                      "state": "ready" if APP["radio"]["power"] else "off", "power": APP["radio"]["power"], "detail": "version 0x14",
+                      "state": "ready", "detail": "version 0x14",
                       "min_power": -30, "max_power": 10, "queue": 0,
                       "lbt": {"enabled": APP["radio"]["lbt_enabled"], "supported": True,
                               "threshold_dbm": APP["radio"]["lbt_threshold_dbm"], "last_rssi_dbm": -97, "last_busy": False}},
@@ -331,7 +344,9 @@ class Handler(BaseHTTPRequestHandler):
                 {"label": "spiffs", "offset": 0x3D0000, "bytes": 0x20000, "kind": "files"},
                 {"label": "coredump", "offset": 0x3F0000, "bytes": 0x10000, "kind": "crash_dump"}]})
         if path == "/api/amp":
-            return self.send(200, AMP)
+            return self.send(200, amp_state())
+        if path == "/api/output":
+            return self.send(200, output_state())
         if path == "/api/presets":
             return self.send(200, {"presets": PRESETS})
         if path == "/api/heap":
@@ -388,18 +403,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"ok": True, "auth": AUTH["enabled"]})
         if path == "/api/output":
             APP["output_enabled"] = bool(body.get("enabled"))
-            return self.send(200, {"ok": True, "enabled": APP["output_enabled"]})
-        if path == "/api/radio":
-            APP["radio"]["power"] = bool(body.get("power"))
-            return self.send(200, {"ok": True, "power": APP["radio"]["power"]})
+            return self.send(200, {"ok": True, **output_state()})
+        if path == "/api/radio/restart":
+            return self.send(200, {"ok": True})
         if path == "/api/all-off":
             TEST.update(mode="off")
         if path in ("/api/send", "/api/raw", "/api/all-off") and APP["role"] == "receiver":
             return self.send(409, {"ok": False, "error": "receiver mode: this controller only listens"})
-        if path in ("/api/send", "/api/raw", "/api/all-off") and not APP["radio"]["power"]:
-            return self.send(409, {"ok": False, "error": "radio is shut down"})
         if path in ("/api/send", "/api/raw", "/api/all-off") and not APP["output_enabled"]:
             return self.send(409, {"ok": False, "error": "RF output is disabled"})
+        if path in ("/api/send", "/api/raw", "/api/all-off") and amp_state()["holds_tx"]:
+            return self.send(409, {"ok": False, "error": "the amplifier is switched off"})
         if path == "/api/config":
             if "name" in body:
                 APP["name"] = body["name"]
@@ -426,8 +440,8 @@ class Handler(BaseHTTPRequestHandler):
             NET.update({k: v for k, v in body.items() if k not in ("wifi_pass", "ap_pass")})
             reboot = True
         elif path == "/api/amp":
-            AMP.update({k: v for k, v in body.items() if k in ("fitted", "active_low", "on", "idle_min")})
-            return self.send(200, {"ok": True, "amp": AMP})
+            AMP.update({k: v for k, v in body.items() if k in ("fitted", "active_low", "on", "idle_min", "follow_output")})
+            return self.send(200, {"ok": True, "amp": amp_state()})
         elif path == "/api/presets":
             name = body.get("delete") or body.get("name")
             PRESETS[:] = [p for p in PRESETS if p["name"] != name]

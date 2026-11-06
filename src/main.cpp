@@ -88,6 +88,7 @@ void setup() {
     store::begin();  // boot log first: a crash later in setup() is then already on record
     amp::begin();    // before the panel: the amp switch may own the status LED's pin
     g_before_tx_hook = amp::before_tx;
+    g_tx_gate_hook = []() { return !amp::holds_tx(); };
     panel::begin();
     peers::begin();
     group::begin();

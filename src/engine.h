@@ -21,7 +21,7 @@ class StateLock {
     StateLock &operator=(const StateLock &) = delete;
 };
 
-enum class RadioState : uint8_t { INITIALIZING, READY, NOT_DETECTED, OFF };
+enum class RadioState : uint8_t { INITIALIZING, READY, NOT_DETECTED };
 enum class TestMode : uint8_t { OFF, SOLID, CYCLE, FADE, FLICKER };
 
 // Fade test mode (FadePalette, config.h): holds each palette colour, then fades to the next, round and round. The
@@ -170,6 +170,8 @@ class Engine {
         StateLock lock;
         this->boot_test_ = saved;
     }
+    // Shut the radio chip down and initialise it again (a radio that stopped responding), then re-send every zone.
+    void restart_radio() { this->restart_radio_ = true; }
     // Panic button: leave test mode and switch every device off (one broadcast on protocol 1).
     // Devices then stay off until the input actually changes a colour. False if output is disabled.
     bool all_off();
@@ -231,6 +233,7 @@ class Engine {
     Radio *radio_{nullptr};
     OokSender sender_;
     RadioState radio_state_{RadioState::INITIALIZING};
+    volatile bool restart_radio_{false};
     uint32_t next_init_ms_{0};
     uint32_t tuned_freq_{0};
     int8_t tuned_power_{0};
@@ -340,3 +343,5 @@ extern Engine g_engine;
 extern void (*g_rx_heard_hook)(uint8_t protocol, const uint8_t *packet, int16_t rssi_dbm);
 // Called from the engine task before each transmission. May wait a moment: the amp waking up (src/amp.h).
 extern void (*g_before_tx_hook)();
+// Optional: false while something outside the engine holds transmissions (the amplifier switched off by hand).
+extern bool (*g_tx_gate_hook)();
