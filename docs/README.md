@@ -28,7 +28,7 @@
 | [Compatibility](reference/compatibility.md) | What has been tested, and how to report a device |
 | [Radio notes](reference/radio.md) | Range, airtime, multiple controllers, coverage groups and the rules |
 | [RF protocols](reference/protocol.md) | The 433 MHz protocols, packet by packet |
-| [HTTP API](reference/api.md) | Endpoints, settings, stats and controller discovery |
+| [HTTP API](reference/api.md) | Endpoints, settings, stats and controller discovery, as an OpenAPI spec with a browsable explorer |
 | [xLights files](../tools/xlights/README.md) | Custom models and the controller definition |
 
 ## Project

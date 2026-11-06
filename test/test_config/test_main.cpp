@@ -275,12 +275,14 @@ void test_amp_record(void) {
     TEST_ASSERT_EQUAL_UINT8(1, a.active_low);
     TEST_ASSERT_EQUAL_UINT8(1, a.on);
     TEST_ASSERT_EQUAL_UINT16(0, a.idle_min);
-    config_save_amp(AmpConfig{1, 0, 0, 30});
+    TEST_ASSERT_EQUAL_UINT8(1, a.follow_output);
+    config_save_amp(AmpConfig{1, 0, 0, 30, 0});
     config_load_amp(a);
     TEST_ASSERT_EQUAL_UINT8(1, a.fitted);
     TEST_ASSERT_EQUAL_UINT8(0, a.active_low);
     TEST_ASSERT_EQUAL_UINT8(0, a.on);
     TEST_ASSERT_EQUAL_UINT16(30, a.idle_min);
+    TEST_ASSERT_EQUAL_UINT8(0, a.follow_output);
 }
 
 void test_amp_record_from_older_firmware(void) {
@@ -299,6 +301,21 @@ void test_amp_record_from_older_firmware(void) {
     TEST_ASSERT_EQUAL_UINT8(0, a.active_low);
     TEST_ASSERT_EQUAL_UINT8(1, a.on);
     TEST_ASSERT_EQUAL_UINT16(0, a.idle_min);
+    TEST_ASSERT_EQUAL_UINT8(1, a.follow_output);
+
+    struct {  // v0.2: with idle_min, before follow_output
+        uint32_t magic;
+        uint8_t fitted, active_low, on;
+        uint16_t idle_min;
+    } v2 = {0x4E324131, 1, 1, 0, 45};
+    p.begin(NVS_NS, false);
+    p.putBytes("amp", &v2, sizeof(v2));
+    p.end();
+    config_load_amp(a);
+    TEST_ASSERT_EQUAL_UINT8(1, a.fitted);
+    TEST_ASSERT_EQUAL_UINT8(0, a.on);
+    TEST_ASSERT_EQUAL_UINT16(45, a.idle_min);
+    TEST_ASSERT_EQUAL_UINT8(1, a.follow_output);
 }
 
 static bool preset(FadePresets &p, const char *json, String &err) {
@@ -347,7 +364,7 @@ void test_extras_roundtrip(void) {
     t.rgb[0] = 0xFF;
     t.fade.n = 2, t.fade.rgb[1][2] = 0x80, t.fade.fade_ms = 2500, t.fade.hold_ms = 4000;
     config_save_boot_test(&t);
-    config_save_amp(AmpConfig{1, 0, 1, 15});
+    config_save_amp(AmpConfig{1, 0, 1, 15, 0});
     FadePresets p{};
     String err;
     TEST_ASSERT_TRUE(preset(p, R"({"name":"Mine","palette":["112233"]})", err));
@@ -371,6 +388,7 @@ void test_extras_roundtrip(void) {
     TEST_ASSERT_EQUAL_UINT8(1, a.fitted);
     TEST_ASSERT_EQUAL_UINT8(0, a.active_low);
     TEST_ASSERT_EQUAL_UINT16(15, a.idle_min);
+    TEST_ASSERT_EQUAL_UINT8(0, a.follow_output);
     FadePresets back;
     config_load_fade_presets(back);
     TEST_ASSERT_EQUAL_STRING("Mine", back.p[0].name);
@@ -389,7 +407,7 @@ void test_settings_reset_clears_the_small_records(void) {
     BootTest t{};
     t.mode = 4, t.fade.n = 1;
     config_save_boot_test(&t);
-    config_save_amp(AmpConfig{1, 1, 1, 5});
+    config_save_amp(AmpConfig{1, 1, 1, 5, 1});
     config_settings_reset();
     BootTest b;
     TEST_ASSERT_FALSE(config_load_boot_test(b));

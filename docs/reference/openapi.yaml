@@ -1,0 +1,1589 @@
+openapi: 3.1.0
+info:
+  title: Net2RF LED controller API
+  version: unreleased
+  summary: The controller's HTTP JSON API, for scripts and integrations such as Home Assistant.
+  description: |
+    Every controller serves this API on port 80, at its IP address or its own name (`net2rf-xxxx.local`), for
+    scripts and integrations such as [Home Assistant](https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/guides/home-assistant.md).
+    All endpoints are JSON, and `POST` bodies are JSON objects.
+
+    The controller doesn't answer cross-site (CORS) requests, so *Try it out* on this page can't reach it: use curl
+    or a script.
+
+    ## Request rules
+
+    Every state-changing `POST` must:
+
+    - send a JSON body with `Content-Type: application/json` (otherwise `415`);
+    - address the controller by IP or by its own name (`net2rf-xxxx`, `net2rf-xxxx.local`, `net2rf.local`). Any
+      other host name gets `403`, including the same name under another domain (`net2rf-xxxx.lan`), since a
+      DNS-rebinding page can pick its own domain. Use the IP when your router publishes its own DNS names;
+    - if sent from a browser, come from the controller's own page (the `Origin` header must match).
+
+    These stop other websites from making your browser change settings or flash firmware behind your back. Scripts,
+    curl and Home Assistant are unaffected as long as they set the JSON content type. `POST /update` (multipart) is
+    exempt from the content-type rule but not from the other two.
+
+    ## Authentication
+
+    Off by default. Once an admin password is set (`POST /api/auth`), every operation marked with a lock needs HTTP
+    Basic auth with user `admin`:
+
+    ```
+    curl -u admin:yourpassword http://net2rf-3f2a.local/api/config
+    ```
+
+    Missing or wrong credentials return `401` with a `WWW-Authenticate: Basic` challenge (browsers show a login
+    prompt). After 5 wrong passwords, all attempts are refused with `429` for 30 s. The password is stored as a
+    salted SHA-256 hash. Basic auth is not encrypted on the wire, so treat it as protection on a trusted LAN, not
+    across the internet. Forgotten password: hold the front-panel button 5 s (network reset), which clears it along
+    with the network settings.
+
+    ## Replies
+
+    Successful writes return `{"ok": true, "reboot": <bool>}` unless the operation says otherwise; when `reboot` is
+    true the controller restarts about a second later. Errors return `{"ok": false, "error": "..."}` with a 4xx or
+    5xx status.
+  license:
+    name: See the repository
+    url: https://github.com/mikeneiderhauser/net2rf-led
+servers:
+  - url: http://{host}
+    variables:
+      host:
+        default: net2rf.local
+        description: The controller's IP address or name (net2rf-xxxx.local)
+tags:
+  - name: Status
+    description: |
+      `/api/status` is what the web UI polls; `/api/stats` is the compact form for monitoring.
+
+      **Update rollback.** A newly uploaded firmware boots as *pending*. It is confirmed once the controller has been
+      reachable (web UI up, with a network connection or the setup AP) for 30 s. If it crashes or reboots before
+      that, the bootloader returns to the previous firmware on the next boot; if it never becomes reachable within 3
+      minutes, it rolls itself back. `device.update_pending` and `device.update_rolled_back` report it. This applies
+      to uploads and to installs from GitHub alike.
+  - name: Output
+    description: |
+      RF output, the radio and the amplifier switch.
+
+      **Amplifier power switch.** An optional output that powers an external RF amplifier up and down, e.g. through
+      its 12 V → 5 V buck's EN pin ([assembly guide](https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/build/amplifier.md#amplifier-power-switch)).
+      It uses `pin`: IO2 on the WT32-ETH01, D1 on the XIAO. Until a switch is `fitted` the firmware leaves the pin
+      alone; on the WT32-ETH01 IO2 is also the status LED's pin (`shares_status_led`), and the LED isn't driven while
+      a switch is fitted.
+
+      - An amp switched off (`on: false`) **holds every transmission** (`holds_tx`), so the radio never sends into an
+        unpowered amp: sends return 409 and show data is counted but not sent.
+      - With `follow_output` (the default) the amp is powered only while RF output is on. Turn it off to keep the amp
+        powered with RF output off, e.g. to receive through it in receiver mode.
+      - With `idle_min`, the amp powers down after that many minutes without a transmission; `asleep` is true
+        meanwhile.
+      - Whenever the amp has been powered down for RF output or the idle timer, it's powered back up 0.3 s ahead of
+        the next transmission. `powered` is what the pin is set to now.
+      - Before the firmware starts, IO2 is low (it must be, for serial flashing), so with an active-low switch the amp
+        is powered during boot.
+  - name: Control
+    description: |
+      Test modes, sends and presets. Sends return 409 in receiver mode, with RF output off, or with the amplifier
+      switched off.
+
+      Test mode on protocol 1 uses one broadcast per colour change rather than one packet per zone. A mode started at
+      power-up gives way to live input and comes back 10 s after the input stops (`engine.test.paused` is true
+      meanwhile); a mode started through `/api/test` overrides the input until it is switched off.
+  - name: Settings
+    description: |
+      `/api/config` reads and writes the app settings; any subset of the fields can be written.
+
+      **Protocols.** 0 = Shenzen New Dody (433.889 MHz, 10-colour palette), 1 = LedGiftSupplier.com (433.920 MHz,
+      RGB, group codes). **Each zone drives its own** (`zones[].protocols`: `[0]`, `[1]` or `[0, 1]`), and only those
+      go on air: a zone on `[0]` never costs protocol 1 airtime. A zone on both sends every change twice, protocol 0
+      then protocol 1 (an FX channel effect becomes "off" for fade out, and the plain colour otherwise, on protocol 1,
+      which has no effects). Broadcasts (All off, input-timeout blanking, test colours) go only to protocols some
+      enabled zone uses.
+
+      - `devices.protocols` (write): sets every zone at once. Read: what every zone uses, or, with `per_zone: true`,
+        what the zones use between them. `devices.protocol` (read-only) is the default protocol (new zones when they
+        differ, the channel meter). Zones always keep an address in both protocols, so nothing has to be re-entered
+        when a zone changes protocol.
+      - `devices.base_layer` (protocol 0): the zone addressed to every group (mask `FFFF`) is a base layer. A zone
+        whose colour is not black is cut out of that zone's address ("everyone except"), so base changes don't reach
+        it; a black zone follows the base and gets no packet of its own while the base's broadcast covers it. Zones
+        that change to the same command at the same moment are sent as one packet with their masks combined. Default
+        `true` for new settings, `false` for settings saved by older firmware. In `/api/status` the base zone's
+        `packets` show the address actually used (e.g. `00FBFF0F` with group 2 cut out).
+      - `devices.mode`: `pixel` (3 channels per zone: R G B in `color_order`), `dmx` (4: R, G, B, FX) or `vendor` (5:
+        boot code, group, R, G, B, the LedGiftSupplier DMX transmitter's layout). Vendor mode drives protocol 1 only,
+        so every enabled zone must use protocol 1 (a zone also on protocol 0 sends only protocol 1). A zone only
+        transmits while its first channel is 85, and the group comes from its second channel.
+      - `zones[].addr_p0`: 4 bytes (packet bytes 0-3; `00FFFF0F` = all groups, `0002000F` = group 1, `0004000F` =
+        group 2, ...). `zones[].addr_p1`: group code byte + byte 6 (`00FF` = group 0, all groups; `01FF` = group 1).
+        Factory default: protocol 1 with five zones, *All Zones* and *Zone 1* to *4* (groups 1-4). Zone *k* defaults
+        to group *k* in both protocols, and zone 0 to all groups. `zones[].start` is read-only: zone *k* starts at
+        `start_channel + k × (3, 4 or 5)`. Settings saved by firmware before per-zone protocols load with every zone on
+        the controller's old protocol and its address kept.
+      - `/api/status` → `engine.zones[].packets`: the last packet sent on each of the zone's protocols (`p`, `pkt`).
+      - Transmit order: zones are sent when their colour changes, taking turns. When zones that reach the same
+        devices change together, the broader address goes first (all groups before a single group), so the more
+        specific colour lands last.
+      - `radio.type`: `cc1101` or `sx1278`. A new or reset controller starts on `sx1278` (WT32-ETH01) or `cc1101`
+        (XIAO ESP32-S3). `tx_power` is clamped to the module's range. `refresh_ms` defaults to 0 (send on change
+        only): the devices latch, and extra airtime only adds interference.
+      - `radio.lbt_enabled` (listen before transmit, on for new settings; settings saved by older firmware keep
+        theirs): before each update the radio listens for 2.5 ms and only transmits if the strongest signal stayed
+        below `lbt_threshold_dbm` (-120..-30, default -75). Otherwise it backs off a random 3-15 ms and listens again,
+        for at most 250 ms, then sends anyway. Set the threshold about 10 dB above the quiet reading shown on
+        *Devices & Radio* (`radio.lbt.last_rssi_dbm` in `/api/status`). See the
+        [radio notes](https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/reference/radio.md#multiple-controllers).
+      - `input.timeout_s`: blank the devices after this long without input. 0 = hold the last colour. On protocol 1
+        the blank is one broadcast "off" to every group (so it also reaches devices in groups no zone uses).
+      - `input.e131_*`: E1.31 listens on UDP 5568 for one universe (slots 1-512 = channels 1-512); with multicast it
+        also joins 239.255.*hi*.*lo* for that universe. Off by default so a shared universe can't drive the devices
+        by accident.
+      - `display.sleep_min`: minutes without a USER button press before the OLED switches off (default 10, 0 =
+        never).
+      - `update.repo`: GitHub repository (`owner/name`) whose releases the web UI offers as firmware updates. Default
+        `mikeneiderhauser/net2rf-led`; `""` restores the default.
+
+      **Receiver mode.** `role`: `controller` (default) or `receiver`. A receiver never transmits: it listens between
+      the two protocol frequencies and decodes both protocols, and transmit requests return 409. `rx_profile` tunes
+      it: `normal` (default), `near` (gain capped, for a transmitter within a few metres) or `wide` (wider
+      bandwidth). `/api/status` → `engine.receiver` has `enabled`, `active` (listening), `supported`, `profile`,
+      `bandwidth` (Hz), `freq`, `frames` (decoded), `bad` (right shape, wrong checksum), `updates` (distinct
+      commands), `rssi_dbm` / `rssi_peak_dbm` (channel level over the last 0.5 s), `last_age_ms`, `zones` (per group:
+      `p`, `group` (`"all"` = every group), `rgb`, `label` (protocol 0 colour or effect), `pkt`, `updates`, `age_ms`,
+      `rssi_dbm`), `noise_pauses` (times a flood of noise edges paused listening for 50 ms, to keep the controller
+      responsive) and `log` (latest transmissions, newest first: `p`, `pkt`, `n` copies heard, `rssi_dbm`, and for
+      protocol 1 `checksum`: `vendor` or `legacy`). `POST /api/stats/reset` clears it.
+
+      **Raw captures.** `engine.receiver.captures` lists the stored bursts, newest first (`id`, `age_ms`, `pulses`,
+      `us` total length, `decoded`, `truncated` at 1024 pulses, `rssi_dbm` peak). `captures_quiet` counts bursts
+      dropped for being no louder than the noise floor. `GET /api/rx/capture?id=N` returns one.
+
+      **Coverage group** (`sync`, see the
+      [radio notes](https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/reference/radio.md#coverage-group)).
+      `enabled` takes part; `master` (with `enabled`) makes this controller the one that receives the show and
+      schedules every controller's slot; `copies` (1-3) is the frames each controller sends per change, used by the
+      master for the whole group. Ignored in receiver mode. `/api/status` → `group`: `role` (`off`, `master`,
+      `remote`), `mac`, `masters` (other masters alive: `name`, `mac`, `ip`), `conflict` (more than one master).
+      Master: `remotes` (`name`, `mac`, `ip`, `state` = `joining` / `synced` / `sync_poor` / `lost`, `error_us`,
+      `sync_age_ms`, `on_time`, `late`, `missed` as the remote reports them), `plans`, `last_plan` (`order`, `copies`,
+      `guard_us`, `lead_us`, `length_us`, `age_ms`). Remote: `following`, `master` (`name`, `mac`, `ip`,
+      `ack_age_ms`), `clock` (`synced`, `samples`, `offset_us`, `error_us`, `rtt_us`), `on_time`, `late`, `missed`,
+      `last_tx_age_ms`. `engine.output` adds `group_plans`, `group_settles` (master) and `group_slots`,
+      `group_skipped` (remote).
+  - name: Network
+    description: Network settings and the Wi-Fi scan. Network changes reboot the controller.
+  - name: Discovery
+    description: |
+      Controllers find each other two ways; broadcasts and mDNS stay on the local subnet, so controllers on
+      different VLANs don't see each other.
+
+      - **Heartbeat (live state):** every 5 s each controller broadcasts a small JSON packet on **UDP 4049** on every
+        active interface (Ethernet, Wi-Fi, setup AP):
+
+        ```
+        {"p":"net2rf","v":1,"id":"24DB","name":"Front Yard","host":"net2rf-24db","fw":"1.2.0",
+         "radio":"ready","input":"live","out":true,"test":false,"zones":4,"air":12,"up":86400}
+        ```
+
+        It also carries `board` and `net` (`eth`, `wifi` or `ap`). `input` is `live` (data in the last 3 s), `idle`,
+        `timed_out` or `none`; `air` is the controller's RF airtime over the last 10 s (%). A controller that has
+        just started adds `"hello":true`; the others answer at once (broadcast, plus directly to the sender, which
+        also works across subnets). A beat also goes out immediately when the radio, input, output or test state
+        changes. The sender's IP is taken from the packet, not the payload. Firmware with coverage groups adds
+        `"mac"` (12 hex digits, the Ethernet MAC: a stable identity), `"sync"` (takes part in a coverage group) and,
+        with `sync`, `"master"`. The master lists every controller whose beat has `sync` and not `master`; a remote
+        follows the one with both. From 0.2.1 every beat adds `"rep"` (repeats per change), and a master's adds
+        `"rem"` (remotes synced now, which each get a slot per change) and `"cp"` (copies each controller sends), so
+        a sender can work out how many changes a second fit. A change to either count sends a beat at once.
+      - **Coverage group (UDP 4050, unicast only):** remote → master `SYNC` every second, master → remote `SYNC_ACK`
+        (NTP-style timestamps), and master → remote `TX` per change (slot start on the master's clock, copies,
+        protocol, frequency, packet). Binary, little-endian, starting `N2RG`, version 1; see
+        `lib/net2rf_group/group_sync.h`.
+      - **mDNS** (`_net2rf._tcp`, every 60 s): finds controllers whose heartbeats can't reach this one, such as older
+        firmware or Wi-Fi with client isolation. They're listed without live state.
+
+      `tools/peer_sim.py` simulates other controllers for testing.
+
+      **Falcon Player and xLights** find the controller a third way: it answers FPP's *discover* ping on **UDP
+      32320** (multicast 239.70.80.80, broadcast or unicast) with a version 3 ping packet: system type `0xC0` (other
+      system), mode *bridge*, its IP, hostname, firmware version, model `Net2RF-LED` and its channel range (for
+      example `0-47`). It sends one such ping when the network comes up and otherwise only when asked, at most once
+      a second, and replies both to the multicast group and directly to the asker. It takes no part in MultiSync
+      playback. FPP has not assigned this controller a type code, and it does not borrow another product's: players
+      list it by hostname and model without knowing what it is, and xLights creates it as an E1.31 controller with
+      no vendor (set DDP, *Keep Channel Numbers* off and the vendor yourself). The model string is the ID of the
+      xLights controller definition in `tools/xlights`.
+  - name: Tools
+    description: Diagnostics and the Tools page
+  - name: Records
+    description: |
+      The controller keeps small JSON files on its 128 KB data partition (LittleFS on the partition labelled
+      `spiffs`), so they survive restarts, firmware updates and a factory reset. A full flash erase removes them.
+      Nothing depends on them: a board without the partition simply reports `mounted: false`.
+
+      | File | Holds | Written |
+      |---|---|---|
+      | `boots.json` | The last 32 restarts: why, on which firmware, how long the run before lasted, and the crash address when there was a core dump | Once per boot. After 5 abnormal restarts in a row nothing is written until a boot has stayed up for a minute; that entry then says how many were `skipped` |
+      | `seen.json` | Up to 64 transmitters heard in receiver mode, by protocol and address | Only with *Record this list to flash* switched on: a new transmitter within a minute, updated counts every 15 minutes, never during a firmware update |
+      | `store.json` | The recording setting | When it is changed |
+      | `cap0.json` ... `cap5.json` | Raw captures kept with **Keep** on the Receiver page | When kept |
+
+      **Flash wear.** The partition is 32 blocks rated for about 100,000 erases each, and writing a small file costs
+      about two, so it is good for roughly a million writes. One write per boot is centuries of normal use; the two
+      cases that could matter are paced: a restart loop stops writing the boot log, and the heard list is opt-in and
+      written at most every 15 minutes (a new transmitter within one). Every file carries the running total as `w`,
+      reported as `writes`.
+  - name: Firmware
+    description: |
+      Firmware is installed by uploading a `.bin` to `POST /update`: a file picked in the web UI, or one the web UI
+      fetched in the browser from the project's GitHub Pages site (the latest release only). The controller does not
+      download firmware and does not check for releases: a secure connection needs about 100 KB of heap, which left
+      about 7 KB free while it ran. Nothing in the firmware opens a secure connection, and the TLS stack is not
+      linked in. See *Status* for update rollback.
+  - name: WLED
+    description: |
+      The part of WLED's JSON API that xLights' WLED upload driver reads and writes. `brand` is `Net2RF`, so
+      xLights' WLED discovery ignores the controller.
+
+paths:
+  /:
+    get:
+      tags: [Status]
+      summary: Web UI
+      responses:
+        "200":
+          description: The web UI (gzip-compressed HTML)
+          content:
+            text/html: {}
+
+  # ---------------------------------------------------------------- Status
+  /api/status:
+    get:
+      tags: [Status]
+      summary: Device, network and engine status
+      description: |
+        Polled by the web UI every second. `device.free_heap` / `min_free_heap` / `heap_bytes` are RAM in bytes
+        (free now, lowest since boot, total); `device.firmware_bytes` and `device.firmware_slot_bytes` give the
+        firmware's size and the flash slot it must fit in (free flash = the difference). The receiver and coverage
+        group fields are described under *Settings*.
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Status"}
+  /api/stats:
+    get:
+      tags: [Status]
+      summary: Compact counters for monitoring
+      description: |
+        For a Home Assistant REST sensor, Grafana or scripts. `repeats` is here so a sender can pace itself without
+        the (password-protected) settings.
+
+        `input.packets` / `frames` count every valid DDP or E1.31 packet and frame (`ddp_packets` / `e131_packets`
+        split them; `last_source` is the protocol of the last one, `source` its sender's IP). `output.suppressed`
+        counts zone updates consumed while output was off. With listen before transmit on, `lbt_checks` counts
+        updates that listened first, `lbt_waits` those that found the channel busy, `lbt_forced` those sent anyway
+        after 250 ms, and `lbt_wait_ms` the total delay. A steadily rising `lbt_forced` means the channel is
+        saturated: lower the load (fewer updates, fewer repeats) or the number of transmitters.
+        `POST /api/stats/reset` zeroes the counters.
+
+        `update` is the latest release a browser has reported (`POST /api/update/latest`), also in `/api/status` as
+        `device.update_check`.
+      responses:
+        "200":
+          description: Counters
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Stats"}
+  /api/stats/reset:
+    post:
+      tags: [Status]
+      summary: Zero the packet counters
+      description: Also clears receiver mode's log.
+      security: [{basicAuth: []}]
+      requestBody: {$ref: "#/components/requestBodies/Empty"}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  # ---------------------------------------------------------------- Output
+  /api/output:
+    get:
+      tags: [Output]
+      summary: RF output state
+      responses:
+        "200":
+          description: RF output
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Output"}
+    post:
+      tags: [Output]
+      summary: Switch RF output on or off
+      description: |
+        Kept across restarts. With output off, show data is still received and counted, nothing is transmitted,
+        and an amplifier that follows RF output powers down.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: {type: boolean}
+      responses:
+        "200":
+          description: The new state
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - {$ref: "#/components/schemas/Output"}
+                  - type: object
+                    properties:
+                      ok: {const: true}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/radio/restart:
+    post:
+      tags: [Output]
+      summary: Restart the radio
+      description: Shuts the radio chip down and initialises it again, then re-sends every zone's colour.
+      security: [{basicAuth: []}]
+      requestBody: {$ref: "#/components/requestBodies/Empty"}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/amp:
+    get:
+      tags: [Output]
+      summary: Amplifier power switch
+      description: Also in `/api/status` as `device.amp`.
+      responses:
+        "200":
+          description: The switch
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Amp"}
+    post:
+      tags: [Output]
+      summary: Change the amplifier switch
+      description: Any subset of the fields. Saved and kept across restarts.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fitted: {type: boolean}
+                active_low: {type: boolean}
+                "on": {type: boolean}
+                idle_min: {type: integer, minimum: 0, maximum: 1440}
+                follow_output: {type: boolean}
+            example: {fitted: true, active_low: true, "on": true, idle_min: 30, follow_output: true}
+      responses:
+        "200":
+          description: The switch after the change
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {const: true}
+                  amp: {$ref: "#/components/schemas/Amp"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  # ---------------------------------------------------------------- Control
+  /api/test:
+    post:
+      tags: [Control]
+      summary: Test mode
+      description: |
+        Overrides the show input. **fade** holds each colour of a palette, then fades to the next; anything left
+        out keeps the Halloween default (3 s fade, 4 s hold). **flicker** is a candle in the `rgb` colour.
+        `boot: true` also starts this mode at every power-up, where it gives way to live input and comes back 10 s
+        after the input stops; `false` stops that.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: {type: string, enum: ["off", solid, cycle, fade, flicker]}
+                rgb: {$ref: "#/components/schemas/Rgb"}
+                palette:
+                  type: array
+                  minItems: 1
+                  maxItems: 8
+                  items: {$ref: "#/components/schemas/Rgb"}
+                fade_s: {type: number, minimum: 0, maximum: 600}
+                hold_s: {type: number, minimum: 0, maximum: 600}
+                boot: {type: boolean}
+            example: {mode: fade, palette: [FF5000, 7000FF], fade_s: 3, hold_s: 4}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/send:
+    post:
+      tags: [Control]
+      summary: Send to one zone or every device
+      description: |
+        `zone: "all"` (or -1) reaches every device: one broadcast on protocol 1, one packet per enabled zone on
+        protocol 0. `"all"` with `"off"` behaves like `/api/all-off`. Protocol 0 only: `fxa` fades in to the last
+        colour, `fxb` fades out, `fxc` is a third effect packet with no known result.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [zone, action]
+              properties:
+                zone:
+                  oneOf:
+                    - {type: integer, minimum: -1, maximum: 15}
+                    - {const: all}
+                action: {type: string, enum: [color, "off", fxa, fxb, fxc]}
+                rgb: {$ref: "#/components/schemas/Rgb"}
+            example: {zone: 1, action: color, rgb: FF0000}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "409": {$ref: "#/components/responses/NotTransmitting"}
+  /api/all-off:
+    post:
+      tags: [Control]
+      summary: Switch every device off
+      description: Leaves test mode. Devices then stay off until the input changes a colour.
+      security: [{basicAuth: []}]
+      requestBody: {$ref: "#/components/requestBodies/Empty"}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "409": {$ref: "#/components/responses/NotTransmitting"}
+  /api/raw:
+    post:
+      tags: [Control]
+      summary: Send a raw packet
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [protocol, hex]
+              properties:
+                protocol: {type: integer, enum: [0, 1]}
+                hex: {type: string, pattern: "^[0-9A-Fa-f]{14}$", description: The 7-byte packet}
+                repeats: {type: integer, minimum: 1}
+                fix: {type: boolean, description: Fix up the checksum}
+            example: {protocol: 1, hex: 55000FFFFF55FF, repeats: 3, fix: true}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "409": {$ref: "#/components/responses/NotTransmitting"}
+  /api/presets:
+    get:
+      tags: [Control]
+      summary: Saved fade palettes
+      responses:
+        "200":
+          description: The presets
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PresetList"}
+    post:
+      tags: [Control]
+      summary: Add, replace or delete a preset
+      description: Adds a preset, or replaces the one of that name. Up to 8, names up to 20 characters.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - {$ref: "#/components/schemas/Preset"}
+                - type: object
+                  required: [delete]
+                  properties:
+                    delete: {type: string, description: The name of the preset to remove}
+            example: {name: Xmas, palette: [FF0000, 00FF00], fade_s: 3, hold_s: 4}
+      responses:
+        "200":
+          description: The presets after the change
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PresetList"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/identify:
+    post:
+      tags: [Control]
+      summary: Identify this controller
+      description: Flickers the status LED and flashes the OLED.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                seconds: {type: integer, minimum: 0, maximum: 120, default: 10, description: 0 stops}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/display:
+    post:
+      tags: [Control]
+      summary: OLED sleep time, or wake it
+      description: "`device.display_info` in `/api/status` has `asleep`, `sleep_min` and `button`."
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sleep_min: {type: integer, minimum: 0, maximum: 240, description: 0 = never}
+                wake: {type: boolean}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  # ---------------------------------------------------------------- Settings
+  /api/config:
+    get:
+      tags: [Settings]
+      summary: Current settings
+      description: The app settings and the network settings, without passwords.
+      security: [{basicAuth: []}]
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  app: {$ref: "#/components/schemas/AppSettings"}
+                  network: {$ref: "#/components/schemas/NetworkSettings"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    post:
+      tags: [Settings]
+      summary: Change app settings
+      description: Any subset of the fields. Changing `radio.type` reboots.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AppSettings"}
+            example: {radio: {repeats: 2}, input: {timeout_s: 0}}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/auth:
+    post:
+      tags: [Settings]
+      summary: Set, change or remove the admin password
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: {type: string, description: 8-64 characters; empty removes the password}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/export:
+    get:
+      tags: [Settings]
+      summary: Download settings
+      description: |
+        `part=settings` gives the app settings plus `boot_test`, `amp` and `fade_presets`; `part=network` the
+        network settings; without `part`, both. Passwords are never included.
+      security: [{basicAuth: []}]
+      parameters:
+        - name: part
+          in: query
+          schema: {type: string, enum: [settings, network]}
+      responses:
+        "200":
+          description: An export file
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ExportFile"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/import:
+    post:
+      tags: [Settings]
+      summary: Restore an export file
+      description: Replaces the parts the file holds and leaves the other alone. Reboots.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ExportFile"}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/reset:
+    post:
+      tags: [Settings]
+      summary: Put settings back to defaults
+      description: "`all` = both. Reboots."
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [what]
+              properties:
+                what: {type: string, enum: [settings, network, all]}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/factory-reset:
+    post:
+      tags: [Settings]
+      summary: Factory reset
+      description: Same as `/api/reset` with `all`. Reboots.
+      security: [{basicAuth: []}]
+      requestBody: {$ref: "#/components/requestBodies/Empty"}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/reboot:
+    post:
+      tags: [Settings]
+      summary: Reboot
+      security: [{basicAuth: []}]
+      requestBody: {$ref: "#/components/requestBodies/Empty"}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  # ---------------------------------------------------------------- Network
+  /api/network:
+    post:
+      tags: [Network]
+      summary: Change network settings, then reboot
+      description: Omit `wifi_pass` and `ap_pass` to keep the current ones. `ap_mode` is when the setup hotspot runs.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NetworkSettings"}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/wifi/scan:
+    post:
+      tags: [Network]
+      summary: Start a Wi-Fi scan
+      security: [{basicAuth: []}]
+      requestBody: {$ref: "#/components/requestBodies/Empty"}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    get:
+      tags: [Network]
+      summary: Wi-Fi scan results
+      security: [{basicAuth: []}]
+      responses:
+        "200":
+          description: Networks found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  running: {type: boolean}
+                  networks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ssid: {type: string}
+                        rssi: {type: integer, description: dBm}
+                        secure: {type: boolean}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  # ---------------------------------------------------------------- Discovery
+  /api/discover:
+    get:
+      tags: [Discovery]
+      summary: Controllers on the network
+      description: |
+        This controller plus every other one it knows of, with live state.
+
+        - `online`: a heartbeat arrived in the last 15 s (three missed beats = offline). Offline controllers stay
+          listed for 10 minutes, then drop off.
+        - `via`: `udp` (heartbeat), `mdns`, or `self`. Entries seen only via mDNS have no `state`.
+        - `alias_claimed`: this controller currently answers `net2rf.local`. Exactly one controller does: the one
+          with the lowest ID among those it can see, re-elected as controllers come and go.
+      responses:
+        "200":
+          description: Controllers
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Discovery"}
+    post:
+      tags: [Discovery]
+      summary: Run an mDNS search now
+      description: Otherwise every 60 s. Same-origin only.
+      requestBody: {$ref: "#/components/requestBodies/Empty"}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+
+  # ---------------------------------------------------------------- Tools
+  /api/tools:
+    get:
+      tags: [Tools]
+      summary: Live data for the Tools page
+      responses:
+        "200":
+          description: The last transmissions and the raw input channels
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tx:
+                    type: array
+                    description: The last 24 transmissions, newest first
+                    items:
+                      type: object
+                      properties:
+                        age_ms: {type: integer}
+                        p: {type: integer, description: Protocol}
+                        pkt: {type: string, description: Packet, hex}
+                        n: {type: integer, description: Repeats}
+                        manual: {type: boolean}
+                        ok: {type: boolean}
+                  tx_total: {type: integer}
+                  input:
+                    type: object
+                    properties:
+                      start: {type: integer}
+                      width: {type: integer, description: Channels per zone}
+                      channels: {type: array, items: {type: integer}}
+  /api/rssi:
+    get:
+      tags: [Tools]
+      summary: Signal strength on the device frequency
+      description: Listens for about 20 ms, between transmissions.
+      security: [{basicAuth: []}]
+      responses:
+        "200":
+          description: The reading
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  peak_dbm: {type: integer}
+                  avg_dbm: {type: integer}
+                  freq_hz: {type: integer}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "409": {$ref: "#/components/responses/Error"}
+  /api/rx/capture:
+    get:
+      tags: [Tools]
+      summary: One raw receiver capture
+      description: "`pulses` are durations in µs: positive = carrier on, negative = off."
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: {type: integer}
+        - name: format
+          in: query
+          description: "`ook` returns rtl_433's pulse-data text instead"
+          schema: {type: string, enum: [ook]}
+      responses:
+        "200":
+          description: The capture
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Capture"}
+            text/plain:
+              schema: {type: string}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/i2c/scan:
+    get:
+      tags: [Tools]
+      summary: What answers on the OLED's I²C bus
+      responses:
+        "200":
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bus_ok: {type: boolean}
+                  devices: {type: array, items: {}}
+                  sda_pin: {type: integer}
+                  scl_pin: {type: integer}
+                  sda_high: {type: boolean}
+                  scl_high: {type: boolean}
+                  orientation: {}
+  /api/heap:
+    get:
+      tags: [Tools]
+      summary: Memory diagnostics
+      responses:
+        "200":
+          description: "`free`, `largest_block`, `min_free`, block counts, and per task `stack_unused`"
+          content:
+            application/json:
+              schema: {type: object}
+  /api/flash:
+    get:
+      tags: [Tools]
+      summary: Flash chip and partition table
+      description: |
+        `used_bytes` is given for the running firmware slot and the settings store. `flash_bytes` is the size the
+        firmware was built for; on a board with a larger chip the difference is unused.
+      responses:
+        "200":
+          description: Flash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  flash_bytes: {type: integer, description: The size the firmware was built for}
+                  flash_chip_bytes: {type: integer, description: The real size, from the chip}
+                  flash_id: {type: integer}
+                  flash_maker_id: {type: integer}
+                  flash_mode: {type: string}
+                  flash_speed_hz: {type: integer}
+                  partitions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        label: {type: string}
+                        offset: {type: integer}
+                        bytes: {type: integer}
+                        kind: {type: string}
+                        used_bytes: {type: integer}
+  /api/crash:
+    get:
+      tags: [Tools]
+      summary: The last crash
+      description: From the core dump kept in flash. Stays until the next crash.
+      security: [{basicAuth: []}]
+      responses:
+        "200":
+          description: The crash, if any
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  present: {type: boolean}
+                  task: {type: string}
+                  reason: {type: string}
+                  pc: {type: string}
+                  address: {type: string}
+                  backtrace: {type: array, items: {type: string}, description: "Look up in that build's firmware.elf"}
+                  elf_sha256: {type: string}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  # ---------------------------------------------------------------- Records
+  /api/store:
+    get:
+      tags: [Records]
+      summary: The data partition and its files
+      security: [{basicAuth: []}]
+      responses:
+        "200":
+          description: Store
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mounted: {type: boolean}
+                  partition: {type: string}
+                  total_bytes: {type: integer}
+                  used_bytes: {type: integer}
+                  boot_no: {type: integer}
+                  writes: {type: integer, description: File writes over the partition's life}
+                  record_seen: {type: boolean}
+                  boot_log_paused: {type: boolean}
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: {type: string}
+                        bytes: {type: integer}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    post:
+      tags: [Records]
+      summary: Record what receiver mode hears to flash
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [record_seen]
+              properties:
+                record_seen: {type: boolean}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/store/boots:
+    get:
+      tags: [Records]
+      summary: The boot log
+      description: The last 32 restarts, oldest first.
+      security: [{basicAuth: []}]
+      responses:
+        "200":
+          description: Boot log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  boots: {type: integer, description: Count since the log began}
+                  abnormal_streak: {type: integer}
+                  boot_no: {type: integer}
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        n: {type: integer}
+                        reason: {type: string}
+                        fw: {type: string}
+                        prev_uptime_s: {type: integer}
+                        pc: {type: string, description: After a crash}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/store/seen:
+    get:
+      tags: [Records]
+      summary: Transmitters receiver mode has decoded
+      security: [{basicAuth: []}]
+      responses:
+        "200":
+          description: Heard transmitters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        protocol: {type: integer}
+                        address: {type: string}
+                        group: {type: integer, description: Protocol 1}
+                        count: {type: integer}
+                        first_boot: {type: integer}
+                        last_boot: {type: integer}
+                        best_rssi_dbm: {type: integer}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/store/captures:
+    get:
+      tags: [Records]
+      summary: Saved captures
+      description: Without their pulses; with `slot`, one capture in full.
+      security: [{basicAuth: []}]
+      parameters:
+        - name: slot
+          in: query
+          schema: {type: integer, minimum: 0, maximum: 5}
+      responses:
+        "200":
+          description: Captures
+          content:
+            application/json:
+              schema: {type: object}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    post:
+      tags: [Records]
+      summary: Keep or free a capture
+      description: Keeping replies with its `slot`; `507` when all 6 slots are used.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [id]
+                  properties:
+                    id: {type: integer, description: Receiver capture id}
+                    note: {type: string}
+                - type: object
+                  required: [delete]
+                  properties:
+                    delete: {type: integer, description: Slot to free}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "507": {$ref: "#/components/responses/Error"}
+  /api/store/clear:
+    post:
+      tags: [Records]
+      summary: Clear records
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [what]
+              properties:
+                what: {type: string, enum: [boots, seen, captures, all]}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/store/file:
+    get:
+      tags: [Records]
+      summary: Download one stored file
+      description: "`boots.json`, `seen.json`, `store.json` or `cap0.json` to `cap5.json` (see *Records*)."
+      security: [{basicAuth: []}]
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: {type: string, example: boots.json}
+      responses:
+        "200":
+          description: The file
+          content:
+            application/json: {}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    post:
+      tags: [Records]
+      summary: Delete one stored file
+      description: |
+        `boots.json` restarts the restart count, `seen.json` empties the heard list, `store.json` puts recording back
+        to off.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delete]
+              properties:
+                delete: {type: string, example: cap0.json}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/store/bundle:
+    get:
+      tags: [Records]
+      summary: One diagnostics file for a fault report
+      description: Status, last crash, boot log, heard transmitters, saved captures and settings. Never a password.
+      security: [{basicAuth: []}]
+      responses:
+        "200":
+          description: The bundle
+          content:
+            application/json: {}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  # ---------------------------------------------------------------- Firmware
+  /update:
+    post:
+      tags: [Firmware]
+      summary: Upload firmware
+      description: |
+        Origin and credentials are checked before anything is written to flash. Reboots when done. The new
+        firmware is confirmed once the controller has been reachable for 30 s, and rolls back otherwise.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [firmware]
+              properties:
+                firmware: {type: string, format: binary, description: firmware.bin}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "500": {$ref: "#/components/responses/Error"}
+  /api/update/latest:
+    post:
+      tags: [Firmware]
+      summary: Report the latest release
+      description: |
+        The web UI reports the latest release it found on GitHub, so the dashboard and the OLED can say a newer
+        version exists. Kept in memory only; the controller never contacts GitHub itself.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag]
+              properties:
+                tag: {type: string, example: v1.2.3}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  # ---------------------------------------------------------------- WLED
+  /json/info:
+    get:
+      tags: [WLED]
+      summary: Device info, WLED style
+      description: "`brand` is `Net2RF`, so xLights' WLED discovery ignores the controller."
+      responses:
+        "200":
+          description: Info
+          content:
+            application/json:
+              schema: {type: object}
+  /json/cfg:
+    get:
+      tags: [WLED]
+      summary: Port 1's pixel count (= zones) and input, WLED style
+      responses:
+        "200":
+          description: Config
+          content:
+            application/json:
+              schema: {type: object}
+    post:
+      tags: [WLED]
+      summary: What xLights posts on Upload
+      description: |
+        `hw.led.ins[0].len` sets the number of zones (pixel mode, 1-16); `if.live.port` 4048 enables DDP and 5568
+        enables E1.31 with `if.live.dmx.uni`. The start channel becomes 1. A zone added this way gets its own group
+        unless it was configured before. WLED's per-port colour order is ignored (it describes LED wiring; the
+        controller's colour order must match the model's String Type). Art-Net, more than one port or more than 16
+        pixels return 400.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object}
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: User `admin` and the admin password. Only needed once a password is set.
+
+  requestBodies:
+    Empty:
+      description: An empty JSON object (the content type is still required)
+      content:
+        application/json:
+          schema: {type: object}
+          example: {}
+
+  responses:
+    Ok:
+      description: Done
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Ok"}
+    Error:
+      description: Refused
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    BadRequest:
+      description: A missing or bad value
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Unauthorized:
+      description: An admin password is set and the credentials are missing or wrong (429 after 5 wrong passwords)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Forbidden:
+      description: Cross-site request blocked (another site's Origin, or an unknown host name)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    NotTransmitting:
+      description: |
+        Nothing can be sent: receiver mode, RF output off, the amplifier switched off, or the transmit queue full
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+          example: {ok: false, error: RF output is disabled}
+
+  schemas:
+    Ok:
+      type: object
+      properties:
+        ok: {const: true}
+        reboot: {type: boolean, description: The controller restarts about a second later}
+    Error:
+      type: object
+      properties:
+        ok: {const: false}
+        error: {type: string}
+    Rgb:
+      type: string
+      pattern: "^[0-9A-Fa-f]{6}$"
+      example: FF0000
+
+    Output:
+      type: object
+      properties:
+        enabled: {type: boolean, description: The RF output switch}
+        transmitting:
+          type: boolean
+          description: False while output is off, in receiver mode, or while the amplifier is switched off by hand
+    Amp:
+      type: object
+      properties:
+        fitted: {type: boolean, description: A switch is wired to the pin; until then the pin is left alone}
+        active_low: {type: boolean, description: The pin is low while the amp is on (an N-FET on the buck's EN)}
+        "on": {type: boolean, description: "Use amplifier. Off holds every transmission (holds_tx)"}
+        idle_min: {type: integer, minimum: 0, maximum: 1440, description: Power down after this long without a transmission (0 = never)}
+        follow_output: {type: boolean, description: Powered only while RF output is on}
+        asleep: {type: boolean, description: Powered down by the idle timer}
+        powered: {type: boolean, description: What the pin is set to now}
+        holds_tx: {type: boolean, description: Switched off by hand, so nothing is transmitted}
+        pin: {type: integer}
+        shares_status_led: {type: boolean}
+    Preset:
+      type: object
+      required: [name, palette]
+      properties:
+        name: {type: string, maxLength: 20}
+        palette:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: {$ref: "#/components/schemas/Rgb"}
+        fade_s: {type: number}
+        hold_s: {type: number}
+    PresetList:
+      type: object
+      properties:
+        presets:
+          type: array
+          maxItems: 8
+          items: {$ref: "#/components/schemas/Preset"}
+
+    Status:
+      type: object
+      description: Large; the main parts are listed. See the API reference for the receiver and coverage group fields.
+      properties:
+        device:
+          type: object
+          properties:
+            name: {type: string}
+            firmware: {type: string}
+            board: {type: string}
+            board_name: {type: string}
+            chip: {type: string}
+            uptime_s: {type: integer}
+            reset_reason: {type: string}
+            uplink: {type: string, description: The connection in use}
+            free_heap: {type: integer}
+            min_free_heap: {type: integer}
+            heap_bytes: {type: integer}
+            firmware_bytes: {type: integer}
+            firmware_slot_bytes: {type: integer}
+            update_pending: {type: boolean}
+            update_rolled_back: {type: boolean}
+            update_check: {$ref: "#/components/schemas/UpdateCheck"}
+            amp: {$ref: "#/components/schemas/Amp"}
+            display_info:
+              type: object
+              properties:
+                asleep: {type: boolean}
+                sleep_min: {type: integer}
+                button: {type: boolean}
+        network: {type: object}
+        engine:
+          type: object
+          properties:
+            role: {type: string, enum: [controller, receiver]}
+            radio:
+              type: object
+              properties:
+                type: {type: string, enum: [cc1101, sx1278]}
+                name: {type: string}
+                state: {type: string, enum: [initializing, ready, not_detected]}
+                detail: {type: string}
+                min_power: {type: integer}
+                max_power: {type: integer}
+                queue: {type: integer}
+                lbt: {type: object}
+            input: {$ref: "#/components/schemas/InputStats"}
+            output: {$ref: "#/components/schemas/OutputStats"}
+            test: {type: object}
+            zones: {type: array, items: {type: object}}
+            receiver: {type: object}
+        group: {type: object, description: Coverage group}
+    Stats:
+      type: object
+      properties:
+        uptime_s: {type: integer}
+        free_heap: {type: integer}
+        firmware: {type: string}
+        name: {type: string}
+        output_enabled: {type: boolean}
+        repeats: {type: integer}
+        radio: {type: string, enum: [initializing, ready, not_detected]}
+        test_mode: {type: string, enum: ["off", solid, cycle, fade, flicker]}
+        role: {type: string, enum: [controller, receiver]}
+        update: {$ref: "#/components/schemas/UpdateCheck"}
+        input: {$ref: "#/components/schemas/InputStats"}
+        output: {$ref: "#/components/schemas/OutputStats"}
+        zones:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {type: string}
+              enabled: {type: boolean}
+              rgb: {type: string}
+              updates: {type: integer}
+              last_tx_age_ms: {type: integer}
+    UpdateCheck:
+      type: object
+      properties:
+        available: {type: boolean, description: "`latest` is newer than the running firmware"}
+        latest: {type: string, description: Missing until a browser has reported one}
+        reported_ago_s: {type: integer}
+    InputStats:
+      type: object
+      properties:
+        packets: {type: integer}
+        frames: {type: integer}
+        ddp_packets: {type: integer}
+        e131_packets: {type: integer}
+        malformed: {type: integer}
+        ignored: {type: integer}
+        bytes: {type: integer}
+        fps: {type: number}
+        seen: {type: boolean}
+        timed_out: {type: boolean}
+        age_ms: {type: integer}
+        source: {type: string, description: The last sender's IP}
+        last_source: {type: string, description: The last input's protocol}
+        timeout_s: {type: integer}
+    OutputStats:
+      type: object
+      properties:
+        enabled: {type: boolean}
+        suppressed: {type: integer, description: Zone updates consumed while output was off}
+        updates: {type: integer}
+        frames: {type: integer}
+        errors: {type: integer}
+        manual: {type: integer}
+        airtime_pct: {type: number, description: Over the last 10 s}
+        lbt_checks: {type: integer}
+        lbt_waits: {type: integer}
+        lbt_forced: {type: integer, description: Sent anyway after 250 ms; steadily rising means the channel is full}
+        lbt_wait_ms: {type: integer}
+        group_plans: {type: integer}
+        group_settles: {type: integer}
+        group_slots: {type: integer}
+        group_skipped: {type: integer}
+
+    AppSettings:
+      type: object
+      description: Every field is optional when writing. See the API reference for what each does.
+      properties:
+        name: {type: string}
+        output_enabled: {type: boolean}
+        role: {type: string, enum: [controller, receiver]}
+        rx_profile: {type: string, enum: [normal, near, wide]}
+        devices:
+          type: object
+          properties:
+            protocols: {type: array, items: {type: integer, enum: [0, 1]}, description: Write sets every zone}
+            per_zone: {type: boolean, readOnly: true}
+            protocol: {type: integer, readOnly: true}
+            mode: {type: string, enum: [pixel, dmx, vendor]}
+            color_order: {type: string, example: RGB}
+            base_layer: {type: boolean}
+        input:
+          type: object
+          properties:
+            ddp_enabled: {type: boolean}
+            ddp_port: {type: integer}
+            e131_enabled: {type: boolean}
+            e131_universe: {type: integer}
+            e131_multicast: {type: boolean}
+            start_channel: {type: integer}
+            timeout_s: {type: integer, description: 0 = hold the last colour}
+        radio:
+          type: object
+          properties:
+            type: {type: string, enum: [cc1101, sx1278], description: Changing it reboots}
+            tx_power: {type: integer, description: dBm, clamped to the module's range}
+            freq_p0: {type: integer}
+            freq_p1: {type: integer}
+            repeats: {type: integer}
+            off_threshold: {type: integer, minimum: 0, maximum: 255}
+            refresh_ms: {type: integer, minimum: 0, maximum: 60000}
+            tx_jitter_ms: {type: integer, minimum: 0, maximum: 200}
+            lbt_enabled: {type: boolean}
+            lbt_threshold_dbm: {type: integer, minimum: -120, maximum: -30}
+        sync:
+          type: object
+          properties:
+            enabled: {type: boolean}
+            master: {type: boolean}
+            copies: {type: integer, minimum: 1, maximum: 3}
+        display:
+          type: object
+          properties:
+            sleep_min: {type: integer, minimum: 0, maximum: 240}
+        update:
+          type: object
+          properties:
+            repo: {type: string, description: "GitHub owner/name; empty restores the default"}
+        zones:
+          type: array
+          maxItems: 16
+          items:
+            type: object
+            properties:
+              enabled: {type: boolean}
+              name: {type: string}
+              protocols: {type: array, items: {type: integer, enum: [0, 1]}}
+              addr_p0: {type: string, pattern: "^[0-9A-Fa-f]{8}$"}
+              addr_p1: {type: string, pattern: "^[0-9A-Fa-f]{4}$"}
+              start: {type: integer, readOnly: true}
+    NetworkSettings:
+      type: object
+      properties:
+        hostname: {type: string}
+        eth_enabled: {type: boolean}
+        wifi_ssid: {type: string}
+        wifi_pass: {type: string, writeOnly: true}
+        dhcp: {type: boolean}
+        ip: {type: string}
+        subnet: {type: string}
+        gateway: {type: string}
+        dns: {type: string}
+        ap_mode: {type: string, enum: [no_connection, always, never]}
+        ap_pass: {type: string, writeOnly: true}
+    ExportFile:
+      type: object
+      properties:
+        app: {$ref: "#/components/schemas/AppSettings"}
+        network: {$ref: "#/components/schemas/NetworkSettings"}
+        boot_test: {type: object}
+        amp:
+          type: object
+          properties:
+            fitted: {type: boolean}
+            active_low: {type: boolean}
+            "on": {type: boolean}
+            idle_min: {type: integer}
+            follow_output: {type: boolean}
+        fade_presets: {type: array, items: {$ref: "#/components/schemas/Preset"}}
+
+    Discovery:
+      type: object
+      properties:
+        running: {type: boolean}
+        alias: {type: string, example: net2rf.local}
+        alias_claimed: {type: boolean, description: This controller answers the shared alias}
+        controllers:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {type: string}
+              hostname: {type: string}
+              ip: {type: string}
+              firmware: {type: string}
+              id: {type: string}
+              self: {type: boolean}
+              online: {type: boolean}
+              last_seen_ms: {type: integer}
+              via: {type: array, items: {type: string, enum: [self, udp, mdns]}}
+              state:
+                type: object
+                properties:
+                  radio: {type: string}
+                  input: {type: string, enum: [live, idle, timed_out, none]}
+                  output_enabled: {type: boolean}
+                  test: {type: boolean}
+                  zones: {type: integer}
+                  airtime_pct: {type: number}
+                  uptime_s: {type: integer}
+    Capture:
+      type: object
+      properties:
+        id: {type: integer}
+        pulses: {type: array, items: {type: integer}}
+        us: {type: integer}
+        decoded: {}
+        truncated: {type: boolean}
+        rssi_dbm: {type: integer}

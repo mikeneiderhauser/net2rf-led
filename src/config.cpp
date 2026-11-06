@@ -130,7 +130,7 @@ void config_defaults_app(AppConfig &c) {
         zone_defaults(c.zones[i], i, rfproto::PROTOCOL_BIT[c.protocol & 1]);
     c.lbt_enabled = 1;  // new controllers only: saved settings keep their own
     c.lbt_threshold = LBT_DEFAULT_THRESHOLD;
-    c.radio_off = 0;
+    c.unused_radio_off = 0;
     strlcpy(c.update_repo, updater::DEFAULT_REPO, sizeof(c.update_repo));
     c.base_layer = 1;  // new controllers only: saved settings keep the old behaviour until switched on
     c.display_sleep = 0;  // the default (10 minutes)
@@ -236,27 +236,36 @@ void config_save_boot_test(const BootTest *t) {
     p.end();
 }
 
-static const uint32_t AMP_MAGIC = 0x4E324131;  // "N2A1"
+static const uint32_t AMP_MAGIC = 0x4E324132;     // "N2A2"
+static const uint32_t AMP_MAGIC_OLD = 0x4E324131;  // "N2A1": the two records below, accepted with follow_output on
 struct AmpRecord {
     uint32_t magic;
     AmpConfig c;
 };
-struct AmpRecordV1 {  // before idle_min (same magic): accepted, idle_min stays 0
+struct AmpRecordV2 {  // before follow_output
+    uint32_t magic;
+    uint8_t fitted, active_low, on;
+    uint16_t idle_min;
+};
+struct AmpRecordV1 {  // before idle_min
     uint32_t magic;
     uint8_t fitted, active_low, on;
 };
 
 void config_load_amp(AmpConfig &out) {
-    out = AmpConfig{0, 1, 1, 0};
+    out = AmpConfig{0, 1, 1, 0, 1};
     Preferences p;
     p.begin(NVS_NS, true);
     AmpRecord r{};
+    AmpRecordV2 v2{};
     AmpRecordV1 v1{};
     size_t len = p.getBytesLength("amp");
     if (len == sizeof(r) && p.getBytes("amp", &r, sizeof(r)) == sizeof(r) && r.magic == AMP_MAGIC)
         out = r.c;
-    else if (len == sizeof(v1) && p.getBytes("amp", &v1, sizeof(v1)) == sizeof(v1) && v1.magic == AMP_MAGIC)
-        out = AmpConfig{v1.fitted, v1.active_low, v1.on, 0};
+    else if (len == sizeof(v2) && p.getBytes("amp", &v2, sizeof(v2)) == sizeof(v2) && v2.magic == AMP_MAGIC_OLD)
+        out = AmpConfig{v2.fitted, v2.active_low, v2.on, v2.idle_min, 1};
+    else if (len == sizeof(v1) && p.getBytes("amp", &v1, sizeof(v1)) == sizeof(v1) && v1.magic == AMP_MAGIC_OLD)
+        out = AmpConfig{v1.fitted, v1.active_low, v1.on, 0, 1};
     p.end();
 }
 
@@ -493,6 +502,7 @@ void extras_to_json(JsonObject out) {
     amp["active_low"] = (bool) a.active_low;
     amp["on"] = (bool) a.on;
     amp["idle_min"] = a.idle_min;
+    amp["follow_output"] = (bool) a.follow_output;
     FadePresets p;
     config_load_fade_presets(p);
     if (p.n)
@@ -522,7 +532,8 @@ bool extras_from_json(JsonObjectConst in, SettingsExtras &x, String &err) {
             return false;
         }
         x.amp = AmpConfig{(uint8_t) (amp["fitted"] | false), (uint8_t) (amp["active_low"] | true),
-                          (uint8_t) (amp["on"] | true), (uint16_t) idle};
+                          (uint8_t) (amp["on"] | true), (uint16_t) idle,
+                          (uint8_t) (amp["follow_output"] | true)};
         x.has_amp = true;
     }
     JsonArrayConst presets = in["fade_presets"].as<JsonArrayConst>();
@@ -639,7 +650,6 @@ void app_to_json(const AppConfig &c, JsonObject o) {
     radio["tx_jitter_ms"] = c.tx_jitter_ms;
     radio["lbt_enabled"] = (bool) c.lbt_enabled;
     radio["lbt_threshold_dbm"] = c.lbt_threshold;
-    radio["power"] = !c.radio_off;
 
     o["display"]["sleep_min"] = display_sleep_minutes(c);
     JsonObject update = o["update"].to<JsonObject>();
@@ -772,8 +782,6 @@ bool app_from_json(JsonObjectConst in, AppConfig &c, String &err) {
             return false;
         if (!radio["lbt_enabled"].isNull())
             c.lbt_enabled = radio["lbt_enabled"].as<bool>();
-        if (radio["power"].is<bool>())
-            c.radio_off = !radio["power"].as<bool>();
     }
 
     if (in["update"]["repo"].is<const char *>()) {

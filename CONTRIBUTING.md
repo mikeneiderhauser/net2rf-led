@@ -15,7 +15,14 @@ pio test -e native                     # unit tests
 python3 tools/mock_server.py           # develop the web UI against a fake API at http://127.0.0.1:8765/
 python3 tools/ddp_test.py <ip> cycle   # send DDP without xLights
 python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the network
+python3 tools/check_openapi.py         # the API spec lists exactly the routes the firmware serves
 ```
+
+**Changing the API:** update [`docs/reference/openapi.yaml`](docs/reference/openapi.yaml), the API's only
+documentation, and `tools/mock_server.py` with the firmware. CI runs `check_openapi.py`, which fails
+when a route is missing from the spec (or the spec has one the firmware doesn't), or when they disagree on which
+routes need the admin password. To browse the spec locally: `python3 -m http.server -d docs/reference`, then open
+`http://localhost:8000/openapi.html`.
 
 ## Repository layout
 
@@ -31,8 +38,10 @@ python3 tools/peer_sim.py --to <ip>    # simulate other controllers on the netwo
 | `tools/xlights` | xLights models and controller definition, and the script that generates the models |
 | `hardware/case` | The printed case: STLs and OpenSCAD source |
 | `flasher/` | The browser flasher, deployed to GitHub Pages at each release |
+| `docs/reference/openapi.yaml` | The HTTP API as an OpenAPI spec; published with Swagger UI at `<pages>/api/` |
 
 ## Releases
 
 Add a section to [CHANGELOG.md](CHANGELOG.md) for the new version first: it becomes the release notes. Pushing a `v*` tag
-then runs the tests, builds both boards, publishes a GitHub release with the firmware, and redeploys the browser flasher.
+then runs the tests, builds both boards, publishes a GitHub release with the firmware, and redeploys the browser flasher
+and the API explorer.

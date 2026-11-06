@@ -252,9 +252,9 @@ static const char *reset_reason() {
 // Why a transmission was refused (409).
 static const char *tx_refused_reason() {
     StateLock lock;
-    return g_app.receiver     ? "receiver mode: this controller only listens"
-           : g_app.radio_off  ? "radio is shut down"
+    return g_app.receiver          ? "receiver mode: this controller only listens"
            : !g_app.output_enabled ? "RF output is disabled"
+           : amp::holds_tx()       ? "the amplifier is switched off"
                                    : "transmit queue full";
 }
 
@@ -362,7 +362,22 @@ static void handle_post_network() {
     send_ok(true);
 }
 
-// Global RF enable. Disabled = DDP is still received and counted, but nothing is transmitted.
+// RF output: {"enabled", "transmitting"}. transmitting is false while receiver mode or an amplifier switched off by
+// hand holds transmissions, even with output enabled.
+static void output_json(JsonObject o) {
+    StateLock lock;
+    o["enabled"] = (bool) g_app.output_enabled;
+    o["transmitting"] = tx_allowed(g_app) && !amp::holds_tx();
+}
+
+static void handle_output_get() {
+    JsonDocument doc;
+    output_json(doc.to<JsonObject>());
+    send_json(200, doc);
+}
+
+// Global RF enable. Disabled = DDP is still received and counted, but nothing is transmitted (and an amplifier that
+// follows RF output powers down).
 static void handle_output() {
     JsonDocument doc;
     if (!parse_body(doc))
@@ -379,31 +394,8 @@ static void handle_output() {
     }
     config_save_app(saved);
     JsonDocument out;
+    output_json(out.to<JsonObject>());
     out["ok"] = true;
-    out["enabled"] = doc["enabled"].as<bool>();
-    send_json(200, out);
-}
-
-// Radio power. Off = the radio chip is put to sleep (persisted); nothing is transmitted until it is switched
-// back on, which re-initialises the chip and re-sends the current colours.
-static void handle_radio() {
-    JsonDocument doc;
-    if (!parse_body(doc))
-        return;
-    if (!doc["power"].is<bool>()) {
-        send_error(400, "expected {\"power\": true|false}");
-        return;
-    }
-    AppConfig saved;
-    {
-        StateLock lock;
-        g_app.radio_off = !doc["power"].as<bool>();
-        saved = g_app;
-    }
-    config_save_app(saved);
-    JsonDocument out;
-    out["ok"] = true;
-    out["power"] = doc["power"].as<bool>();
     send_json(200, out);
 }
 
@@ -1238,8 +1230,12 @@ void begin() {
                     send_ok();
                 }));
     s_server.on("/api/raw", HTTP_POST, protect(handle_raw));
+    s_server.on("/api/output", HTTP_GET, handle_output_get);
     s_server.on("/api/output", HTTP_POST, protect(handle_output));
-    s_server.on("/api/radio", HTTP_POST, protect(handle_radio));
+    s_server.on("/api/radio/restart", HTTP_POST, protect([]() {
+                    g_engine.restart_radio();
+                    send_ok();
+                }));
     s_server.on("/api/stats/reset", HTTP_POST, protect([]() {
                     g_engine.reset_stats();
                     group::reset_stats();

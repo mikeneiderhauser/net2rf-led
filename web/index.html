@@ -143,7 +143,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
         <div class="big" id="d_air">–<span class="unit">% airtime</span></div>
         <div class="small dim">share of the last 10 s spent transmitting</div>
         <label class="tog" style="margin-top:10px" title="Off: show data is still received and counted, but nothing is transmitted"><input type="checkbox" id="d_outSw" role="switch"><i></i><span><b>RF output</b> <span class="dim small" id="d_outState"></span></span></label>
-        <label class="tog" title="Off: the radio chip is put to sleep to save power"><input type="checkbox" id="d_radioSw" role="switch"><i></i><span><b>Radio power</b> <span class="dim small" id="d_radioSwState"></span></span></label>
+        <div class="small hide" id="d_ampLine" style="margin:2px 0 8px">Amplifier power: <span id="d_amp"></span></div>
         <label class="tog" title="On: listen on 433 MHz and show what the devices are told; nothing is transmitted"><input type="checkbox" id="d_rxSw" role="switch"><i></i><span><b>Receiver mode</b> <span class="dim small" id="d_rxSwState"></span></span></label>
         <div class="actions"><button class="danger" id="d_allOff" title="Send off to every device in range">All off</button></div>
         <dl class="kv">
@@ -333,9 +333,15 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
       <p class="dim small" style="margin-top:0">Flickers the status LED and flashes &ldquo;THIS ONE&rdquo; on the OLED for 15&nbsp;s, to tell this controller apart from others.</p>
       <div class="actions" style="margin-top:0"><button class="primary" id="idn_go">Identify this controller</button><button id="idn_stop">Stop</button></div>
     </div>
+    <div class="card"><h2>Restart radio</h2>
+      <p class="dim small" style="margin-top:0">Shuts the radio chip down and starts it again, then re-sends every zone's colour. Try it when the radio stops responding or shows &ldquo;not detected&rdquo;.</p>
+      <div class="actions" style="margin-top:0"><button id="rr_go">Restart radio</button></div>
+    </div>
     <div class="card" id="amp_card"><h2>Amplifier power</h2>
       <p class="dim small" style="margin-top:0">Powers an external RF amplifier up and down through a switch on IO<span class="amp_pin">2</span> (e.g. a FET on its buck's EN pin; see the assembly guide). <span id="amp_note"></span></p>
-      <label class="tog"><input type="checkbox" id="amp_on" role="switch"><i></i><span><b>Amplifier</b> <span class="dim small" id="amp_state"></span></span></label>
+      <label class="tog"><input type="checkbox" id="amp_on" role="switch"><i></i><span><b>Use amplifier</b> <span class="dim small" id="amp_state"></span></span></label>
+      <div class="small" id="amp_powerLine" style="margin:2px 0 4px">Power: <span id="amp_power"></span></div>
+      <label class="inline" style="display:block;margin-top:8px"><input type="checkbox" id="amp_follow"> Power the amp only while RF output is on. Untick to keep it powered with RF output off, e.g. to receive through it in receiver mode.</label>
       <details class="adv" style="margin-top:8px"><summary>Switch wiring</summary>
         <label class="inline" style="display:block;margin-top:8px"><input type="checkbox" id="amp_fitted"> A power switch is wired to IO<span class="amp_pin">2</span></label>
         <label class="inline" style="display:block;margin-top:4px"><input type="checkbox" id="amp_low"> Active low: the pin is low while the amp is on (an N-FET pulling the buck's EN low when the pin is high)</label>
@@ -587,7 +593,7 @@ window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
 // ---------- status polling ----------
 async function poll(){try{S=await api('status');render();if(location.hash==='#tools'){gUi();rwTick();toolsLive()}}catch(e){$('pills').innerHTML=pill('bad','offline')}}
 function inputState(i){if(S.engine.test.mode!=='off')return['warn','Test mode'];if(i.out_of_range_channel)return['bad','Wrong channels'];if(!i.seen)return['','No DDP yet'];if(i.timed_out)return['warn','Timed out (blank)'];return i.age_ms<3000?['good','Receiving']:['','Idle']}
-function radioState(r){return r.state==='ready'&&r.data_line==='fault'?['bad','data line fault']:r.state==='ready'?['good','ready']:r.state==='not_detected'?['bad','not detected']:r.state==='off'?['','shut down']:['warn','initializing']}
+function radioState(r){return r.state==='ready'&&r.data_line==='fault'?['bad','data line fault']:r.state==='ready'?['good','ready']:r.state==='not_detected'?['bad','not detected']:['warn','initializing']}
 // coverage group
 function groupPill(g){if(!g||g.role==='off')return'';if(g.conflict)return pill('bad','2+ group masters');
   if(g.role==='master'){const rs=g.remotes||[],ok=rs.filter(x=>x.state==='synced').length;return pill(rs.length&&ok<rs.length?'warn':'good',`group master · ${ok}/${rs.length} remotes`)}
@@ -617,7 +623,7 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
   $('zoneLabel').textContent=d.name;$('verLabel').textContent='v'+d.firmware;
   const [ic,it]=inputState(i),[rc,rt]=radioState(r);
   const rx=e.receiver||{},rxOn=e.role==='receiver';
-  $('pills').innerHTML=(rxOn?pill(rx.active?'good':'warn','receiver mode'):o.enabled?'':pill('bad','RF output off'))+(d.update_rolled_back?pill('bad','update rolled back'):'')+groupPill(S.group)+pill(rc,r.name+' '+rt)+pill(ic,it)+pill(n.interface==='none'?'bad':n.interface==='ap'?'warn':'good',n.interface+' · '+n.ip);
+  $('pills').innerHTML=(rxOn?pill(rx.active?'good':'warn','receiver mode'):o.enabled?(d.amp&&d.amp.holds_tx?pill('bad','amplifier off'):''):pill('bad','RF output off'))+(d.update_rolled_back?pill('bad','update rolled back'):'')+groupPill(S.group)+pill(rc,r.name+' '+rt)+pill(ic,it)+pill(n.interface==='none'?'bad':n.interface==='ap'?'warn':'good',n.interface+' · '+n.ip);
   $('d_fps').innerHTML=i.fps+'<span class="unit">fps</span>';
   $('d_inState').innerHTML=`<span class="badge ${ic}">${it}</span> <span class="dim">${i.seen?(i.last_source==='e131'?'E1.31':'DDP')+' · last packet '+fmtAge(i.age_ms):''}</span>`;
   $('d_pk').textContent=`${fmtN(i.ddp_packets)} / ${fmtN(i.e131_packets)}`;$('d_fr').textContent=fmtN(i.frames);$('d_bad').textContent=fmtN(i.malformed);
@@ -627,13 +633,15 @@ function render(){const ap=S.network.interface==='ap';$('cnaNote').classList.tog
     `In xLights, open this controller and <b>untick "Keep Channel Numbers"</b> (DDP), or check the E1.31 universe / start channel.`;$('d_bytes').textContent=fmtBytes(i.bytes);$('d_src').textContent=i.source||'–';
   $('d_air').innerHTML=o.airtime_pct+'<span class="unit">% airtime</span>';
   $('d_up').textContent=fmtN(o.updates);$('d_tf').textContent=fmtN(o.frames);$('d_man').textContent=fmtN(o.manual);$('d_err').textContent=fmtN(o.errors);$('d_q').textContent=r.queue;$('d_sup').textContent=fmtN(o.suppressed);
-  const pw=r.power!==false;if(!swBusy){$('d_outSw').checked=o.enabled;$('d_radioSw').checked=pw;$('d_rxSw').checked=rxOn}
-  $('d_rxSwState').textContent=rxOn?(rx.active?'listening, nothing is transmitted':!rx.supported?'this radio cannot receive':!pw?'radio is shut down':'starting…'):'off';
+  if(!swBusy){$('d_outSw').checked=o.enabled;$('d_rxSw').checked=rxOn}
+  $('d_rxSwState').textContent=rxOn?(rx.active?'listening, nothing is transmitted':!rx.supported?'this radio cannot receive':'starting…'):'off';
   $('d_outSw').disabled=rxOn;$('d_allOff').disabled=rxOn;
   ['d_zonesCard','d_testCard'].forEach(id=>$(id).classList.toggle('hide',rxOn));
   $('d_rxCard').classList.toggle('hide',!rxOn);if(rxOn)renderRx(rx);
-  $('d_outState').textContent=o.enabled?(pw?'on':'on, but the radio is shut down'):'off: show data is received, nothing is sent';
-  $('d_radioSwState').textContent=pw?'on':'shut down: nothing is sent until it is switched on';
+  const amp=d.amp||{};$('d_ampLine').classList.toggle('hide',!amp.fitted);
+  if(amp.fitted){const[c,t]=ampPower(amp);$('d_amp').innerHTML=`<span class="badge ${c}">${t}</span>`}
+  $('d_outState').textContent=o.enabled?(amp.holds_tx?'on, but the amplifier is switched off: nothing is sent':'on'):
+    'off: show data is received, nothing is sent'+(amp.fitted&&amp.on&&amp.follow_output?'; amplifier powered down':'');
   renderGroup(S.group);
   $('d_radio').textContent=r.name;$('d_radioState').innerHTML=`<span class="badge ${rc}">${rt}</span>`;
   $('d_rdet').textContent=r.detail||'–';
@@ -939,6 +947,7 @@ $('cm_stop').onclick=()=>{clearInterval(CM.timer);CM.timer=null};
 
 $('idn_go').onclick=()=>api('identify',{seconds:15}).then(()=>toast('Identifying for 15 s'));
 $('idn_stop').onclick=()=>api('identify',{seconds:0});
+$('rr_go').onclick=()=>api('radio/restart',{}).then(()=>{toast('Restarting the radio');poll()});
 // tools: address probe
 const PAL=[[0,255,0,0],[1,0,255,0],[2,0,0,255],[3,255,0,128],[4,255,255,255],[5,255,255,0],[8,148,0,211],[9,255,128,0],[10,75,0,130],[11,0,255,255]];
 const p1c=v=>(~v)&255;
@@ -1051,7 +1060,6 @@ let swBusy=false;
 async function swChange(el,off,path,body,done){swBusy=true;const on=el.checked;
   try{if(!on&&!await ask(off)){el.checked=true;return}await api(path,body(on));toast(done(on))}catch(e){el.checked=!on}finally{swBusy=false;poll()}}
 $('d_outSw').onchange=e=>swChange(e.target,'Stop all RF transmission? Show data will be received but ignored until output is switched back on.','output',on=>({enabled:on}),on=>on?'RF output on':'RF output off');
-$('d_radioSw').onchange=e=>swChange(e.target,'Shut down the radio chip? Nothing is transmitted until you switch it on again. This setting survives a reboot.','radio',on=>({power:on}),on=>on?'Radio powered on':'Radio shut down');
 $('resetStats').onclick=()=>api('stats/reset',{}).then(()=>toast('Counters reset'));
 function testBody(m){const b=m==='fade'&&$('fadePal').children.length?fadeBody():{mode:m,rgb:$('testColor').value.slice(1)};if($('testBoot').checked)b.boot=m!=='off';return b}
 document.querySelectorAll('#testSeg button').forEach(b=>b.onclick=()=>api('test',testBody(b.dataset.m)).then(()=>{if(b.dataset.m==='fade')fadeEdited=false;poll()}));
@@ -1066,14 +1074,20 @@ try{$('t_adv').open=localStorage.getItem('n2r_tools_adv')==='1'}catch(e){}
 $('t_adv').ontoggle=()=>{try{localStorage.setItem('n2r_tools_adv',$('t_adv').open?'1':'0')}catch(e){}};
 // amplifier power switch (/api/amp)
 var ampBusy=false;
+// what the amp's power is now, and why: [badge class, text]
+function ampPower(a){return a.powered?['good','on']:!a.on?['bad','off (switched off)']:a.asleep?['','off (idle)']:
+  a.follow_output?['','off (RF output is off)']:['','off']}
 function ampRender(a){if(!a||ampBusy)return;document.querySelectorAll('.amp_pin').forEach(x=>x.textContent=a.pin);
   $('amp_fitted').checked=a.fitted;$('amp_low').checked=a.active_low;$('amp_on').checked=a.on;$('amp_on').disabled=!a.fitted;
+  $('amp_follow').checked=a.follow_output;$('amp_follow').disabled=!a.fitted;
   if(document.activeElement!==$('amp_idle'))$('amp_idle').value=a.idle_min||0;
-  $('amp_state').textContent=a.fitted?(a.asleep?'idle, powered down':a.on?'on':'off'):'no switch fitted';
+  $('amp_state').textContent=!a.fitted?'no switch fitted':a.on?'':'off: nothing is transmitted until it is switched on';
+  $('amp_powerLine').classList.toggle('hide',!a.fitted);if(a.fitted){const[c,t]=ampPower(a);$('amp_power').innerHTML=`<span class="badge ${c}">${t}</span>`}
   $('amp_note').textContent=a.fitted?'':'Tick the wiring box below once a switch is fitted.';
   $('amp_led').textContent=a.shares_status_led?'This pin also drives the status LED, which stays dark while a switch is fitted.':''}
-async function ampSet(b){ampBusy=true;try{const r=await api('amp',b);ampBusy=false;ampRender(r.amp);toast(r.amp.fitted?'Amplifier '+(r.amp.on?'on':'off'):'No amp switch fitted')}catch(e){}finally{ampBusy=false;poll()}}
+async function ampSet(b){ampBusy=true;try{const r=await api('amp',b);ampBusy=false;ampRender(r.amp);toast(r.amp.fitted?(r.amp.on?'Amplifier in use':'Amplifier switched off: nothing is transmitted'):'No amp switch fitted')}catch(e){}finally{ampBusy=false;poll()}}
 $('amp_on').onchange=e=>ampSet({on:e.target.checked});
+$('amp_follow').onchange=e=>ampSet({follow_output:e.target.checked});
 $('amp_fitted').onchange=async e=>{const want=e.target.checked;ampBusy=true;  // the status poll must not reset the box while asking
   const ok=!want||await ask('Drive IO'+$('amp_fitted').parentNode.querySelector('.amp_pin').textContent+' as the amplifier switch? Only do this if a switch is wired to it.');
   ampBusy=false;if(!ok){e.target.checked=false;return}ampSet({fitted:want})};

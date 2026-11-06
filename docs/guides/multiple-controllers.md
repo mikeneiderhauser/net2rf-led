@@ -84,4 +84,4 @@ Every controller sends its own copy of each change, so changes take longer. With
 - **Receiver mode:** a controller in receiver mode ignores the group settings.
 
 The full details are in the [radio notes](../reference/radio.md#coverage-group), and the settings in the
-[HTTP API](../reference/api.md#settings-apiconfig--app).
+[HTTP API](https://mikeneiderhauser.github.io/net2rf-led/api/#/Settings).

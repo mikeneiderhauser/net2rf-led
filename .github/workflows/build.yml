@@ -43,6 +43,9 @@ jobs:
       - name: Unit tests
         run: pio test -e native
 
+      - name: API spec matches the firmware's routes
+        run: python3 tools/check_openapi.py
+
       - name: Build firmware
         run: pio run -e wt32-eth01 -e xiao-esp32s3
 
@@ -72,6 +75,10 @@ jobs:
           cp .pio/build/xiao-esp32s3/firmware.bin site/firmware-xiao-esp32s3.bin
           sed "s/__VERSION__/${FW_VERSION}/" flasher/manifest.json > site/manifest.json
           sed -i "s|__RELEASES_URL__|https://github.com/${GITHUB_REPOSITORY}/releases/latest|" site/index.html
+          # API reference (Swagger UI) at <pages>/api/
+          mkdir -p site/api
+          cp docs/reference/openapi.html site/api/index.html
+          sed "s/^  version: .*/  version: ${FW_VERSION}/" docs/reference/openapi.yaml > site/api/openapi.yaml
 
       - uses: actions/upload-pages-artifact@v5
         if: startsWith(github.ref, 'refs/tags/v')

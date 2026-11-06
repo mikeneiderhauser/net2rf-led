@@ -55,6 +55,11 @@ the XIAO, D1). It's optional: until you enable it, IO2 stays the status LED's pi
 - IO2 high pulls EN low and the buck, so the amp, switches off. IO2 low lets the buck's own pull-up switch it on.
 - Check the module first: power it from 12 V and measure EN. About 12 V or 5-6 V means it is pulled up, so this
   circuit is right. Near 0 V means an active-low EN (LM2596 type), which needs a different circuit.
+- **Then, unpowered, measure the resistance from EN to the 12 V input.** Close to 0 Ω means EN is tied straight to
+  the input, usually by a solder jumper (often labelled B) that leaves EN unused: the FET would short 12 V to
+  ground. Cut the jumper and measure again (it should read open). Many modules then hold EN high themselves: check
+  the output comes on with nothing connected to EN. If it doesn't, add a 100k from the input to EN.
+- A 2N7000 (TO-92: source, gate, drain from the left, flat face toward you) works as well as a 2N7002.
 
 Don't connect IO2 to EN directly: EN is usually pulled up to the 12 V input, and IO2 must be low at reset for
 serial flashing. The FET and its gate pull-down take care of both.
@@ -64,9 +69,17 @@ IO2 pulls low. Use it on the 5 V side: the AO3401's gate is only rated to ±12 V
 Never switch the amp's ground: its RF ground also runs through the coax.
 
 Then, on the web UI's **Tools** page, open **Amplifier power → Switch wiring** and tick *A power switch is wired to
-IO2*. Leave **Active low** ticked for circuit A, and untick it for circuit B. The **Amplifier**
-switch then turns the amp on and off, and the setting is kept across restarts. Over HTTP it's `/api/amp`
-([API](../reference/api.md#amplifier-power-switch)).
+IO2*. Leave **Active low** ticked for circuit A, and untick it for circuit B. **Use amplifier** then switches the
+amp into use, and the setting is kept across restarts. *Power* below it, and *Amplifier power* on the dashboard,
+show whether the amp is powered right now, and why not. Over HTTP it's `/api/amp`
+([API: Output](https://mikeneiderhauser.github.io/net2rf-led/api/#/Output)).
 
-**Idle power-down:** set *Power down after N minutes* on the same card and the amp powers down after that long
-without a transmission, then back up 0.3 s ahead of the next one. 0 keeps it on.
+- **Use amplifier off holds every transmission,** so the radio never sends into an unpowered amp. An unpowered amp
+  is not a dummy load: depending on its circuit, much of the power can reflect back into the radio.
+- **Follows RF output (on by default):** the amp is powered only while the dashboard's *RF output* is on. Untick
+  *Power the amp only while RF output is on* to keep it powered with RF output off, e.g. to receive through it in
+  receiver mode.
+- **Idle power-down:** set *Power down after N minutes* and the amp powers down after that long without a
+  transmission. 0 keeps it on.
+- Whenever it's been powered down for RF output or the idle timer, the amp is powered back up 0.3 s ahead of the
+  next transmission.

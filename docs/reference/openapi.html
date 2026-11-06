@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- Swagger UI for openapi.yaml (same folder). Published with the browser flasher at <pages>/api/; locally:
+     python3 -m http.server -d docs/reference, then open http://localhost:8000/openapi.html -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Net2RF LED API</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui.css">
+<meta name="color-scheme" content="light">
+<style>html{color-scheme:light;background:#fff}body{margin:0}.swagger-ui .topbar{display:none}
+/* section intros go under their heading, full width */
+.swagger-ui .opblock-tag{flex-wrap:wrap}.swagger-ui .opblock-tag>a{order:0}.swagger-ui .opblock-tag>button{order:1;margin-left:auto}
+.swagger-ui .opblock-tag small{order:2;flex:1 1 100%;padding:0 0 12px}
+</style>
+</head>
+<body>
+<div id="api"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+<script>
+SwaggerUIBundle({
+  url: "openapi.yaml",
+  dom_id: "#api",
+  deepLinking: true,
+  docExpansion: "list",
+  defaultModelsExpandDepth: 0,
+  supportedSubmitMethods: []  // the controller doesn't answer cross-site requests: reference only
+});
+</script>
+</body>
+</html>

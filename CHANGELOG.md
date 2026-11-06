@@ -3,6 +3,43 @@
 What changed in each release. The section for a version becomes its
 [GitHub release](https://github.com/mikeneiderhauser/net2rf-led/releases) notes.
 
+## [0.3.0] - 2026-11-06
+
+One switch, RF output, now stops everything going on air, and the amplifier follows it. The API is documented as an
+OpenAPI spec with a browsable explorer.
+
+### Added
+
+- **The amplifier follows RF output:** with an amplifier switch fitted, turning RF output off also powers the amp
+  down, and it powers back up 0.3 s ahead of the next transmission. A new setting, *Power the amp only while RF
+  output is on* (on by default), keeps it powered instead, e.g. to receive through it in receiver mode.
+- **Amplifier power on the dashboard:** with an amplifier switch fitted, the Output card shows whether the amp is
+  powered, and why not (switched off, idle, or RF output off). The Tools page's switch is now *Use amplifier*.
+- **Restart radio** on the Tools page (`POST /api/radio/restart`), for a radio that stopped responding.
+- `GET /api/output`: whether RF output is on, and whether the controller is actually transmitting.
+- **The API as an OpenAPI spec:** [`docs/reference/openapi.yaml`](docs/reference/openapi.yaml) describes every
+  endpoint, and the [API explorer](https://mikeneiderhauser.github.io/net2rf-led/api/) shows it with Swagger UI. It
+  replaces the API reference page, and CI checks it against the firmware's routes.
+
+### Changed
+
+- **Switching the amplifier off now holds every transmission,** so the radio never sends into an unpowered amp.
+
+### Removed
+
+These may affect scripts and integrations:
+
+- The **Radio power** switch, `POST /api/radio`, `radio.power` in `/api/config` and `/api/status`, and the `off`
+  radio state. Use RF output to stop transmitting, and Restart radio to reset the chip. A controller whose radio
+  was shut down starts with it on.
+
+### Upgrade notes
+
+- Your settings are kept. Amplifier settings load with *Power the amp only while RF output is on* ticked.
+- With an amplifier switch fitted and *Use amplifier* off, the controller no longer transmits. Switch it on, or untick
+  the switch under *Switch wiring* if no switch is fitted.
+- Anything that used `/api/radio` or `radio.power` needs updating.
+
 ## [0.2.2] - 2026-11-04
 
 A fix for the web UI on controllers with an OLED.
@@ -111,5 +148,8 @@ The R2.0 carrier board is built and tested, with the Ra-02 radio, in both printe
 
 See the [releases page](https://github.com/mikeneiderhauser/net2rf-led/releases).
 
+[0.3.0]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.0.10...v0.1.0
