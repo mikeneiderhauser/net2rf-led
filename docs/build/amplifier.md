@@ -83,3 +83,48 @@ show whether the amp is powered right now, and why not. Over HTTP it's `/api/amp
   transmission. 0 keeps it on.
 - Whenever it's been powered down for RF output or the idle timer, the amp is powered back up 0.3 s ahead of the
   next transmission.
+
+### Checking the switch
+
+With the amp wired and the switch ticked, before closing the case:
+
+| RF output | IO2 | Buck EN | Amp |
+|---|---|---|---|
+| Off | about 3.3 V | about 0 V | off |
+| On | about 0 V | high (the buck's pull-up) | powered |
+
+- Toggle RF output a few times: the amp follows it each time, and *Amplifier power* on the dashboard agrees.
+- The 100 Ω gate resistor stays cold in both states. The gate draws no current, so a warm resistor means a fault.
+- Tap and flex the case in both states: the amp must not change. Strain-relieve the wires to the buck and the FET.
+- The amp is powered for a moment at every boot: IO2 is low until the firmware starts. That's expected.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| The amp blinks twice a second (or in step with the status LED) | The switch isn't ticked, so IO2 is still the status LED's pin and its blink pattern switches the amp. Two blinks a second is the setup hotspot's pattern | Tick *A power switch is wired to IO2* under *Switch wiring* |
+| RF output doesn't switch the amp | The switch isn't ticked, or *Power the amp only while RF output is on* is unticked | Tick both. *Power* on the Tools page shows what the firmware wants |
+| The amp stays on with RF output off | EN is tied to the 12 V input (the solder jumper isn't fully cut, or got bridged again while soldering the EN wire), so the FET can't pull it low | Unpowered, measure EN to the 12 V input: it must read open |
+| The gate resistor gets hot | Something connects IO2's side of the 100 Ω to EN, the 12 V side or ground: a solder bridge or a bent lead between the FET's gate and drain, or a 100 Ω fitted where the 100k pull-down goes | Unpowered: gate pad to drain pad must be open, gate pad to GND about 100k. Power off until it's fixed: the current flows through IO2 |
+| The firmware says powered but the amp is off, or it comes on when the case is moved | A loose wire or cracked joint: the buck's 12 V, GND or 5 V wires, the EN wire or the FET's leads | Reflow, then strain-relieve. Measure EN while flexing each wire to find it |
+| *Power: off (switched off)* and sends return 409 | *Use amplifier* is off: transmissions are held so the radio never sends into an unpowered amp | Switch it on, or untick the switch if none is wired |
+
+## Interference with nearby audio
+
+Speakers and audio gear close to the antenna may buzz or chirp in time with the transmissions. Their amplifiers pick
+up the 433 MHz bursts and turn them into sound. It's not a fault and does no harm, but an amp makes it more likely.
+If the noise is there with nothing transmitting, it's something else: a steady whine is usually the buck's
+switching noise reaching the audio through a shared supply (fit the input capacitor the buck module calls for), and
+noise or nearby radios jammed with no transmissions at all can mean the amp is oscillating. Never run the amp
+without an antenna or a 50 Ω dummy load.
+
+To reduce it:
+
+- **Distance first.** Mount the antenna a few metres from speakers and their cables, and don't run audio cables
+  alongside the antenna or controller cables. Pickup drops off quickly with distance.
+- **Less power.** Use the lowest transmit power and amp gain that reach every device. On the bench, use a dummy load.
+- **Ferrites.** Clip-on ferrite chokes (type 31 or 43 mix) on the audio cables near the speaker or its amplifier,
+  with a few turns through the core.
+- **Less airtime.** Fewer repeats, and *Refresh unchanged (ms)* at 0 (send on change only), mean fewer bursts.
+
+Before a show, play audio and run a busy sequence, then listen at each speaker.
