@@ -42,7 +42,8 @@ routes need the admin password. To browse the spec locally: `python3 -m http.ser
 
 ## Releases
 
-Add a section to [CHANGELOG.md](CHANGELOG.md) for the new version first: it becomes the release notes. If the
-release changes what a quick-start sheet says, update [docs/sheets](docs/sheets), including the firmware version on each. Pushing a `v*` tag
+Add a section to [CHANGELOG.md](CHANGELOG.md) for the new version first: it becomes the release notes. The
+quick-start sheets in [docs/sheets](docs/sheets) aren't tied to a release: when what they say changes, update them and
+bump their revision. Pushing a `v*` tag
 then runs the tests, builds both boards, publishes a GitHub release with the firmware, and redeploys the browser flasher
 and the API explorer.

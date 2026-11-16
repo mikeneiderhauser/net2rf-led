@@ -1,6 +1,6 @@
 # Carrier board
 
-**Assembled board, R2.0** · For firmware v0.3.2 or later
+**Assembled board, R2.0** · Sheet rev B · 2026-11-16
 
 Thanks for trying the Net2RF LED carrier board. The WT32-ETH01, a Ra-02 radio and a 0.96" OLED plug in to make a controller that drives 433 MHz RF wristbands and pucks from your light show. The R2.0 fixes (SPI bridge, reset capacitor) are already fitted.
 
@@ -24,7 +24,7 @@ Thanks for trying the Net2RF LED carrier board. The WT32-ETH01, a Ra-02 radio an
 1. Open the **web flasher** (QR below) in Chrome or Edge.
 2. Connect the adapter at **3.3 V**: GND, TX→RXD0, RX→TXD0. Power the board from its own supply.
 3. **Hold BOOT, tap EN, release BOOT**, then click **Install**. Tap EN when it's done.
-4. After this, updates go over the network: no cable needed.
+4. After this, updates go over the network: no cable needed. The **Unit MAC** (on the OLED at power-up, and under **System**) identifies the board: quote it if you get in touch.
 
 ## Pre-flight check, before powering on
 
@@ -34,15 +34,17 @@ Thanks for trying the Net2RF LED carrier board. The WT32-ETH01, a Ra-02 radio an
 
 ## Connect
 
-1. **Ethernet (recommended):** plug in a network cable, then power on. The IP address appears on the OLED. Open `http://net2rf.local/` or that IP in a browser.
+1. **Ethernet (recommended):** plug in a network cable, then power on. The IP address appears on the OLED. Open that IP, or `http://net2rf-xxxx.local/` (xxxx = the last 4 digits of the Unit MAC, also in the hotspot name). Some Android phones can't open `.local` names: the IP always works.
 2. **No Ethernet:** after 15 s it opens a hotspot. Join **NET2RF-XXXX**, password `net2rf1234`, and open `http://192.168.4.1/`. Under **Network** pick your **2.4 GHz** Wi-Fi and **Save & reboot**.
 3. For a show, give it a **static IP** or a DHCP reservation, so FPP and xLights always find it.
+4. **Secure it:** set an **admin password** (System) and change the **hotspot password** (Network → Setup access point). The default above is public.
 
 ## Use it in your show
 
 - **Falcon Player (10.3+):** the **Net2RF Auto Mode** plugin makes zones follow the colours of your other props, with nothing to sequence. Set **FPP Settings → UI → User Interface Level** to **Developer**, then in **Content Setup → Plugin Manager** paste the plugin's URL (below) and **Install**. Set it up under **Content Setup → Net2RF Auto Mode**.
 - **xLights:** add it as a **DDP** controller at its IP, with **Keep Channel Numbers** unticked. Each zone is one pixel. The controller's **Tools → xLights setup** has the details.
-- **Test without a show:** Dashboard → **Test mode**, or Tools → **Range walk**.
+- **Check your devices:** Tools → **Which protocol is my device?** lights them red (protocol 0) or green (protocol 1). No response: wake the device (its button), move closer, and see the compatibility list in the repo.
+- **Placement:** antenna upright, high and clear of metal. The case isn't weatherproof: mount it under cover or inside an enclosure.
 
 ## Links
 
