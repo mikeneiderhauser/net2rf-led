@@ -5,6 +5,35 @@ What changed in each release. The section for a version becomes its
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-16
+
+Each controller has one **unit MAC** to label and track it by, and serves its own API explorer.
+
+### Added
+
+- **Unit MAC:** one address that identifies each controller, for labels and support: the Ethernet MAC (on every
+  board). The OLED's start-up screen shows it and now stays up for 5 s (or until USER is pressed) so it can be read.
+  The System page shows it and lists all four MACs the chip uses (Ethernet, Wi-Fi, setup hotspot, Bluetooth), with
+  the unit MAC marked; `/api/status` and the diagnostics file carry `unit_mac` and `macs`.
+- **The API on the controller:** `/api/openapi.yaml` serves the API spec, matching the controller's firmware, and
+  `/api/docs` an explorer page for it (Swagger UI) where *Try it out* sends real requests to the controller. The page
+  needs **internet access in the browser** (it loads Swagger UI from unpkg.com); the controller doesn't. Linked from
+  the sidebar (*API*) and *System → Project*.
+- **Quick-start sheets** in `docs/sheets`: the one-page guides shipped with the carrier board, the controller and the
+  controller with amplifier.
+
+### Fixed
+
+- **Two controllers whose IDs match** (the last two MAC bytes, about a 2% chance in 50 units) now see each other:
+  controllers are told apart by their full MAC, so they no longer ignore each other's heartbeats, both claim
+  `net2rf.local`, or fail to pair in a coverage group. `/api/discover` lists each controller's `mac`.
+- **The Wi-Fi MAC no longer shows as 00:00:00:00:00:00** while Wi-Fi is stopped (on Ethernet), on the Network page
+  and in `/api/status`. The Ethernet MAC is now reported before the Ethernet driver has started, too.
+- **Values on the Network and System pages can be selected and copied:** the once-a-second refresh no longer
+  redraws lines that haven't changed.
+- **Docs:** the user guide (*Tools → Amplifier power*, the OLED pages) and the show setup guide (the carrier
+  board's SX1278) match the firmware again.
+
 ## [0.3.1] - 2026-11-16
 
 The OLED says when an update is being confirmed, so a controller isn't unplugged before it's kept.
@@ -172,7 +201,8 @@ The R2.0 carrier board is built and tested, with the Ra-02 radio, in both printe
 
 See the [releases page](https://github.com/mikeneiderhauser/net2rf-led/releases).
 
-[Unreleased]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.2.1...v0.2.2

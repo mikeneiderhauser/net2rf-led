@@ -41,6 +41,7 @@ dl.kv dt{color:var(--dim)}dl.kv dd{margin:0;text-align:right;font-variant-numeri
 .sw{display:inline-block;width:22px;height:22px;border-radius:5px;border:1px solid var(--rule);vertical-align:middle}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
 .dim{color:var(--dim)}.small{font-size:12px}
+.macs{display:inline-grid;grid-template-columns:auto auto;gap:2px 12px;align-items:baseline}.macs .dim{text-align:right;white-space:nowrap}
 .badge{display:inline-block;border-radius:6px;padding:1px 7px;font-size:12px;font-weight:600}
 .badge.good{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
 .badge.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
@@ -97,7 +98,7 @@ details.adv>summary{cursor:pointer;font-weight:600;color:var(--dim)}details.adv[
     <a href="#tools">Tools</a>
     <a href="#system">System</a>
   </nav>
-  <div class="ver"><span id="verLabel"></span> &middot; <a href="https://github.com/mikeneiderhauser/net2rf-led" target="_blank" rel="noopener" title="Source, documentation and releases">GitHub</a></div>
+  <div class="ver"><span id="verLabel"></span> &middot; <a href="https://github.com/mikeneiderhauser/net2rf-led" target="_blank" rel="noopener" title="Source, documentation and releases">GitHub</a> &middot; <a href="/api/docs" target="_blank" rel="noopener" title="This controller's API (Swagger UI). Needs internet access in your browser.">API</a></div>
 </aside>
 <main>
   <div id="cnaNote" class="card hide" style="border-left:4px solid var(--warn)"><b>You're in the Wi-Fi sign-in window.</b>
@@ -581,7 +582,14 @@ async function flashInfo(){if(flashLoaded)return;let f;try{f=await api('flash')}
 function fmtUp(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+'d ':'')+(h?h+'h ':'')+m+'m'}
 const mhz=hz=>(hz/1e6).toFixed(3)+' MHz';
 const pill=(cls,txt)=>`<span class="pill"><span class="led ${cls}"></span>${txt}</span>`;
-function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}
+// Key/value lists are redrawn every second: update only the values that changed, so text in the others (a MAC, an
+// IP) can still be selected and copied.
+function macList(rows){return `<span class="macs">${rows.map(([k,m])=>`<span class="small dim">${esc(k)}</span><span class="mono">${m}</span>`).join('')}</span>`}
+function kv(el,rows){const h=rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('');if(el._kv===h)return;
+  const dds=el.querySelectorAll('dd');
+  if(dds.length===rows.length&&rows.every(([k],i)=>el._keys&&el._keys[i]===k))rows.forEach(([,v],i)=>{if(el._vals[i]!==v)dds[i].innerHTML=v});
+  else el.innerHTML=h;
+  el._kv=h;el._keys=rows.map(r=>r[0]);el._vals=rows.map(r=>r[1])}
 
 // ---------- navigation ----------
 function show(page){if(!PAGES[page])page='dashboard';
@@ -775,7 +783,7 @@ function renderNetStatus(){if(!S)return;const n=S.network,rows=[['Active',n.inte
   if(n.ethernet.present!==false)rows.push(['Ethernet',n.ethernet.enabled?(n.ethernet.link?`link up, ${n.ethernet.speed} Mbps${n.ethernet.full_duplex?' full duplex':''}`:'no link'):'disabled']);
   rows.push(['Wi-Fi',n.wifi.ssid?(n.wifi.connected?`${esc(n.wifi.ssid)} (${n.wifi.rssi} dBm)`:(n.wifi.error?`<span style="color:var(--bad)">can't join ${esc(n.wifi.ssid)}: ${esc(n.wifi.error)}</span>${n.wifi.paused?' (retries paused while the setup AP is in use)':''}`:n.wifi.active?'connecting to '+esc(n.wifi.ssid):'standby (Ethernet in use)')):'not configured']);
   rows.push(['Access point',n.ap.active?`${esc(n.ap.ssid)} · ${n.ap.ip} · ${n.ap.clients} connected`:'off']);
-  if(n.ethernet.mac)rows.push(['Ethernet MAC',n.ethernet.mac]);rows.push(['Wi-Fi MAC',n.wifi.mac]);kv($('n_status'),rows)}
+  if(n.ethernet.mac)rows.push(['Ethernet MAC',(S.device&&n.ethernet.mac===S.device.unit_mac?'<span class="small dim">unit MAC</span>&nbsp; ':'')+`<span class="mono">${n.ethernet.mac}</span>`]);rows.push(['Wi-Fi MAC',`<span class="mono">${n.wifi.mac}</span>`]);kv($('n_status'),rows)}
 // Wi-Fi scan: strongest first, one row per network name (several access points can share one)
 var scanNets=[];
 function scanDraw(found){const nets={};(found||[]).forEach(w=>{if(w.ssid&&(!nets[w.ssid]||w.rssi>nets[w.ssid].rssi))nets[w.ssid]=w});
@@ -1152,7 +1160,7 @@ const OTHER_BOARD_TAGS=['-xiao-esp32s3-'];
 function forBoard(name){const b=(S&&S.device.board)||'wt32-eth01';return b==='wt32-eth01'?!OTHER_BOARD_TAGS.some(t=>name.includes(t)):name.includes('-'+b+'-')}
 function sysInfo(){authUi();displayUi();ghFill();fwNotice();const d=S.device;
   const upd=d.update_pending?'<span class="badge warn">new update, confirming…</span>':d.update_rolled_back?'<span class="badge bad">last update failed and was rolled back</span>':'<span class="badge good">confirmed</span>';
-  kv($('s_info'),[['Version',d.firmware],['Project',`<a href="${GH_URL}" target="_blank" rel="noopener">github.com/mikeneiderhauser/net2rf-led</a><br><span class="small"><a href="${GH_URL}#documentation" target="_blank" rel="noopener">docs</a> · <a href="${GH_URL}/releases" target="_blank" rel="noopener">releases</a> · <a href="${GH_URL}/issues" target="_blank" rel="noopener">report a problem</a> · GPL-3.0</span>`],['Update state',upd],['Built',d.built],['Board',esc(d.board_name||'WT32-ETH01')],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',heapFree(d,true)],['Free flash',flashFree(d,true)],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`OLED at ${d.display_info.address}`:'none']])}
+  kv($('s_info'),[['Version',d.firmware],['Project',`<a href="${GH_URL}" target="_blank" rel="noopener">github.com/mikeneiderhauser/net2rf-led</a><br><span class="small"><a href="${GH_URL}#documentation" target="_blank" rel="noopener">docs</a> · <a href="/api/docs" target="_blank" rel="noopener" title="Swagger UI for this controller's API. Needs internet access in your browser.">API</a> · <a href="${GH_URL}/releases" target="_blank" rel="noopener">releases</a> · <a href="${GH_URL}/issues" target="_blank" rel="noopener">report a problem</a> · GPL-3.0</span>`],['Update state',upd],['Built',d.built],['Board',esc(d.board_name||'WT32-ETH01')],['Unit MAC',d.unit_mac?`<span class="mono" title="The address that identifies this controller: quote it for support">${d.unit_mac}</span>`:'–'],['All MACs',d.macs?macList([['Ethernet (unit MAC)',d.macs.ethernet],['Wi-Fi',d.macs.wifi],[`Setup hotspot NET2RF-${d.suffix}`,d.macs.ap],['Bluetooth (not used)',d.macs.bluetooth]]):'–'],['Chip',`${d.chip} rev ${d.chip_rev}`],['Uptime',fmtUp(d.uptime_s)],['Free memory',heapFree(d,true)],['Free flash',flashFree(d,true)],['Last reset',d.reset_reason],['Display',d.display_info&&d.display_info.present?`OLED at ${d.display_info.address}`:'none']])}
 $('s_file').onchange=()=>{$('s_upload').disabled=!$('s_file').files.length};
 $('s_upload').onclick=async()=>{const f=$('s_file').files[0];if(!f)return;if(!await ask(`Flash ${f.name} (${fmtBytes(f.size)})?`))return;
   try{await api('config')}catch(e){return}  // log in first so the upload isn't sent twice

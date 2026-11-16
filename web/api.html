@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- The API page served by the controller at /api/docs (tools/embed_ui.py builds it in). Swagger UI comes from
+     unpkg.com, so the browser needs internet access; the spec, /api/openapi.yaml, comes from this controller. Served
+     from the controller itself, "Try it out" works: the requests stay on the controller's own address. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Net2RF LED API</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui.css">
+<meta name="color-scheme" content="light">
+<style>html{color-scheme:light;background:#fff}body{margin:0;font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+/* Dark, like the controller's own UI. Swagger UI has no dark theme, so the light page is inverted and its hues
+   turned back (GET stays blue, POST green); 0.9 rather than 1 keeps it a soft dark grey instead of black. */
+html{filter:invert(.9) hue-rotate(180deg)}
+.swagger-ui .topbar{display:none}
+.swagger-ui .opblock-tag{flex-wrap:wrap}.swagger-ui .opblock-tag>a{order:0}.swagger-ui .opblock-tag>button{order:1;margin-left:auto}
+.swagger-ui .opblock-tag small{order:2;flex:1 1 100%;padding:0 0 12px}
+.note{max-width:1420px;margin:16px auto 0;padding:10px 20px;box-sizing:border-box;font-size:14px;color:#3b4151;border-left:4px solid #49cc90;background:#f3fbf7}
+.note.bad{border-color:#f93e3e;background:#fef3f3}.note a{color:#1a63c7}</style>
+</head>
+<body>
+<div class="note" id="note">This page loads Swagger UI from unpkg.com, so <b>your browser needs internet access</b>. The spec
+comes from this controller and matches its firmware: <a href="/api/openapi.yaml">openapi.yaml</a>. <b>Try it out</b> sends real
+requests to this controller. · <a href="/">Back to the controller</a></div>
+<div id="api"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+<script>
+if (typeof SwaggerUIBundle === "undefined") {
+  const n = document.getElementById("note");
+  n.className = "note bad";
+  n.innerHTML = "<b>Couldn't load Swagger UI.</b> This page needs internet access in your browser: it loads Swagger UI " +
+    "from unpkg.com. Without it, download the spec, <a href=\"/api/openapi.yaml\">openapi.yaml</a>, and open it in a tool " +
+    "such as Postman, or go <a href=\"/\">back to the controller</a>.";
+} else {
+  SwaggerUIBundle({
+    url: "/api/openapi.yaml",
+    dom_id: "#api",
+    deepLinking: true,
+    docExpansion: "list",
+    defaultModelsExpandDepth: 0,
+    // whatever server the spec names, send to this controller (the address this page was opened on)
+    requestInterceptor: (r) => { r.url = r.url.replace(/^https?:\/\/[^/]+/, location.origin); return r; }
+  });
+}
+</script>
+</body>
+</html>

@@ -28,6 +28,14 @@ String device_suffix() {
 
 void device_mac(uint8_t *mac) { esp_read_mac(mac, ESP_MAC_ETH); }
 
+String unit_mac() {
+    uint8_t m[6];
+    device_mac(m);
+    char buf[18];
+    snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", m[0], m[1], m[2], m[3], m[4], m[5]);
+    return String(buf);
+}
+
 String default_hostname() {
     String s = "net2rf-" + device_suffix();
     s.toLowerCase();

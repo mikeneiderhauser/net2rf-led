@@ -6,12 +6,29 @@ It's documented in one place, [`openapi.yaml`](openapi.yaml) (OpenAPI 3.1): ever
 request rules, authentication, settings, receiver mode, coverage groups, controller discovery, board records and
 firmware updates.
 
-- **Read it** in the [API explorer](https://mikeneiderhauser.github.io/net2rf-led/api/), published with each
-  release, or locally: `python3 -m http.server -d docs/reference`, then open `http://localhost:8000/openapi.html`.
-- **Use it** in Postman, Insomnia or a client generator by loading the file.
+## On the controller
 
-The explorer can't send requests to a controller (the controller doesn't answer cross-site requests). Use curl or a
-script:
+Every controller (firmware 0.3.2 and later) serves the spec and an explorer page for it:
+
+| Address | What it is |
+|---|---|
+| `http://<controller>/api/docs` | **API explorer** (Swagger UI). *Try it out* sends real requests to this controller, with the admin login if one is set. Also linked from **System → Project → API**. |
+| `http://<controller>/api/openapi.yaml` | The spec, matching the controller's firmware: load it into Postman, Insomnia or a client generator. |
+
+> **The explorer page needs internet access in your browser.** It loads Swagger UI from unpkg.com; the controller
+> itself needs no internet. Without it, the page says so and links the raw spec, which always works.
+
+*Try it out* changes things for real: switching RF output off, starting a test, rebooting. Use it on a controller
+that isn't running a show.
+
+## Online
+
+The [API explorer](https://mikeneiderhauser.github.io/net2rf-led/api/) published with each release shows the latest
+release's spec (also needs internet). It can't send requests to a controller, because the controller doesn't answer
+cross-site requests: use the controller's own page, or curl or a script. Locally:
+`python3 -m http.server -d docs/reference`, then open `http://localhost:8000/openapi.html`.
+
+## From a script
 
 ```bash
 curl http://net2rf-3f2a.local/api/stats

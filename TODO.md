@@ -63,6 +63,14 @@ history.
 
 ## Ideas, not started
 
+- [ ] **Offline API explorer on boards with 8 MB flash.** `/api/docs` loads Swagger UI from unpkg.com, so the browser
+  needs internet. Some WT32-ETH01s have an 8 MB chip (both bench boards, .232 and .233, do; `/api/flash` reports
+  `flash_chip_bytes`) while the partition table uses only the first 4 MB. Without touching the partition table (not
+  safe to rewrite over the air), the firmware could claim a region past 4 MB at runtime (e.g. 1 MB at 0x400000) and
+  keep files there. The System page would have the browser fetch Swagger UI (about 350 KB gzipped) and upload it, as
+  firmware updates do; `/api/docs` then serves it from the controller and falls back to unpkg on 4 MB boards. The
+  same space could hold more raw captures, logs or show presets.
+
 - [ ] **Receiver output over the network** (after the decoder is proven on air):
   1. **DDP out** of what the receiver tracks: one pixel per group (All first, then groups 1-15, the same layout
      the controller takes as input) to a configured address, sent on change plus a slow repeat. Drives WLED / FPP /

@@ -216,7 +216,9 @@ def status():
     return {
         "device": {"firmware": FW, "built": "Sep 28 2026 09:00:00", "uptime_s": int(up) + 3600,
                    "free_heap": 182344, "min_free_heap": 160112, "heap_bytes": 327680, "firmware_bytes": 1471297, "firmware_slot_bytes": 1966080, "chip": "ESP32-D0WD-V3", "chip_rev": 3,
-                   "reset_reason": "power on", "display": True, "suffix": "3F2A", "name": APP["name"],
+                   "reset_reason": "power on", "display": True, "suffix": "3F2A", "unit_mac": "A8:03:2A:11:3F:2A",
+                   "macs": {"ethernet": "A8:03:2A:11:3F:2A", "wifi": "A8:03:2A:11:3F:27",
+                            "ap": "A8:03:2A:11:3F:28", "bluetooth": "A8:03:2A:11:3F:29"}, "name": APP["name"],
                    "auth": AUTH["enabled"], "update_pending": False, "update_rolled_back": False,
                    "update_check": dict({"available": newer(LATEST["tag"], FW)},
                                         **({"latest": LATEST["tag"], "reported_ago_s": int(time.time() - LATEST["at"])} if LATEST["tag"] else {})),
@@ -226,7 +228,7 @@ def status():
                     "ethernet": {"enabled": True, "link": True, "mac": "A8:03:2A:11:3F:2A", "speed": 100,
                                  "full_duplex": True, "ip": "192.168.250.60", "gateway": "192.168.250.1",
                                  "subnet": "255.255.255.0"},
-                    "wifi": {"ssid": NET["wifi_ssid"], "active": False, "connected": False, "mac": "A8:03:2A:11:3F:28"},
+                    "wifi": {"ssid": NET["wifi_ssid"], "active": False, "connected": False, "mac": "A8:03:2A:11:3F:27"},
                     "ap": {"active": False}},
         "group": group_status(),
         "engine": {
@@ -278,6 +280,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             with open(os.path.join(ROOT, "web", "index.html"), "rb") as f:
                 return self.send(200, f.read(), "text/html")
+        if path == "/api/docs":
+            with open(os.path.join(ROOT, "web", "api.html"), "rb") as f:
+                return self.send(200, f.read(), "text/html")
+        if path == "/api/openapi.yaml":
+            with open(os.path.join(ROOT, "docs", "reference", "openapi.yaml"), "rb") as f:
+                return self.send(200, f.read(), "application/yaml")
         if path == "/api/status":
             return self.send(200, status())
         if path == "/api/config":

@@ -72,6 +72,8 @@ static uint8_t num_pages() {
     return build_pages(pages);
 }
 static uint32_t s_last_draw = 0, s_last_auto_page = 0;
+static uint32_t s_splash_until = 0;  // the start-up screen stays up until then (0 = not showing)
+static const uint32_t SPLASH_MS = 5000;
 
 // Button state. The button is only "armed" if its pin reads released (pulled up) at boot, so an
 // unfitted, floating input can never trigger a reset.
@@ -165,11 +167,14 @@ static void probe_display() {
         s_oled->flipScreenVertically();
         s_oled->setFont(ArialMT_Plain_10);
         s_oled->clear();
-        s_oled->drawString(0, 0, "Net2RF LED");
-        s_oled->drawString(0, 14, "v" FW_VERSION);
-    s_oled->drawString(0, 28, NET2RF_BOARD_NAME);
+        s_oled->drawString(0, 0, "Net2RF LED  v" FW_VERSION);
+        s_oled->drawString(0, 13, NET2RF_BOARD_NAME);
+        // The unit MAC (config.h: unit_mac()), for labelling units and support: the one address to quote.
+        s_oled->drawString(0, 32, "Unit MAC");
+        s_oled->drawString(0, 45, unit_mac());
         s_oled->display();
-        s_last_draw = millis();  // leave the splash up briefly
+        s_last_draw = millis();
+        s_splash_until = (millis() + SPLASH_MS) | 1;  // long enough to read the MAC
         log_i("OLED at 0x%02X%s", addr,
               s_pins_swapped ? " (SDA/SCL wired swapped: working anyway)" : "");
         return;
@@ -599,6 +604,12 @@ void loop() {
         s_oled->displayOff();
         s_asleep = true;
         log_i("OLED asleep");
+    }
+    if (s_splash_until) {  // the start-up screen, until it has been up long enough or USER is pressed
+        if ((int32_t) (now - s_splash_until) < 0 && !s_pressed)
+            return;
+        s_splash_until = 0;
+        s_last_draw = 0;
     }
     if (!s_asleep && !s_pressed && now - s_last_draw > 500) {
         if (oled_ok()) {
