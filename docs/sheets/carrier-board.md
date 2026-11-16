@@ -46,12 +46,12 @@ Thanks for trying the Net2RF LED carrier board. The WT32-ETH01, a Ra-02 radio an
 
 ## Links
 
-| | |
+| QR | Link |
 |---|---|
-| GitHub repo | <https://github.com/mikeneiderhauser/net2rf-led> |
-| Carrier board guide | <https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/build/carrier-board.md> |
-| Web flasher | <https://mikeneiderhauser.github.io/net2rf-led/> |
-| Case STLs | <https://github.com/mikeneiderhauser/net2rf-led/tree/main/hardware/case> |
-| FPP plugin | <https://github.com/mikeneiderhauser/fpp-net2rf-auto> |
+| <img src="qr/repo.svg" width="96" alt="QR code: GitHub repo"> | **GitHub repo**<br><https://github.com/mikeneiderhauser/net2rf-led> |
+| <img src="qr/carrier.svg" width="96" alt="QR code: Carrier board guide"> | **Carrier board guide**<br><https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/build/carrier-board.md> |
+| <img src="qr/flasher.svg" width="96" alt="QR code: Web flasher"> | **Web flasher**<br><https://mikeneiderhauser.github.io/net2rf-led/> |
+| <img src="qr/case.svg" width="96" alt="QR code: Case STLs"> | **Case STLs**<br><https://github.com/mikeneiderhauser/net2rf-led/tree/main/hardware/case> |
+| <img src="qr/plugin.svg" width="96" alt="QR code: FPP plugin"> | **FPP plugin**<br><https://github.com/mikeneiderhauser/fpp-net2rf-auto> |
 
 Questions or problems: [open an issue](https://github.com/mikeneiderhauser/net2rf-led/issues).

@@ -46,11 +46,11 @@ The OLED shows what releasing USER will do.
 
 ## Links
 
-| | |
+| QR | Link |
 |---|---|
-| GitHub repo | <https://github.com/mikeneiderhauser/net2rf-led> |
-| User guide | <https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/guides/user-guide.md> |
-| FPP plugin | <https://github.com/mikeneiderhauser/fpp-net2rf-auto> |
-| Show setup (xLights) | <https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/guides/show-setup.md> |
+| <img src="qr/repo.svg" width="96" alt="QR code: GitHub repo"> | **GitHub repo**<br><https://github.com/mikeneiderhauser/net2rf-led> |
+| <img src="qr/guide.svg" width="96" alt="QR code: User guide"> | **User guide**<br><https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/guides/user-guide.md> |
+| <img src="qr/plugin.svg" width="96" alt="QR code: FPP plugin"> | **FPP plugin**<br><https://github.com/mikeneiderhauser/fpp-net2rf-auto> |
+| <img src="qr/show.svg" width="96" alt="QR code: Show setup (xLights)"> | **Show setup (xLights)**<br><https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/guides/show-setup.md> |
 
 Questions or problems: [open an issue](https://github.com/mikeneiderhauser/net2rf-led/issues).
