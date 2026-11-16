@@ -8,11 +8,12 @@ extern "C" bool verifyRollbackLater() { return true; }
 
 namespace ota_guard {
 
-static const uint32_t HEALTHY_FOR_MS = 30000;   // reachable this long -> keep the update
+static const uint32_t HEALTHY_FOR_MS = 15000;   // reachable this long -> keep the update
 static const uint32_t GIVE_UP_AFTER_MS = 180000;  // never reachable -> roll back
 
 static bool s_checked = false, s_pending = false;
 static uint32_t s_reachable_since = 0;
+static uint32_t s_confirmed_at = 0;
 
 static void check_state() {
     if (s_checked)
@@ -45,6 +46,7 @@ void loop(bool reachable) {
     if (now - s_reachable_since >= HEALTHY_FOR_MS) {
         esp_ota_mark_app_valid_cancel_rollback();
         s_pending = false;
+        s_confirmed_at = now | 1;
         log_i("Firmware update confirmed");
     }
 }
@@ -53,6 +55,15 @@ bool pending() {
     check_state();
     return s_pending;
 }
+
+int32_t confirm_left_ms() {
+    if (!pending() || s_reachable_since == 0)
+        return -1;
+    uint32_t in = millis() - s_reachable_since;
+    return in >= HEALTHY_FOR_MS ? 0 : (int32_t) (HEALTHY_FOR_MS - in);
+}
+
+bool just_confirmed(uint32_t within_ms) { return s_confirmed_at && millis() - s_confirmed_at < within_ms; }
 
 bool rolled_back() { return esp_ota_get_last_invalid_partition() != nullptr; }
 

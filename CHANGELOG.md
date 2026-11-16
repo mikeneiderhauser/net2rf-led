@@ -3,6 +3,30 @@
 What changed in each release. The section for a version becomes its
 [GitHub release](https://github.com/mikeneiderhauser/net2rf-led/releases) notes.
 
+## [Unreleased]
+
+## [0.3.1] - 2026-11-16
+
+The OLED says when an update is being confirmed, so a controller isn't unplugged before it's kept.
+
+### Added
+
+- **The OLED shows when an update is being confirmed:** *Installed vX.Y.Z · Keep powered · 12 s* counts down the time
+  a new firmware must stay up before it's kept, then *Update confirmed*. Restarting or unplugging the controller
+  during that time rolls the update back.
+- **The firmware version is always on the OLED's status page,** right of the hostname. In a coverage group the
+  group's status used to take its place.
+
+### Changed
+
+- **A new firmware is confirmed after 15 s reachable,** down from 30 s. Crashes at start-up and a network that
+  doesn't come up still roll it back.
+
+### Fixed
+
+- **OLED messages no longer run off the screen:** the reset prompts, the update screen and long version names are
+  fitted to the display.
+
 ## [0.3.0] - 2026-11-06
 
 One switch, RF output, now stops everything going on air, and the amplifier follows it. The API is documented as an
@@ -148,6 +172,8 @@ The R2.0 carrier board is built and tested, with the Ra-02 radio, in both printe
 
 See the [releases page](https://github.com/mikeneiderhauser/net2rf-led/releases).
 
+[Unreleased]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/mikeneiderhauser/net2rf-led/compare/v0.2.0...v0.2.1

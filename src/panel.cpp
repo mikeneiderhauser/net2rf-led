@@ -10,6 +10,7 @@
 #include "engine.h"
 #include "group.h"
 #include "net.h"
+#include "ota_guard.h"
 #include "pins.h"
 
 namespace panel {
@@ -258,11 +259,25 @@ void begin() {
     s_next_probe_ms = millis() + PROBE_INTERVAL_MS;
 }
 
-static void draw_centered(const String &line1, const String &line2) {
+static String fit(const String &text, uint16_t max_px);
+
+// The firmware version, short enough for one line: a development build ("0.3.0-2-gabc-dirty") becomes "v0.3.0+".
+static String short_version() {
+    String v = FW_VERSION;
+    int dash = v.indexOf('-');
+    return "v" + (dash > 0 ? v.substring(0, dash) + "+" : v);
+}
+
+// A message screen: two or three centred lines, each cut to the screen's width.
+static void draw_centered(const String &line1, const String &line2, const String &line3 = String()) {
     s_oled->clear();
+    s_oled->setFont(ArialMT_Plain_10);
     s_oled->setTextAlignment(TEXT_ALIGN_CENTER);
-    s_oled->drawString(64, 18, line1);
-    s_oled->drawString(64, 34, line2);
+    const int top = line3.length() ? 10 : 18;
+    s_oled->drawString(64, top, fit(line1, 128));
+    s_oled->drawString(64, top + 16, fit(line2, 128));
+    if (line3.length())
+        s_oled->drawString(64, top + 32, fit(line3, 128));
     s_oled->setTextAlignment(TEXT_ALIGN_LEFT);
     s_oled->display();
 }
@@ -288,7 +303,7 @@ static void handle_button(uint32_t now) {
                 ESP.restart();
             } else if (held >= HOLD_NET_RESET_MS) {
                 if (oled_ok())
-                    draw_centered("Network reset", "Password cleared, rebooting");
+                    draw_centered("Network reset", "Admin password cleared", "Rebooting...");
                 config_network_reset();
                 delay(500);
                 ESP.restart();
@@ -302,8 +317,10 @@ static void handle_button(uint32_t now) {
     if (s_pressed && oled_ok()) {
         uint32_t held = now - s_press_start;
         if (held >= HOLD_NET_RESET_MS) {
-            draw_centered(held >= HOLD_FACTORY_MS ? "Release: FACTORY reset" : "Release: network reset",
-                          held >= HOLD_FACTORY_MS ? "(erases everything)" : "+ clears admin password");
+            if (held >= HOLD_FACTORY_MS)
+                draw_centered("Release for", "FACTORY RESET", "erases everything");
+            else
+                draw_centered("Release for", "network reset", "+ clears admin password");
             s_last_draw = now;
         }
     }
@@ -401,10 +418,14 @@ static void draw_page(uint32_t now) {
         String iface = net::active_interface();
         iface = iface == "ethernet" ? "ETH" : iface == "wifi" ? "WiFi" : iface == "ap" ? "AP" : "offline";
         s_oled->drawString(0, 14, fit(net::ip().toString() + "  " + iface, 128));
-        if (net::ap_active())
-            s_oled->drawString(0, 26, fit("AP " + net::ap_ssid(), 128));
-        else
-            s_oled->drawString(0, 26, fit(g_net.hostname, 128));
+        // The firmware version always shows, right of the name; a development build ("0.3.0-2-gabc-dirty") is
+        // shortened to "0.3.0+".
+        String ver = short_version();
+        s_oled->setTextAlignment(TEXT_ALIGN_RIGHT);
+        s_oled->drawString(128, 26, ver);
+        s_oled->setTextAlignment(TEXT_ALIGN_LEFT);
+        int name_w = 124 - s_oled->getStringWidth(ver);
+        s_oled->drawString(0, 26, fit(net::ap_active() ? "AP " + net::ap_ssid() : g_net.hostname, name_w));
         String radio = String(s.radio_name) + ": ";
         radio += s.radio_state == RadioState::READY          ? (g_engine.receiving() ? "receiving" : "ready")
                  : s.radio_state == RadioState::NOT_DETECTED ? "NOT DETECTED"
@@ -412,8 +433,8 @@ static void draw_page(uint32_t now) {
         s_oled->drawString(0, 38, radio);
         const char *newer = updater::available_version();
         String grp = group::summary();
-        s_oled->drawString(0, 50, newer ? fit(String("v" FW_VERSION " > ") + newer + " avail", 128)
-                                  : grp.length() ? fit(grp, 128) : String("v" FW_VERSION));
+        s_oled->drawString(0, 50, newer ? fit(ver + " > " + newer + " avail", 128)
+                                  : grp.length() ? fit(grp, 128) : "up " + age_string(millis()));
     } else if (page.kind == PAGE_RECEIVER || page.kind == PAGE_HEARD) {
         draw_receiver(page.kind == PAGE_HEARD, page.first, s);
     } else if (page.kind == PAGE_INPUT) {
@@ -527,6 +548,27 @@ void loop() {
             }
             return;
         }
+    }
+    // A new firmware is kept only once it has been reachable for a while (src/ota_guard.h): restarted or unplugged
+    // before that, it rolls back. Say so, with a countdown, then briefly that it's kept.
+    static bool showed_update = false;
+    if (!s_pressed && (ota_guard::pending() || ota_guard::just_confirmed(4000))) {
+        wake_display(now);
+        if ((!showed_update || now - s_last_draw > 500) && oled_ok()) {
+            int32_t left = ota_guard::confirm_left_ms();
+            if (!ota_guard::pending())
+                draw_centered("Update confirmed", short_version());
+            else
+                draw_centered("Installed " + short_version(), "Keep powered",
+                              left < 0 ? String("starting...") : String((left + 999) / 1000) + " s");
+            s_last_draw = now;
+            showed_update = true;
+        }
+        return;
+    }
+    if (showed_update) {  // back to the normal pages
+        showed_update = false;
+        s_last_draw = 0;
     }
     uint16_t drops = net::last_drop().count;
     if (drops != s_drops_seen) {  // a connection was just lost: say why right away
