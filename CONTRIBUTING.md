@@ -29,7 +29,7 @@ routes need the admin password. To browse the spec locally: `python3 -m http.ser
 | Path | What it is |
 |---|---|
 | `src/` | The firmware: engine (zones, scheduling, RF), network, web server, OLED and button, peers, updater |
-| `web/index.html` | The web UI (gzipped into the firmware at build time) |
+| `web/index.html` | The web UI (gzipped into the firmware at build time, with `web/api.html` and the API spec: `tools/embed_ui.py`) |
 | `lib/net2rf_protocol` | Packet encoder and decoder, receiver zone tracking, DDP / E1.31 parsers (pure C++, unit tested) |
 | `lib/cc1101_ook`, `lib/sx1278_ook` | Minimal radio drivers for OOK transmit and listen before transmit |
 | `lib/net2rf_heartbeat`, `lib/net2rf_fpp` | Controller heartbeat and FPP discovery ping formats (unit tested) |
@@ -42,6 +42,7 @@ routes need the admin password. To browse the spec locally: `python3 -m http.ser
 
 ## Releases
 
-Add a section to [CHANGELOG.md](CHANGELOG.md) for the new version first: it becomes the release notes. Pushing a `v*` tag
+Add a section to [CHANGELOG.md](CHANGELOG.md) for the new version first: it becomes the release notes. If the
+release changes what a quick-start sheet says, update [docs/sheets](docs/sheets), including the firmware version on each. Pushing a `v*` tag
 then runs the tests, builds both boards, publishes a GitHub release with the firmware, and redeploys the browser flasher
 and the API explorer.

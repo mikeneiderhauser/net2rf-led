@@ -225,3 +225,7 @@ bool parse_hex(const char *str, uint8_t *out, size_t len);
 String default_hostname();
 String device_suffix();  // last 2 MAC bytes, e.g. "3F2A"
 void device_mac(uint8_t *mac);  // the 6-byte MAC the suffix comes from (unique per board)
+// device_mac() as "AA:BB:CC:DD:EE:FF": the unit MAC, the one address that identifies this controller in labels,
+// support and the update records. It's the Ethernet MAC on every board (derived from the chip on a board without
+// Ethernet); the chip's other MACs (Wi-Fi, hotspot, Bluetooth) are listed beside it on the System page.
+String unit_mac();

@@ -20,6 +20,7 @@
 | [Flashing](build/flashing.md) | Installing the firmware the first time |
 | [External amplifier](build/amplifier.md) | More range, and switching the amp from the firmware |
 | [Printed case](../hardware/case/README.md) | STLs, OpenSCAD source and fitting instructions |
+| Quick-start sheets | The one-page sheets shipped with the hardware: [carrier board](sheets/carrier-board.md), [controller](sheets/controller.md), [controller with amplifier](sheets/controller-amp.md) |
 
 ## Technical reference
 

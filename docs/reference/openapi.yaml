@@ -8,8 +8,11 @@ info:
     scripts and integrations such as [Home Assistant](https://github.com/mikeneiderhauser/net2rf-led/blob/main/docs/guides/home-assistant.md).
     All endpoints are JSON, and `POST` bodies are JSON objects.
 
-    The controller doesn't answer cross-site (CORS) requests, so *Try it out* on this page can't reach it: use curl
-    or a script.
+    **Two ways to browse it:** the controller serves this spec, matching its firmware, at `/api/openapi.yaml`, and
+    this page at `/api/docs`. Opened from the controller, *Try it out* sends real requests to it. Either way the page
+    loads Swagger UI from unpkg.com, so **the browser needs internet access** (the controller doesn't). On the
+    copy published with each release, *Try it out* is off: the controller doesn't answer cross-site (CORS)
+    requests, so use the controller's own page, curl or a script.
 
     ## Request rules
 
@@ -275,6 +278,33 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Status"}
+  /api/openapi.yaml:
+    get:
+      tags: [Status]
+      summary: This API spec
+      description: |
+        This document, as served by the controller: it matches the firmware running there (`info.version`). Load it
+        into Postman, Insomnia or a client generator.
+      responses:
+        "200":
+          description: OpenAPI 3.1, YAML
+          content:
+            application/yaml:
+              schema: {type: string}
+  /api/docs:
+    get:
+      tags: [Status]
+      summary: API explorer page
+      description: |
+        Swagger UI for `/api/openapi.yaml`, where *Try it out* sends real requests to this controller. The page loads
+        Swagger UI from unpkg.com, so **the browser needs internet access**; without it, the page says so and links
+        the raw spec.
+      responses:
+        "200":
+          description: HTML page
+          content:
+            text/html:
+              schema: {type: string}
   /api/stats:
     get:
       tags: [Status]
@@ -1355,6 +1385,21 @@ components:
             firmware_slot_bytes: {type: integer}
             update_pending: {type: boolean}
             update_rolled_back: {type: boolean}
+            suffix: {type: string, example: 279B, description: "Last two bytes of the unit MAC: the -xxxx in the hostname and hotspot name"}
+            unit_mac:
+              type: string
+              example: "B4:A6:4A:81:27:9B"
+              description: >-
+                The one MAC that identifies this unit, for labels and support: the Ethernet MAC on every board (derived
+                from the chip on a board without Ethernet).
+            macs:
+              type: object
+              description: Every MAC the chip uses. Only `ethernet` is the unit MAC.
+              properties:
+                ethernet: {type: string}
+                wifi: {type: string, description: Wi-Fi client}
+                ap: {type: string, description: The setup hotspot}
+                bluetooth: {type: string, description: Not used}
             update_check: {$ref: "#/components/schemas/UpdateCheck"}
             amp: {$ref: "#/components/schemas/Amp"}
             display_info:
@@ -1563,7 +1608,8 @@ components:
               hostname: {type: string}
               ip: {type: string}
               firmware: {type: string}
-              id: {type: string}
+              id: {type: string, description: "Last two bytes of the unit MAC: two controllers can share one"}
+              mac: {type: string, example: B4A64A81279B, description: "Full unit MAC, 12 hex digits (absent for older firmware and mDNS-only entries): what controllers are told apart by"}
               self: {type: boolean}
               online: {type: boolean}
               last_seen_ms: {type: integer}

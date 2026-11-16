@@ -26,6 +26,7 @@ static const size_t MAX_PEERS = 32;
 
 struct Peer {
     String id, name, host, ip, fw, radio, input;
+    String mac;  // full MAC, 12 hex digits, from the heartbeat; "" from older firmware or mDNS only
     bool out = false, test = false;
     uint8_t zones = 0, air = 0;
     uint32_t up = 0;
@@ -49,17 +50,44 @@ struct Guard {
     ~Guard() { xSemaphoreGive(s_lock); }
 };
 
-static Peer *find(const String &id) {
+// Two controllers can share an ID (it's only the last two MAC bytes), so a peer is matched by its full MAC when
+// it sends one. An entry known only by ID (mDNS, older firmware) is adopted by the first heartbeat with that ID.
+static Peer *find(const String &id, const String &mac) {
+    if (mac.length()) {
+        for (Peer &p : s_peers)
+            if (p.mac.equalsIgnoreCase(mac))
+                return &p;
+        for (Peer &p : s_peers)
+            if (p.mac.isEmpty() && p.id.equalsIgnoreCase(id))
+                return &p;
+        return nullptr;
+    }
     for (Peer &p : s_peers)
         if (p.id.equalsIgnoreCase(id))
             return &p;
     return nullptr;
 }
 
+static String own_mac_hex() {
+    uint8_t mac[6];
+    device_mac(mac);
+    char hex[13];
+    n2rgroup::mac_to_hex(mac, hex);
+    return String(hex);
+}
+
+// A heartbeat or mDNS sighting of this controller itself (looped back): by MAC when known, else by ID.
+static bool is_self(const String &id, const String &mac) {
+    return mac.length() ? mac.equalsIgnoreCase(own_mac_hex()) : device_suffix().equalsIgnoreCase(id);
+}
+
 // Caller holds the lock. Returns nullptr when the table is full of peers we've heard from more recently.
-static Peer *upsert(const String &id, uint32_t now) {
-    if (Peer *p = find(id))
+static Peer *upsert(const String &id, const String &mac, uint32_t now) {
+    if (Peer *p = find(id, mac)) {
+        if (mac.length() && p->mac.isEmpty())
+            p->mac = mac;
         return p;
+    }
     if (s_peers.size() >= MAX_PEERS) {
         // replace the stalest entry
         size_t oldest = 0;
@@ -76,6 +104,8 @@ static Peer *upsert(const String &id, uint32_t now) {
     Peer p;
     p.id = id;
     p.id.toUpperCase();
+    p.mac = mac;
+    p.mac.toUpperCase();
     s_peers.push_back(p);
     return &s_peers.back();
 }
@@ -209,12 +239,12 @@ static void on_packet(AsyncUDPPacket &packet) {
     net2rf::Heartbeat h;
     if (!net2rf::decode_heartbeat(packet.data(), packet.length(), h))
         return;
-    if (device_suffix().equalsIgnoreCase(h.id))
+    if (is_self(h.id, h.mac))
         return;  // our own broadcast looped back
     uint32_t now = millis();
     {
         Guard g;
-        Peer *p = upsert(h.id, now);
+        Peer *p = upsert(h.id, h.mac, now);
         p->name = h.name;
         p->host = h.host;
         p->ip = packet.remoteIP().toString();
@@ -242,14 +272,17 @@ void begin() {
 }
 
 void note_mdns(const String &id, const String &name, const String &host, const String &ip, const String &fw) {
-    if (id.isEmpty() || id.length() > 6 || device_suffix().equalsIgnoreCase(id))
+    if (id.isEmpty() || id.length() > 6)
         return;
     String h = host;
     if (h.endsWith(".local"))
         h.remove(h.length() - 6);
+    // mDNS carries no MAC: a controller sharing our ID is only told apart from us by its address
+    if (device_suffix().equalsIgnoreCase(id) && (ip.isEmpty() || ip == net::ip().toString()))
+        return;
     uint32_t now = millis();
     Guard g;
-    Peer *p = upsert(id, now);
+    Peer *p = upsert(id, "", now);
     if (!p->last_udp_ms || now - p->last_udp_ms >= ONLINE_FOR_MS) {
         // the heartbeat is fresher when we have one; otherwise take what mDNS says
         p->name = name;
@@ -337,6 +370,7 @@ void json(JsonArray arr) {
     self["ip"] = net::ip().toString();
     self["firmware"] = me.fw;
     self["id"] = me.id;
+    self["mac"] = me.mac;
     self["self"] = true;
     self["online"] = true;
     self["last_seen_ms"] = 0;
@@ -351,6 +385,8 @@ void json(JsonArray arr) {
         j["ip"] = p.ip;
         j["firmware"] = p.fw;
         j["id"] = p.id;
+        if (p.mac.length())
+            j["mac"] = p.mac;
         j["self"] = false;
         bool online = p.last_udp_ms && now - p.last_udp_ms < ONLINE_FOR_MS;
         j["online"] = online;
@@ -370,14 +406,16 @@ void json(JsonArray arr) {
 bool alias_should_hold(bool &decided) {
     uint32_t now = millis();
     decided = s_net_up_ms && now - s_net_up_ms >= ELECTION_SETTLE_MS;
-    String me = device_suffix();
+    String me = device_suffix(), my_mac = own_mac_hex();
     Guard g;
     for (const Peer &p : s_peers) {
         bool live = (p.last_udp_ms && now - p.last_udp_ms < ONLINE_FOR_MS) ||
                     (!p.last_udp_ms && p.last_mdns_ms && now - p.last_mdns_ms < MDNS_FRESH_MS);
         if (!live)
             continue;
-        if (p.host.equalsIgnoreCase(net::SHARED_ALIAS) || p.id < me)
+        // lowest ID wins; two controllers sharing an ID are ordered by their full MAC
+        bool lower = p.id < me || (p.id == me && p.mac.length() && p.mac < my_mac);
+        if (p.host.equalsIgnoreCase(net::SHARED_ALIAS) || lower)
             return false;
     }
     return true;

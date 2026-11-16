@@ -5,7 +5,8 @@
 
 // Other controllers on the network, with their live state.
 //
-// Two sources feed one table, keyed by controller ID (last two MAC bytes):
+// Two sources feed one table, keyed by the controller's full MAC (from the heartbeat), or by its ID (last two MAC
+// bytes) for one known only through mDNS or older firmware. Two controllers can share an ID, never a MAC:
 //  * a UDP heartbeat (net2rf::HEARTBEAT_PORT) every controller broadcasts every 5 s on each active interface,
 //    carrying its name, firmware and state; a peer is "online" while beats keep arriving (15 s = 3 missed);
 //  * mDNS (_net2rf._tcp) discovery from net.cpp, which also finds controllers whose beats can't reach us

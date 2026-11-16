@@ -19,7 +19,8 @@ controller, and each group of devices becomes a single pixel you sequence alongs
   setup page opens. Enter your show Wi-Fi under **Network** and save, and the controller reboots onto it.
   The ESP32 only does 2.4 GHz.
 
-Check the dashboard: the radio should read **CC1101 ready** (or SX1278). *Not detected* means wiring or power to the
+Check the dashboard: the radio should read **SX1278 ready** (the carrier board's Ra-02), or **CC1101 ready** on a
+DIY build with a CC1101. *Not detected* means wiring or power to the
 radio, or the wrong module selected under **Devices & Radio**.
 
 Then give it a **static IP** (or a DHCP reservation) under **Network**, so xLights always finds it like your

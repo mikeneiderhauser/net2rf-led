@@ -4,6 +4,7 @@
 #include <ESPmDNS.h>
 #include <ETH.h>  // also on boards without Ethernet (always down there): keeps the status code shared
 #include <WiFi.h>
+#include <esp_mac.h>
 #include <mdns.h>
 
 #include "config.h"
@@ -391,12 +392,22 @@ void status_json(JsonObject o) {
             ld["reason_code"] = drop.reason;
         ld["ago_s"] = drop.age_ms / 1000;
     }
+    // MACs come from the chip's eFuse-derived addresses, so they're right even while that interface is stopped
+    // (WiFi.macAddress() reads 00:00:00:00:00:00 until Wi-Fi has started, e.g. on Ethernet).
+    auto mac_of = [](esp_mac_type_t type) {
+        uint8_t m[6];
+        esp_read_mac(m, type);
+        char buf[18];
+        snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", m[0], m[1], m[2], m[3], m[4], m[5]);
+        return String(buf);
+    };
     JsonObject eth = o["ethernet"].to<JsonObject>();
     eth["present"] = (bool) NET2RF_HAS_ETHERNET;  // the board has an Ethernet port
     eth["enabled"] = (bool) g_net.eth_enabled && NET2RF_HAS_ETHERNET;
     eth["link"] = (bool) s_eth_link;
+    if (NET2RF_HAS_ETHERNET)
+        eth["mac"] = mac_of(ESP_MAC_ETH);
     if (s_eth_started) {
-        eth["mac"] = ETH.macAddress();
         if (s_eth_link) {
             eth["speed"] = ETH.linkSpeed();
             eth["full_duplex"] = ETH.fullDuplex();
@@ -416,7 +427,7 @@ void status_json(JsonObject o) {
         wifi["reason_code"] = s_sta_reason;
         wifi["error"] = reason_text(s_sta_reason);
     }
-    wifi["mac"] = WiFi.macAddress();
+    wifi["mac"] = mac_of(ESP_MAC_WIFI_STA);
     if (s_sta_ip) {
         wifi["ip"] = WiFi.localIP().toString();
         wifi["rssi"] = WiFi.RSSI();

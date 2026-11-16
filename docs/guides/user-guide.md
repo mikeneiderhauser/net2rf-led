@@ -50,7 +50,7 @@ For a show, give the controller a **static IP** or a DHCP reservation, so xLight
 | **Devices & Radio** | Controller name, device protocol, input mode (pixel / DMX / vendor), colour order and start channel; radio module, TX power, frequencies, frames per update, refresh, TX jitter, listen before transmit; DDP / E1.31 input and the input timeout |
 | **Network** | Current connection and the settings above |
 | **Tools** | Testing and diagnostics, described [below](#tools) |
-| **System** | Firmware info (version, free memory, free flash) and **Update firmware** (from GitHub releases or a file); an **Advanced** section with the flash partition breakdown; OLED sleep time and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset |
+| **System** | Firmware info (version, free memory, free flash) and **Update firmware** (from GitHub releases or a file); an **Advanced** section with the flash partition breakdown; OLED sleep time and an I²C scan; **admin password**; settings **export / import**; reboot and factory reset; under *Project*, a link to the **API** explorer (`/api/docs`, see [HTTP API](../reference/api.md): it needs internet access in your browser) |
 
 The pill row at the top of every page shows the radio, input and network state at a glance.
 
@@ -65,7 +65,7 @@ The everyday tools are always shown:
 | **Which protocol is my device?** | Alternates the two device protocols: the device lights red for protocol 0, green for protocol 1 |
 | **Range walk** | Cycles red, green, blue, white every 2 s on all zones while you walk the area with a device, with the TX power setting next to it |
 | **Identify** | Flickers the status LED and flashes *THIS ONE* on the OLED for 15 s, to tell controllers apart |
-| **Amplifier power** | Switches an external RF amplifier on and off, once a power switch is wired to IO2 (tick *Switch wiring* first). It can also power the amp down after a set time without a transmission, and back up for the next one. See the [assembly guide](../build/amplifier.md#amplifier-power-switch). |
+| **Amplifier power** | For an external RF amplifier with a power switch wired to IO2 (tick *Switch wiring* first). **Use amplifier** puts it into use; while it's off, nothing is transmitted, so the radio never sends into an unpowered amp. By default the amp is powered only while **RF output** is on; it can also power down after a set time without a transmission. It's powered back up 0.3 s before the next one. *Power* shows its state now, as does the dashboard. See the [assembly guide](../build/amplifier.md#amplifier-power-switch). |
 | **Input monitor** | The channel values arriving from xLights / FPP right now, per zone: shows a wrong start channel or colour order at a glance |
 | **xLights setup** | The exact controller and model settings for the current zones |
 
@@ -172,12 +172,21 @@ instead and the LED is not driven.
 
 ### OLED
 
+At power-up the OLED shows the firmware version, the board and the controller's **unit MAC** for 5 s, or until
+USER is pressed.
+
+**Unit MAC:** the one address that identifies a controller, for labels, records and support questions. It's the
+Ethernet MAC (what your router lists for a controller on Ethernet), and its last four digits are the `xxxx` in
+`net2rf-xxxx` and in the hotspot name `NET2RF-XXXX`. The chip has three more MACs, for Wi-Fi, the setup hotspot and
+Bluetooth (unused), each differing in the last digit: **System** lists all four, with the unit MAC marked. It's also
+in `/api/status` (`device.unit_mac`) and in the diagnostics file.
+
 Pages advance with a short press of USER, or rotate every 5 s without a button. The header shows the controller
 name and page number.
 
 | Page | Shows |
 |---|---|
-| Status | IP and interface (ETH / WiFi / AP / offline), hostname (or hotspot name), radio state, firmware version (and a newer release, if one was found) |
+| Status | IP and interface (ETH / WiFi / AP / offline), hostname (or hotspot name) with the firmware version beside it, radio state, and a last line with a newer release if one was found, else the coverage group's status, else the uptime |
 | Input | DDP / E1.31 state (live, nothing yet, timed out, TEST MODE, OUTPUT OFF), frame rate, packet count, time since the last packet, enabled inputs |
 | Zones | Zone number, name and current colour (hex), 4 per page |
 | Receiver *(receiver mode, instead of Input)* | Listening state, frequency and channel level, commands / frames / bad frames, time since the last one |
@@ -189,6 +198,9 @@ name and page number.
   minutes, 0 = never). It wakes on the next USER press (which only wakes it), from *Wake display* on the System
   page, after a reboot, and by itself when the network drops or its address changes, the setup hotspot starts
   or stops, or the radio fails. A controller without a USER button sleeps too, and relies on those.
+- **Update screen:** after a firmware update, *Installed vX.Y.Z · Keep powered* counts down until the update is
+  confirmed, then *Update confirmed* shows for a few seconds. Don't unplug or restart it meanwhile (see
+  [Firmware updates](#firmware-updates)).
 - **Network drop screen:** when a working connection is lost, the OLED shows why straight away, for 30 seconds:
   which interface dropped, the reason (for Wi-Fi the driver's reason and its code, such as `BEACON_TIMEOUT (200)`;
   for Ethernet "link down"), how many drops there have been since boot, how long ago, and whether it is back.

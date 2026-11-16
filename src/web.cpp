@@ -1,5 +1,6 @@
 #include "web.h"
 
+#include <esp_mac.h>
 #include <ArduinoJson.h>
 #include <Update.h>
 #include <WebServer.h>
@@ -29,6 +30,7 @@
 #include <wled_compat.h>
 
 namespace web {
+static void macs_json(JsonObject dev);  // unit_mac and every MAC the chip uses (defined below)
 
 static WebServer s_server(80);
 static uint32_t s_reboot_at = 0;
@@ -268,6 +270,21 @@ static void handle_index() {
     s_server.send_P(200, "text/html", (const char *) INDEX_HTML_GZ, INDEX_HTML_GZ_LEN);
 }
 
+// The API spec (docs/reference/openapi.yaml, stamped with this firmware's version) and a Swagger UI page for it.
+// The page loads Swagger UI itself from unpkg.com, so the browser needs internet access; served from here, its
+// "Try it out" requests go to this controller.
+static void handle_openapi() {
+    s_server.sendHeader("Cache-Control", "no-cache");
+    s_server.sendHeader("Content-Encoding", "gzip");
+    s_server.send_P(200, "application/yaml", (const char *) OPENAPI_YAML_GZ, OPENAPI_YAML_GZ_LEN);
+}
+
+static void handle_api_docs() {
+    s_server.sendHeader("Cache-Control", "no-cache");
+    s_server.sendHeader("Content-Encoding", "gzip");
+    s_server.send_P(200, "text/html", (const char *) API_HTML_GZ, API_HTML_GZ_LEN);
+}
+
 static void handle_status() {
     JsonDocument doc;
     JsonObject dev = doc["device"].to<JsonObject>();
@@ -291,6 +308,7 @@ static void handle_status() {
     panel::display_json(dev["display_info"].to<JsonObject>());
     amp::json(dev["amp"].to<JsonObject>());
     dev["suffix"] = device_suffix();
+    macs_json(dev);
     dev["update_pending"] = ota_guard::pending();
     dev["update_rolled_back"] = ota_guard::rolled_back();
     updater::check_json(dev["update_check"].to<JsonObject>());
@@ -851,6 +869,23 @@ static void send_download(const String &file_name, const String &body) {
     s_server.send(200, "application/json", body);
 }
 
+// Every MAC the chip uses, so a support question can't mix them up. "unit_mac" is the one to quote (unit_mac()).
+static void macs_json(JsonObject dev) {
+    dev["unit_mac"] = unit_mac();
+    JsonObject m = dev["macs"].to<JsonObject>();
+    auto put = [&](const char *key, esp_mac_type_t type) {
+        uint8_t b[6];
+        esp_read_mac(b, type);
+        char buf[18];
+        snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", b[0], b[1], b[2], b[3], b[4], b[5]);
+        m[key] = buf;
+    };
+    put("ethernet", ESP_MAC_ETH);
+    put("wifi", ESP_MAC_WIFI_STA);
+    put("ap", ESP_MAC_WIFI_SOFTAP);
+    put("bluetooth", ESP_MAC_BT);
+}
+
 // Everything worth sending along with a fault report, in one file: device, network and engine status, the last
 // crash, the boot log, what receiver mode has heard, saved captures (without pulses) and the settings. No
 // Wi-Fi or admin password.
@@ -864,6 +899,7 @@ static void handle_store_bundle() {
     dev["chip"] = ESP.getChipModel();
     dev["chip_rev"] = ESP.getChipRevision();
     dev["suffix"] = device_suffix();
+    macs_json(dev);
     dev["uptime_s"] = millis() / 1000;
     dev["reset_reason"] = reset_reason();
     dev["free_heap"] = ESP.getFreeHeap();
@@ -1082,6 +1118,8 @@ void begin() {
     s_server.collectHeaders(HEADERS, 2);
     // Open: the page itself and read-only monitoring.
     s_server.on("/", HTTP_GET, handle_index);
+    s_server.on("/api/openapi.yaml", HTTP_GET, handle_openapi);  // the API spec: open, like the UI itself
+    s_server.on("/api/docs", HTTP_GET, handle_api_docs);
     s_server.on("/api/status", HTTP_GET, handle_status);
     s_server.on("/api/stats", HTTP_GET, handle_stats);
     s_server.on("/api/flash", HTTP_GET, handle_flash);
