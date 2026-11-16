@@ -232,8 +232,9 @@ largest single free block and how much of each task's stack is unused.
 `mikeneiderhauser/net2rf-led`). Change it only if you run firmware from a fork.
 
 **Automatic rollback:** a new build is only kept once the controller has come back up and stayed reachable for
-30 s. If it crashes or never becomes reachable within 3 minutes, it returns to the previous firmware by itself,
-and the System page says so.
+15 s. If it crashes or never becomes reachable within 3 minutes, it returns to the previous firmware by itself,
+and the System page says so. **Don't restart or unplug it during those 15 s:** that also counts as a failed update.
+The OLED shows *Keep powered* with a countdown, then *Update confirmed*.
 
 ## Settings: two parts, handled separately
 

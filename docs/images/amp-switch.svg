@@ -30,21 +30,40 @@
 <polyline points="365,263 385,263 385,275" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="365,245 385,245 385,263" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M367,245 l10,-5 v10 z" fill="#37474f"/>
-<text x="398" y="250" font-size="13" fill="#1f2421" text-anchor="start" font-weight="700">2N7002</text>
+<text x="352" y="205" font-size="13" fill="#1f2421" text-anchor="end" font-weight="700">2N7002</text>
 <text x="392" y="217" font-size="11" fill="#6a716c" text-anchor="start">D</text>
 <text x="392" y="287" font-size="11" fill="#6a716c" text-anchor="start">S</text>
 <text x="344" y="237" font-size="11" fill="#6a716c" text-anchor="start">G</text>
-<polyline points="385,215 385,165 440,165" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="440" y="138" width="112" height="54" rx="8" fill="#f6f8f5" stroke="#9aa39d" stroke-width="1.5"/>
-<text x="496.0" y="160" font-size="14" fill="#1f2421" text-anchor="middle" font-weight="700">Buck EN</text>
-<text x="496.0" y="178" font-size="12" fill="#6a716c" text-anchor="middle">12 V → 5 V</text>
+<polyline points="385,215 385,165 470,165" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="470" y="138" width="92" height="54" rx="8" fill="#f6f8f5" stroke="#9aa39d" stroke-width="1.5"/>
+<text x="516" y="160" font-size="14" fill="#1f2421" text-anchor="middle" font-weight="700">Buck EN</text>
+<text x="516" y="178" font-size="12" fill="#6a716c" text-anchor="middle">12 V → 5 V</text>
+<circle cx="430" cy="165" r="4.5" fill="#37474f"/>
+<polyline points="430,165 430,300" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="416,300 444,300" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="416,308 444,308" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="430,308 430,415" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="430,415 430,425" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="416,425 444,425" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="421,430 439,430" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="426,435 434,435" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="450" y="300" font-size="13" fill="#1f2421" text-anchor="start" font-weight="700">100 nF</text>
+<text x="450" y="316" font-size="11" fill="#6a716c" text-anchor="start">optional</text>
+<circle cx="430" cy="215" r="4.5" fill="#37474f"/>
+<polyline points="430,215 520,215 520,232" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="509" y="232" width="22" height="50" rx="3" fill="#fff" stroke="#37474f" stroke-width="2"/>
+<text x="502" y="262" font-size="13" fill="#1f2421" text-anchor="end" font-weight="700">100 kΩ</text>
+<polyline points="520,282 520,350" fill="none" stroke="#d32f2f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="470" y="350" width="92" height="46" rx="8" fill="#f6f8f5" stroke="#9aa39d" stroke-width="1.5"/>
+<text x="516" y="370" font-size="14" fill="#1f2421" text-anchor="middle" font-weight="700">12 V in</text>
+<text x="516" y="386" font-size="12" fill="#6a716c" text-anchor="middle">buck input</text>
 <polyline points="385,275 385,415" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="385,415 385,425" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="371,425 399,425" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="376,430 394,430" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="381,435 389,435" fill="none" stroke="#37474f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<text x="44" y="470" font-size="12" fill="#6a716c" text-anchor="start">IO2 high: EN pulled low, amp off. IO2 low: the buck's own pull-up turns the amp on.</text>
-<text x="44" y="488" font-size="12" fill="#6a716c" text-anchor="start">Check EN first: it should read 5-12 V with nothing connected.</text>
+<text x="44" y="470" font-size="12" fill="#6a716c" text-anchor="start">IO2 high: EN pulled low, amp off. IO2 low: the 100 kΩ pull-up turns the amp on.</text>
+<text x="44" y="488" font-size="12" fill="#6a716c" text-anchor="start">Cut the module's EN-to-input jumper first: EN to 12 V in must read open.</text>
 <text x="616" y="106" font-size="15" fill="#1f2421" text-anchor="start" font-weight="700">B. No EN pin: high-side switch</text>
 <text x="616" y="126" font-size="12" fill="#6a716c" text-anchor="start">Tools page: Active low unticked</text>
 <rect x="616" y="138" width="96" height="54" rx="8" fill="#f6f8f5" stroke="#9aa39d" stroke-width="1.5"/>

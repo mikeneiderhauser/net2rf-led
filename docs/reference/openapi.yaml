@@ -60,7 +60,7 @@ tags:
       `/api/status` is what the web UI polls; `/api/stats` is the compact form for monitoring.
 
       **Update rollback.** A newly uploaded firmware boots as *pending*. It is confirmed once the controller has been
-      reachable (web UI up, with a network connection or the setup AP) for 30 s. If it crashes or reboots before
+      reachable (web UI up, with a network connection or the setup AP) for 15 s. If it crashes or reboots before
       that, the bootloader returns to the previous firmware on the next boot; if it never becomes reachable within 3
       minutes, it rolls itself back. `device.update_pending` and `device.update_rolled_back` report it. This applies
       to uploads and to installs from GitHub alike.
@@ -1144,7 +1144,7 @@ paths:
       summary: Upload firmware
       description: |
         Origin and credentials are checked before anything is written to flash. Reboots when done. The new
-        firmware is confirmed once the controller has been reachable for 30 s, and rolls back otherwise.
+        firmware is confirmed once the controller has been reachable for 15 s, and rolls back otherwise.
       security: [{basicAuth: []}]
       requestBody:
         required: true

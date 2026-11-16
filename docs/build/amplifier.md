@@ -57,8 +57,11 @@ the XIAO, D1). It's optional: until you enable it, IO2 stays the status LED's pi
   circuit is right. Near 0 V means an active-low EN (LM2596 type), which needs a different circuit.
 - **Then, unpowered, measure the resistance from EN to the 12 V input.** Close to 0 Ω means EN is tied straight to
   the input, usually by a solder jumper (often labelled B) that leaves EN unused: the FET would short 12 V to
-  ground. Cut the jumper and measure again (it should read open). Many modules then hold EN high themselves: check
-  the output comes on with nothing connected to EN. If it doesn't, add a 100k from the input to EN.
+  ground. Cut the jumper and measure again (it should read open).
+- **Then fit a 100k from the 12 V input to EN** (and, if you have one, 100 nF from EN to GND, at the pad). With
+  the jumper cut, EN is held high only weakly, if at all: the output may come on, but a hand near the buck or the
+  amp's own signal can pull EN low and switch the amp off. The pull-up holds it firmly; the FET still pulls it low
+  (about 0.12 mA through the 100k). EN already took 12 V through the jumper, so this is safe for the module.
 - A 2N7000 (TO-92: source, gate, drain from the left, flat face toward you) works as well as a 2N7002.
 
 Don't connect IO2 to EN directly: EN is usually pulled up to the 12 V input, and IO2 must be low at reset for
@@ -94,6 +97,7 @@ With the amp wired and the switch ticked, before closing the case:
 | On | about 0 V | high (the buck's pull-up) | powered |
 
 - Toggle RF output a few times: the amp follows it each time, and *Amplifier power* on the dashboard agrees.
+- With RF output on, bring a hand close to the buck and the amp: the amp must stay on.
 - The 100 Ω gate resistor stays cold in both states. The gate draws no current, so a warm resistor means a fault.
 - Tap and flex the case in both states: the amp must not change. Strain-relieve the wires to the buck and the FET.
 - The amp is powered for a moment at every boot: IO2 is low until the firmware starts. That's expected.
@@ -105,6 +109,7 @@ With the amp wired and the switch ticked, before closing the case:
 | The amp blinks twice a second (or in step with the status LED) | The switch isn't ticked, so IO2 is still the status LED's pin and its blink pattern switches the amp. Two blinks a second is the setup hotspot's pattern | Tick *A power switch is wired to IO2* under *Switch wiring* |
 | RF output doesn't switch the amp | The switch isn't ticked, or *Power the amp only while RF output is on* is unticked | Tick both. *Power* on the Tools page shows what the firmware wants |
 | The amp stays on with RF output off | EN is tied to the 12 V input (the solder jumper isn't fully cut, or got bridged again while soldering the EN wire), so the FET can't pull it low | Unpowered, measure EN to the 12 V input: it must read open |
+| The amp switches off when a hand comes near the buck, or while it transmits | EN is floating: the jumper is cut and nothing holds EN high, so hand capacitance or RF from the amp pulls it low | Fit the 100k from the 12 V input to EN, and 100 nF from EN to GND. Keep the EN wire short and away from the amp's output |
 | The gate resistor gets hot | Something connects IO2's side of the 100 Ω to EN, the 12 V side or ground: a solder bridge or a bent lead between the FET's gate and drain, or a 100 Ω fitted where the 100k pull-down goes | Unpowered: gate pad to drain pad must be open, gate pad to GND about 100k. Power off until it's fixed: the current flows through IO2 |
 | The firmware says powered but the amp is off, or it comes on when the case is moved | A loose wire or cracked joint: the buck's 12 V, GND or 5 V wires, the EN wire or the FET's leads | Reflow, then strain-relieve. Measure EN while flexing each wire to find it |
 | *Power: off (switched off)* and sends return 409 | *Use amplifier* is off: transmissions are held so the radio never sends into an unpowered amp | Switch it on, or untick the switch if none is wired |

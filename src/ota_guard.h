@@ -10,6 +10,8 @@ namespace ota_guard {
 
 void loop(bool reachable);  // call regularly; `reachable` = web server running and an IP to reach it
 bool pending();             // running an update that has not been confirmed yet
+int32_t confirm_left_ms();  // while pending: ms until it's confirmed, or -1 while not yet reachable
+bool just_confirmed(uint32_t within_ms);  // confirmed during this run, less than within_ms ago
 bool rolled_back();         // the last update failed and was rolled back
 
 }  // namespace ota_guard

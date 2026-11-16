@@ -21,9 +21,9 @@ history.
 
 - [ ] **XIAO ESP32-S3 build** on a real board: boot, Wi-Fi, the radio on the documented pins, BOOT as the USER button,
   the per-board firmware file in the updater and the browser flasher.
-- [ ] **Amplifier power switch** (`/api/amp`, IO2): no switch has been wired yet. Check the buck's EN polarity, that
-  the amp follows the switch, and that serial flashing still works with the gate pull-down on IO2. Then the idle
-  power-down: that 0.3 s of warm-up is enough for the first packet to go out at full power.
+- [ ] **Amplifier power switch** (`/api/amp`, IO2): wired and working on two boards (circuit A, with the EN pull-up).
+  Still to check: serial flashing with the gate pull-down on IO2, and the idle power-down (that 0.3 s of warm-up is
+  enough for the first packet to go out at full power).
 - [ ] **Fade and flicker** on bracelets of both protocols (fade has run on Wally's Lights pucks).
 
 ## xLights and FPP
@@ -39,6 +39,22 @@ history.
      model looked up from the model string `Net2RF-LED`), together with the definition PR.
 
   Until then a discovered controller is created as E1.31 with no vendor and has to be corrected by hand.
+
+## Case
+
+- [ ] **OLED sled: one lid for every OLED module.** 0.96" modules vary between suppliers in board size, thickness,
+  where the glass sits and where the header is, and `net2rf_case_R28.scad` only has two fixed sizes (`S15`, plus
+  `lid-small-oled.stl`). As R29:
+  - **Lid:** a fixed window (about 23 x 13.6 mm, larger than any 0.96" panel's active area) and a standard sled bay
+    under it (about 33 x 33 mm), with the rails and end stop moved from the OLED onto the bay.
+  - **Sled per module** (`oled_sled.scad`, one row per module in a profile table, one STL each): a pocket for that
+    board's size and thickness, offset so its glass sits centred under the window and flush with the lid, a cut-out
+    for its header and cable, and its profile name embossed on the back. Prints flat without supports.
+  - **Retention:** the sled clicks in on the rail detent, with an optional M2 screw; the OLED stays in its sled with
+    a dab of glue or a light press fit.
+  - **Check:** the sled floor adds about 1 mm under the OLED, against about 1.4 mm between its header pins and J7:
+    cut the floor away under the pins if needed. Print a bay test piece and one sled first, as with piece G.
+  - **First:** measure each OLED module bought so far (board, thickness, glass offset and height, header side).
 
 ## Docs
 
